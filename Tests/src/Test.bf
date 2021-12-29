@@ -16,8 +16,14 @@ namespace Bon.Tests
 
 			{
 				bool b = true;
-				let str = Bon.Serialize(b, .. scope .());
+				let str = Bon.Serialize(b, .. scope .(), .Verbose);
 				Test.Assert(str == bool.TrueString);
+			}
+
+			{
+				bool b = true;
+				let str = Bon.Serialize(b, .. scope .());
+				Test.Assert(str == "1");
 			}
 
 			{
@@ -143,7 +149,7 @@ namespace Bon.Tests
 
 				{
 					let str = Bon.Serialize(s, .. scope .());
-					Test.Assert(str == "{thing=651,bs=[{name=\"first element\",age=34,type=.OtherThing},{name=\"second element\",age=101},{name=\"\"}]}");
+					Test.Assert(str == "{thing=651,bs=[{name=\"first element\",age=34,type=1},{name=\"second element\",age=101},{name=\"\"}]}");
 				}
 			}
 		}

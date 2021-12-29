@@ -72,12 +72,13 @@ namespace Bon.Integrated
 
 	class BonWriter
 	{
-		String outStr;
+		public String outStr;
 		bool doFormatting;
 		
-		FormatHelper f = .();
-		int objDepth = 0, arrDepth = 0;
+		FormatHelper f;
+		int objDepth, arrDepth;
 
+		[Inline]
 		public this(String str, bool formatting = false)
 		{
 			outStr = str;
@@ -116,9 +117,7 @@ namespace Bon.Integrated
 			else if (outStr.EndsWith(','))
 				outStr.RemoveFromEnd(1);
 
-			outStr.Append("],");
-			if (doFormatting)
-				f.NewLine(outStr);
+			outStr.Append(']');
 		}
 
 		public ObjectBlockEnd StartObject()
@@ -161,8 +160,13 @@ namespace Bon.Integrated
 			else if (outStr.EndsWith(','))
 				outStr.RemoveFromEnd(1);
 
-			outStr.Append("},");
-			if (doFormatting)
+			outStr.Append('}');
+		}
+		
+		public void EndEntry(bool doOneLine = false)
+		{
+			outStr.Append(',');
+			if (doFormatting && !doOneLine)
 				f.NewLine(outStr);
 		}
 
@@ -184,19 +188,6 @@ namespace Bon.Integrated
 				f.DoTabs(outStr);
 			outStr..Append(key)
 				.Append(':');
-		}
-
-		public void Value(StringView value, bool doOneLine = false)
-		{
-			outStr..Append(value)
-				.Append(',');
-			if (doFormatting && !doOneLine)
-				f.NewLine(outStr);
-		}
-
-		public void PreVal(StringView valuePrefix)
-		{
-			outStr.Append(valuePrefix);
 		}
 
 		public void End()

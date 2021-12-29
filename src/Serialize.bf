@@ -24,8 +24,6 @@ namespace Bon.Integrated
 		case Verbose = 1 << 3;
 	}
 
-	// TODO: implement verbosity (smallbools, small enums) + size prefixes
-
 	static class Serialize
 	{
 		static mixin VariantDataIsZero(Variant val)
@@ -37,91 +35,31 @@ namespace Bon.Integrated
 			isZero
 		}
 
-		static mixin DoInclude(ref Variant val, BonSerializeFlags includeFlags)
+		static mixin DoInclude(ref Variant val, BonSerializeFlags flags)
 		{
-			(includeFlags.HasFlag(.IncludeDefault) || !VariantDataIsZero!(val))
+			(flags.HasFlag(.IncludeDefault) || !VariantDataIsZero!(val))
 		}
 
 		[Inline]
-		public static void Thing(BonWriter writer, ref Variant thingVal, BonSerializeFlags includeFlags = .DefaultFlags)
+		public static void Thing(BonWriter writer, ref Variant thingVal, BonSerializeFlags flags = .DefaultFlags)
 		{
-			if (DoInclude!(ref thingVal, includeFlags))
-				Field(writer, ref thingVal, includeFlags);
+			if (DoInclude!(ref thingVal, flags))
+				Field(writer, ref thingVal, flags);
 		}
 
-		public static void Struct(BonWriter writer, ref Variant structVal, BonSerializeFlags includeFlags = .DefaultFlags)
-		{
-			let structType = structVal.VariantType;
-
-			Debug.Assert(structType.IsStruct);
-
-			if (!structType is TypeInstance
-				|| (structType.FieldCount == 0 && !structType.HasCustomAttribute<SerializableAttribute>()))
-			{
-				BonConfig.logOut?.Invoke(scope $"Struct {structType} does not seem to have reflection data included. Add [Serializable]");
-
-				// In case we do include default values (and thus expect to have everything in there),
-				// still include "{}"
-				if (!includeFlags.HasFlag(.IncludeDefault))
-					return;
-			}
-
-			using (writer.StartObject())
-			{
-				if (structType.FieldCount > 0)
-				{
-					for (let m in structType.GetFields(.Instance))
-					{
-						if ((!includeFlags.HasFlag(.IgnoreAttributes) && m.GetCustomAttribute<NoSerializeAttribute>() case .Ok) // check hidden
-							|| !includeFlags.HasFlag(.AllowNonPublic) && (m.[Friend]mFieldData.mFlags & .Public == 0) // check protection level
-							&& (includeFlags.HasFlag(.IgnoreAttributes) || !(m.GetCustomAttribute<DoSerializeAttribute>() case .Ok))) // check if we still include it anyway
-							continue;
-
-						Variant val = Variant.CreateReference(m.FieldType, ((uint8*)structVal.DataPtr) + m.MemberOffset);
-
-						if (!DoInclude!(ref val, includeFlags))
-							continue;
-
-						writer.Identifier(m.Name);
-						Field(writer, ref val, includeFlags);
-					}
-				}
-			}
-		}
-
-		public static void Field(BonWriter writer, ref Variant val, BonSerializeFlags includeFlags = .DefaultFlags, bool doOneLineVal = false)
+		public static void Field(BonWriter writer, ref Variant val, BonSerializeFlags flags = .DefaultFlags, bool doOneLineVal = false)
 		{
 			let fieldType = val.VariantType;
-			let valueBuffer = scope String();
 
 			mixin AsThingToString<T>()
 			{
-				T integer = *(T*)val.DataPtr;
-				integer.ToString(valueBuffer);
+				T thing = *(T*)val.DataPtr;
+				thing.ToString(writer.outStr);
 			}
 
-			if (fieldType.IsEnum)
+			mixin Integer(Type type)
 			{
-				if (fieldType.IsUnion)
-				{
-					Debug.FatalError(); // TODO
-				}
-				else
-				{
-					valueBuffer.Append('.');
-					int64 value = 0;
-					Span<uint8>((uint8*)val.DataPtr, fieldType.Size).CopyTo(Span<uint8>((uint8*)&value, fieldType.Size));
-					Enum.EnumToString(fieldType, valueBuffer, value);
-
-					// TODO: some effort to try and convert number values into combinations of named values?
-				}
-			}
-			else if (fieldType.IsInteger ||
-				fieldType.IsTypedPrimitive && fieldType.UnderlyingType.IsInteger)
-			{
-				
-
-				switch (fieldType)
+				switch (type)
 				{
 				case typeof(int8): AsThingToString!<int8>();
 				case typeof(int16): AsThingToString!<int16>();
@@ -138,10 +76,10 @@ namespace Bon.Integrated
 				default: Debug.FatalError(); // Should be unreachable
 				}
 			}
-			else if (fieldType.IsFloatingPoint
-				|| fieldType.IsTypedPrimitive && fieldType.UnderlyingType.IsFloatingPoint)
+
+			mixin Float(Type type)
 			{
-				switch (fieldType)
+				switch (type)
 				{
 				case typeof(float): AsThingToString!<float>();
 				case typeof(double): AsThingToString!<double>();
@@ -149,23 +87,87 @@ namespace Bon.Integrated
 				default: Debug.FatalError(); // Should be unreachable
 				}
 			}
-			else if (fieldType == typeof(bool))
+
+			mixin Bool()
 			{
-				AsThingToString!<bool>();
+				bool boolean = *(bool*)val.DataPtr;
+				if (flags.HasFlag(.Verbose))
+					boolean.ToString(writer.outStr);
+				else (boolean ? 1 : 0).ToString(writer.outStr);
+			}
+
+			if (fieldType.IsPrimitive)
+			{
+				if (fieldType.IsInteger)
+					Integer!(fieldType);
+				else if (fieldType.IsFloatingPoint)
+					Float!(fieldType);
+				else if (fieldType == typeof(bool))
+					Bool!();
+				else Debug.FatalError(); // Should be unreachable
+			}
+			else if (fieldType.IsTypedPrimitive)
+			{
+				if (fieldType.UnderlyingType.IsInteger)
+				{
+					if (fieldType.IsEnum && flags.HasFlag(.Verbose))
+					{
+						writer.outStr.Append('.');
+						int64 value = 0;
+						Span<uint8>((uint8*)val.DataPtr, fieldType.Size).CopyTo(Span<uint8>((uint8*)&value, fieldType.Size));
+						Enum.EnumToString(fieldType, writer.outStr, value);
+
+						// TODO: some effort to try and convert number values into combinations of named values?
+					}
+					else Integer!(fieldType.UnderlyingType);
+				}
+				else if (fieldType.UnderlyingType.IsFloatingPoint)
+					Float!(fieldType.UnderlyingType);
+				else if (fieldType.UnderlyingType == typeof(bool))
+					Bool!();
+				else Debug.FatalError(); // Should be unreachable
+			}
+			else if (fieldType.IsStruct)
+			{
+				if (fieldType == typeof(StringView))
+				{
+					let view = val.Get<StringView>();
+
+					if (view.Ptr == null)
+						writer.outStr.Append("null");
+					else if (view.Length == 0)
+						writer.outStr.Append("\"\"");
+					else String.QuoteString(&view[0], view.Length, writer.outStr);
+				}
+				else if (fieldType.IsEnum && fieldType.IsUnion)
+				{
+					Debug.FatalError(); // TODO (also check, is this even reachable and in the right place?)
+				}
+				else Struct(writer, ref val, flags);
 			}
 			else if (fieldType is SizedArrayType)
 			{
-				using (writer.StartArray())
+				let t = (SizedArrayType)fieldType;
+				let count = t.ElementCount;
+				if (count > 0)
 				{
-					let t = (SizedArrayType)fieldType;
-					let count = t.ElementCount;
-					if (count > 0)
+					// Since this is a fixed-size array, this info is not necessary to
+					// deserialize in any case. But it's nice for manual editing to know how
+					// much the array can hold
+					if (flags.HasFlag(.Verbose))
+					{
+						writer.outStr.Append('<');
+						count.ToString(writer.outStr);
+						writer.outStr.Append("> /* sized array! */"); // No use changing the count number!
+					}
+	
+					using (writer.StartArray())
 					{
 						let arrType = t.UnderlyingType;
 						let doOneLine = (arrType.IsPrimitive || arrType.IsTypedPrimitive);
 
 						var includeCount = count;
-						if (!includeFlags.HasFlag(.IncludeDefault))
+						if (!flags.HasFlag(.IncludeDefault))
 						{
 							var ptr = (uint8*)val.DataPtr + arrType.Stride * (count - 1);
 							for (var i = count - 1; i >= 0; i--)
@@ -173,7 +175,7 @@ namespace Bon.Integrated
 								var arrVal = Variant.CreateReference(arrType, ptr);
 
 								// If this gets included, we'll have to include everything until here!
-								if (DoInclude!(ref arrVal, includeFlags))
+								if (DoInclude!(ref arrVal, flags))
 								{
 									includeCount = i + 1;
 									break;
@@ -187,47 +189,62 @@ namespace Bon.Integrated
 						for (let i < includeCount)
 						{
 							var arrVal = Variant.CreateReference(arrType, ptr);
-							Field(writer, ref arrVal, includeFlags, doOneLine);
+							Field(writer, ref arrVal, flags, doOneLine);
 
 							ptr += arrType.Stride;
 						}
 					}
 				}
-
-				return; // we don't need buffer
-			}
-			else if (fieldType == typeof(StringView))
-			{
-				let view = val.Get<StringView>();
-
-				if (view.Ptr == null)
-					valueBuffer.Append("null");
-				else if (view.Length == 0)
-					valueBuffer.Append("\"\"");
-				else String.QuoteString(&view[0], view.Length, valueBuffer);
 			}
 			else if (fieldType == typeof(String))
 			{
 				let str = val.Get<String>();
 
 				if (str == null)
-					valueBuffer.Append("null");
+					writer.outStr.Append("null");
 				else if (str.Length == 0)
-					valueBuffer.Append("\"\"");
-				else String.QuoteString(&str[0], str.Length, valueBuffer);
+					writer.outStr.Append("\"\"");
+				else String.QuoteString(&str[0], str.Length, writer.outStr);
 			}
-			else if (fieldType.IsStruct)
+			else Debug.FatalError(); // TODO
+
+			writer.EndEntry(doOneLineVal);
+		}
+
+		public static void Struct(BonWriter writer, ref Variant structVal, BonSerializeFlags flags = .DefaultFlags)
+		{
+			let structType = structVal.VariantType;
+
+			Debug.Assert(structType.IsStruct);
+
+			using (writer.StartObject())
 			{
-				Struct(writer, ref val, includeFlags);
-				return;
-			}
-			else
-			{
-				Debug.FatalError(scope $"Couldn't serialize field of type {fieldType.GetName(.. scope .())}");
-				return;
+				if (structType.FieldCount > 0)
+				{
+					for (let m in structType.GetFields(.Instance))
+					{
+						if ((!flags.HasFlag(.IgnoreAttributes) && m.GetCustomAttribute<NoSerializeAttribute>() case .Ok) // check hidden
+							|| !flags.HasFlag(.AllowNonPublic) && (m.[Friend]mFieldData.mFlags & .Public == 0) // check protection level
+							&& (flags.HasFlag(.IgnoreAttributes) || !(m.GetCustomAttribute<DoSerializeAttribute>() case .Ok))) // check if we still include it anyway
+							continue;
+
+						Variant val = Variant.CreateReference(m.FieldType, ((uint8*)structVal.DataPtr) + m.MemberOffset);
+
+						if (!DoInclude!(ref val, flags))
+							continue;
+
+						writer.Identifier(m.Name);
+						Field(writer, ref val, flags);
+					}
+				}
 			}
 
-			writer.Value(valueBuffer, doOneLineVal);
+			if (!structType is TypeInstance
+					|| (structType.FieldCount == 0 && !structType.HasCustomAttribute<SerializableAttribute>()))
+			{
+				// Just add this as a comment in case anyone wonders...
+				writer.outStr.Append(scope $"/* No reflection data for {structType}. Add [Serializable] or force it */");
+			}
 		}
 	}
 }
