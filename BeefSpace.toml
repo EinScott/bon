@@ -1,0 +1,5 @@
+FileVersion = 1
+Projects = {bon = {Path = "."}, Tests = {Path = "Tests"}}
+
+[Workspace]
+StartupProject = "Tests"
