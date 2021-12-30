@@ -47,9 +47,17 @@ namespace Bon.Integrated
 				Field(writer, ref thingVal, flags);
 		}
 
+		static mixin DoTypeOneLine(Type type, BonSerializeFlags flags)
+		{
+			(type.IsPrimitive || (type.IsTypedPrimitive && (!flags.HasFlag(.Verbose) || !type.IsEnum)))
+		}
+
 		public static void Field(BonWriter writer, ref Variant val, BonSerializeFlags flags = .DefaultFlags, bool doOneLineVal = false)
 		{
 			let fieldType = val.VariantType;
+
+			// Make sure that doOneLineVal is only passed when valid
+			Debug.Assert(!doOneLineVal || DoTypeOneLine!(fieldType, flags));
 
 			mixin AsThingToString<T>()
 			{
@@ -77,6 +85,27 @@ namespace Bon.Integrated
 				}
 			}
 
+			mixin Char(Type type)
+			{
+				mixin HandleChar<T>()
+				{
+					T thing = *(T*)val.DataPtr;
+					var str = thing.ToString(.. scope .());
+					let len = str.Length;
+					String.QuoteString(&str[0], len, str);
+					writer.outStr.Append(str[(len + 1)...^2]);
+				}
+
+				writer.outStr.Append('\'');
+				switch (type)
+				{
+				case typeof(char8): HandleChar!<char8>();
+				case typeof(char16): HandleChar!<char16>();
+				case typeof(char32): HandleChar!<char32>();
+				}
+				writer.outStr.Append('\'');
+			}
+
 			mixin Float(Type type)
 			{
 				switch (type)
@@ -98,31 +127,110 @@ namespace Bon.Integrated
 
 			if (fieldType.IsPrimitive)
 			{
+				writer.StartLine(doOneLineVal);
+
 				if (fieldType.IsInteger)
 					Integer!(fieldType);
 				else if (fieldType.IsFloatingPoint)
 					Float!(fieldType);
+				else if (fieldType.IsChar)
+					Char!(fieldType);
 				else if (fieldType == typeof(bool))
 					Bool!();
 				else Debug.FatalError(); // Should be unreachable
 			}
 			else if (fieldType.IsTypedPrimitive)
 			{
+				writer.StartLine(doOneLineVal);
+
 				if (fieldType.UnderlyingType.IsInteger)
 				{
 					if (fieldType.IsEnum && flags.HasFlag(.Verbose))
 					{
-						writer.outStr.Append('.');
 						int64 value = 0;
 						Span<uint8>((uint8*)val.DataPtr, fieldType.Size).CopyTo(Span<uint8>((uint8*)&value, fieldType.Size));
-						Enum.EnumToString(fieldType, writer.outStr, value);
 
-						// TODO: some effort to try and convert number values into combinations of named values?
+						bool found = false;
+						for (var field in fieldType.GetFields())
+						{
+							if (field.[Friend]mFieldData.mFlags.HasFlag(.EnumCase) &&
+								*(int64*)&field.[Friend]mFieldData.[Friend]mData == value)
+							{
+								writer.outStr..Append('.').Append(field.Name);
+								found = true;
+							}
+						}
+
+						if (!found)
+						{
+							// There is no exact named value here, but maybe multiple!
+
+							// We only try once, but that's better than none. If you were
+							// to have this enum { A = 0b0011, B = 0b0111, C = 0b1100 }
+							// and run this on 0b1111, this algorithm would fail to
+							// identify .A | .C, but rather .B | 0b1000 because it takes
+							// the largest match first and never looks back if it doesn't
+							// work out. The easiest way to make something more complicated
+							// work would probably be recursion... maybe in the future
+							int64 valueLeft = value;
+							String bestValName = scope .();
+							while (valueLeft != 0)
+							{
+								// Go through all values and find best match in therms of bits
+								int64 bestVal = 0;
+								var bestValBits = 0;
+								for (var field in fieldType.GetFields())
+								{
+									if (field.[Friend]mFieldData.mFlags.HasFlag(.EnumCase))
+									{
+										let fieldVal = *(int64*)&field.[Friend]mFieldData.[Friend]mData;
+
+										if (fieldVal == 0 || (fieldVal & ~valueLeft) != 0)
+											continue; // fieldVal contains bits that valueLeft doesn't have
+
+										var bits = 0;
+										for (let i < sizeof(int64) * 8)
+											if (((fieldVal >> i) & 0b1) != 0)
+												bits++;
+
+										if (bits > bestValBits)
+										{
+											bestVal = fieldVal;
+											bestValName.Set(field.Name);
+											bestValBits = bits;
+										}
+									}
+								}
+
+								if (bestValBits > 0)
+								{
+									valueLeft &= ~bestVal; // Remove all bits it shares with this
+									writer.outStr..Append('.')..Append(bestValName).Append('|');
+								}
+								else
+								{
+									if (writer.outStr.EndsWith('|')) // Flags enum
+										(*(uint64*)&valueLeft).ToString(writer.outStr, "X", null);
+									else Integer!(fieldType.UnderlyingType);
+									break;
+								}
+
+								if (valueLeft == 0)
+								{
+									if (writer.outStr.EndsWith('|'))
+										writer.outStr.RemoveFromEnd(1);
+									break;
+								}
+							}
+						}
+
 					}
 					else Integer!(fieldType.UnderlyingType);
 				}
 				else if (fieldType.UnderlyingType.IsFloatingPoint)
 					Float!(fieldType.UnderlyingType);
+				else if (fieldType.UnderlyingType.IsChar)
+					Char!(fieldType.UnderlyingType);
 				else if (fieldType.UnderlyingType == typeof(bool))
 					Bool!();
 				else Debug.FatalError(); // Should be unreachable
@@ -131,6 +239,8 @@ namespace Bon.Integrated
 			{
 				if (fieldType == typeof(StringView))
 				{
+					writer.StartLine(doOneLineVal);
+
 					let view = val.Get<StringView>();
 
 					if (view.Ptr == null)
@@ -156,16 +266,15 @@ namespace Bon.Integrated
 					// much the array can hold
 					if (flags.HasFlag(.Verbose))
 					{
-						writer.outStr.Append('<');
+						writer.outStr.Append("<const ");
 						count.ToString(writer.outStr);
-						writer.outStr.Append("> /* sized array! */"); // No use changing the count number!
+						writer.outStr.Append('>');
 					}
-	
-					using (writer.StartArray())
+					
+					let arrType = t.UnderlyingType;
+					let doOneLine = DoTypeOneLine!(arrType, flags);
+					using (writer.StartArray(doOneLine))
 					{
-						let arrType = t.UnderlyingType;
-						let doOneLine = (arrType.IsPrimitive || arrType.IsTypedPrimitive);
-
 						var includeCount = count;
 						if (!flags.HasFlag(.IncludeDefault))
 						{
@@ -198,6 +307,8 @@ namespace Bon.Integrated
 			}
 			else if (fieldType == typeof(String))
 			{
+				writer.StartLine(doOneLineVal);
+
 				let str = val.Get<String>();
 
 				if (str == null)
