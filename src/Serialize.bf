@@ -251,7 +251,66 @@ namespace Bon.Integrated
 				}
 				else if (fieldType.IsEnum && fieldType.IsUnion)
 				{
-					Debug.FatalError(); // TODO (also check, is this even reachable and in the right place?)
+					// Enum union in memory:
+					// {<payload>|<discriminator>}
+
+					bool didWrite = false;
+					uint64 unionCaseIndex = uint64.MaxValue;
+					uint64 currCaseIndex = 0;
+					for (var enumField in fieldType.GetFields())
+					{
+						if (enumField.[Friend]mFieldData.mFlags.HasFlag(.EnumDiscriminator))
+						{
+							let discrType = enumField.FieldType;
+							var discrVal = Variant.CreateReference(discrType, (uint8*)val.DataPtr + enumField.[Friend]mFieldData.mData);
+							Debug.Assert(discrType.IsInteger);
+
+							mixin GetVal<T>() where T : var
+							{
+								T thing = *(T*)discrVal.DataPtr;
+								unionCaseIndex = (uint64)thing;
+							}
+
+							switch (discrType)
+							{
+							case typeof(int8): GetVal!<int8>();
+							case typeof(int16): GetVal!<int16>();
+							case typeof(int32): GetVal!<int32>();
+							case typeof(int64): GetVal!<int64>();
+							case typeof(int): GetVal!<int>();
+
+							case typeof(uint8): GetVal!<uint8>();
+							case typeof(uint16): GetVal!<uint16>();
+							case typeof(uint32): GetVal!<uint32>();
+							case typeof(uint64): GetVal!<uint64>();
+							case typeof(uint): GetVal!<uint>();
+
+							default: Debug.FatalError(); // Should be unreachable
+							}
+						}
+						else if (enumField.[Friend]mFieldData.mFlags.HasFlag(.EnumCase)) // Filter through unioncaseIndex
+						{
+							Debug.Assert(unionCaseIndex != uint64.MaxValue);
+
+							// Skip enum cases until we get to the selected one
+							if (currCaseIndex != unionCaseIndex)
+							{
+								currCaseIndex++;
+								continue;
+							}
+
+							var unionPayload = Variant.CreateReference(enumField.FieldType, val.DataPtr);
+
+							// Do serialize of discriminator and payload
+							writer.outStr..Append('.').Append(enumField.Name);
+							Struct(writer, ref unionPayload, flags);
+
+							didWrite = true;
+							break;
+						}
+					}
+
+					Debug.Assert(didWrite);
 				}
 				else Struct(writer, ref val, flags);
 			}
@@ -350,8 +409,7 @@ namespace Bon.Integrated
 				}
 			}
 
-			if (!structType is TypeInstance
-					|| (structType.FieldCount == 0 && !structType.HasCustomAttribute<SerializableAttribute>()))
+			if (!structType is TypeInstance)
 			{
 				// Just add this as a comment in case anyone wonders...
 				writer.outStr.Append(scope $"/* No reflection data for {structType}. Add [Serializable] or force it */");

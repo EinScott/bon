@@ -325,5 +325,41 @@ namespace Bon.Tests
 				}
 			}
 		}
+
+		[Serializable]
+		struct Vector2 : this(float x, float y);
+
+		[Serializable]
+		enum Thing
+		{
+			case Nothing;
+			case Text(Vector2 pos, String text, float rotation);
+			case Circle(Vector2 pos, float radius);
+			case Rect(Vector2 pos, Vector2 size, float rotation);
+			case Capsule(Vector2 pos, float radius, uint height);
+			case Something(float, float, Vector2);
+		}
+
+		[Test]
+		static void EnumUnions()
+		{
+			{
+				Thing i = .Nothing;
+				let str = Bon.Serialize(i, .. scope .(), .IncludeDefault);
+				Test.Assert(str == ".Nothing{}");
+			}
+
+			{
+				Thing i = .Circle(.(0, 0), 4.5f);
+				let str = Bon.Serialize(i, .. scope .());
+				Test.Assert(str == ".Circle{radius=4.5}");
+			}
+
+			{
+				Thing i = .Something(5, 4.5f, .(1, 10));
+				let str = Bon.Serialize(i, .. scope .());
+				Test.Assert(str == ".Something{0=5,1=4.5,2={x=1,y=10}}"); //TODO: on verbose mode, put a warning comment in on these, telling you to name your stuff!
+			}
+		}
 	}
 }
