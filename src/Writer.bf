@@ -1,77 +1,76 @@
 using System;
 using System.Diagnostics;
-using System.IO;
 
 namespace Bon.Integrated
 {
-	struct FormatHelper
-	{
-		int tabDepth;
-
-		[Inline]
-		public void TabPush() mut
-		{
-			tabDepth++;
-		}
-
-		[Inline]
-		public void TabPop() mut
-		{
-			tabDepth--;
-
-			Debug.Assert(tabDepth >= 0);
-		}
-
-		[Inline]
-		public void DoTabs(String outStr)
-		{
-			for (let i < tabDepth)
-				outStr.Append('\t');
-		}
-
-		[Inline]
-		public void NewLine(String outStr)
-		{
-			outStr.Append('\n');
-		}
-	}
-
-	struct ArrayBlockEnd : IDisposable
-	{
-		BonWriter w;
-
-		[Inline]
-		public this(BonWriter format)
-		{
-			w = format;
-		}
-
-		[Inline]
-		public void Dispose()
-		{
-			w.EndArray();
-		}
-	}
-
-	struct ObjectBlockEnd : IDisposable
-	{
-		BonWriter w;
-
-		[Inline]
-		public this(BonWriter format)
-		{
-			w = format;
-		}
-
-		[Inline]
-		public void Dispose()
-		{
-			w.EndObject();
-		}
-	}
-
 	class BonWriter
 	{
+		public struct ArrayBlockEnd : IDisposable
+		{
+			BonWriter w;
+
+			[Inline]
+			public this(BonWriter format)
+			{
+				w = format;
+			}
+
+			[Inline]
+			public void Dispose()
+			{
+				w.ArrayBlockEnd();
+			}
+		}
+
+		public struct ObjectBlockEnd : IDisposable
+		{
+			BonWriter w;
+
+			[Inline]
+			public this(BonWriter format)
+			{
+				w = format;
+			}
+
+			[Inline]
+			public void Dispose()
+			{
+				w.ObjectBlockEnd();
+			}
+		}
+
+		struct FormatHelper
+		{
+			int tabDepth;
+
+			[Inline]
+			public void TabPush() mut
+			{
+				tabDepth++;
+			}
+
+			[Inline]
+			public void TabPop() mut
+			{
+				tabDepth--;
+
+				Debug.Assert(tabDepth >= 0);
+			}
+
+			[Inline]
+			public void DoTabs(String outStr)
+			{
+				for (let i < tabDepth)
+					outStr.Append('\t');
+			}
+
+			[Inline]
+			public void NewLine(String outStr)
+			{
+				outStr.Append('\n');
+			}
+		}
+
 		public String outStr;
 		bool doFormatting;
 		
@@ -81,13 +80,15 @@ namespace Bon.Integrated
 		[Inline]
 		public this(String str, bool formatting = false)
 		{
+			Debug.Assert(str != null);
+
 			outStr = str;
 			doFormatting = formatting;
 		}
 
 		public void Identifier(StringView identifier)
 		{
-			Debug.Assert(outStr[outStr.Length - 1] != '=' && outStr[outStr.Length - 1] != ':');
+			Debug.Assert(!outStr.EndsWith('=') && !outStr.EndsWith(':'));
 
 			if (doFormatting)
 				f.DoTabs(outStr);
@@ -95,29 +96,71 @@ namespace Bon.Integrated
 				.Append('=');
 		}
 
-		public void Key(StringView key)
-		{
-			Debug.Assert(outStr[outStr.Length - 1] != '=' && outStr[outStr.Length - 1] != ':');
-
-			if (doFormatting)
-				f.DoTabs(outStr);
-			outStr..Append(key)
-				.Append(':');
-		}
-
-		/// Call at the start of a non-block value, i.e. not on an object or array block,
-		/// will make sure that this line will end up with the right indentation (when on beginning of line)
 		[Inline]
-		public void StartLine(bool doOneLine = false)
+		public void Key()
 		{
-			if (doFormatting && !doOneLine && outStr.Length > 0 && outStr[outStr.Length - 1] == '\n')
+			Debug.Assert(!outStr.EndsWith('=') && !outStr.EndsWith(':') && !outStr.EndsWith(','));
+
+			outStr.Append(':');
+		}
+
+		[Inline]
+		public void EntryStart(bool doOneLine = false)
+		{
+			if (doFormatting && !doOneLine && outStr.EndsWith('\n'))
 				f.DoTabs(outStr);
 		}
 
-		public ArrayBlockEnd StartArray(bool doOneLine = false)
+		[Inline]
+		public void Enum(StringView caseName)
 		{
-			if (doFormatting && outStr.Length > 0 && outStr[outStr.Length - 1] == '\n')
-				f.DoTabs(outStr);
+			if (!(outStr.Length == 0 || outStr.EndsWith('=') || outStr.EndsWith(':')))
+				EnumAdd();
+			outStr..Append('.').Append(caseName);
+		}
+
+		[Inline]
+		public void EnumAdd()
+		{
+			outStr.Append('|');
+		}
+
+		[Inline]
+		public void Sizer(int count, bool markConst = false)
+		{
+			outStr.Append('<');
+			if (markConst)
+				outStr.Append("const ");
+			count.ToString(outStr);
+			outStr.Append('>');	
+		}
+
+		[Inline]
+		public void String(StringView string)
+		{
+			if (string.Length == 0)
+				outStr.Append("\"\"");
+			else String.QuoteString(&string[[Unchecked]0], string.Length, outStr);
+		}
+
+		[Inline]
+		public void Null()
+		{
+			outStr.Append("null");
+		}
+
+		[Inline]
+		public void Char(char32 char)
+		{
+			outStr.Append('\'');
+			let string = scope String()..Append(char);
+			let len = string.Length;
+			outStr..Append(String.QuoteString(&string[[Unchecked]0], len, .. string)[(len + 1)...^2])
+				.Append('\'');
+		}
+
+		public ArrayBlockEnd ArrayBlock(bool doOneLine = false)
+		{
 			outStr.Append('[');
 			if (doFormatting)
 			{
@@ -131,10 +174,8 @@ namespace Bon.Integrated
 			return .(this);
 		}
 
-		public ObjectBlockEnd StartObject()
+		public ObjectBlockEnd ObjectBlock()
 		{
-			if (doFormatting && outStr.Length > 0 && outStr[outStr.Length - 1] == '\n')
-				f.DoTabs(outStr);
 			outStr.Append('{');
 			if (doFormatting)
 			{
@@ -147,7 +188,7 @@ namespace Bon.Integrated
 			return .(this);
 		}
 
-		public void EndArray()
+		void ArrayBlockEnd()
 		{
 			Debug.Assert(arrDepth > 0);
 			arrDepth--;
@@ -166,7 +207,7 @@ namespace Bon.Integrated
 			outStr.Append(']');
 		}
 
-		public void EndObject()
+		void ObjectBlockEnd()
 		{
 			Debug.Assert(objDepth > 0);
 			objDepth--;
@@ -193,10 +234,8 @@ namespace Bon.Integrated
 			outStr.Append('}');
 		}
 		
-		/// Call at the end of any value (be it primitive, array or object).
-		/// Prepares for the next Start..., Identifier or Key call.
 		[Inline]
-		public void EndEntry(bool doOneLine = false)
+		public void EntryEnd(bool doOneLine = false)
 		{
 			outStr.Append(',');
 			if (doFormatting && !doOneLine)
@@ -210,10 +249,10 @@ namespace Bon.Integrated
 			if (outStr.Length > 0)
 			{
 				// Remove trailing newline with tabs (possibly)
-				while (outStr[outStr.Length - 1].IsWhiteSpace)
+				while (outStr[[Unchecked]outStr.Length - 1].IsWhiteSpace)
 					outStr.RemoveFromEnd(1);
 
-				if (outStr[outStr.Length - 1] == ',')
+				if (outStr.EndsWith(','))
 					outStr.RemoveFromEnd(1);
 			}
 		}

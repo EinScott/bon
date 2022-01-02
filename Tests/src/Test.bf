@@ -206,6 +206,8 @@ namespace Bon.Tests
 				let str = Bon.Serialize(i, .. scope .(), .Verbose);
 				Test.Assert(str == ".CozyHut|.Green");
 			}
+
+			// TODO: test leftover with and without flags enum!
 		}
 
 		[Serializable,Ordered]

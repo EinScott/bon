@@ -40,24 +40,24 @@ namespace Bon.Integrated
 			(flags.HasFlag(.IncludeDefault) || !VariantDataIsZero!(val))
 		}
 
-		[Inline]
-		public static void Thing(BonWriter writer, ref Variant thingVal, BonSerializeFlags flags = .DefaultFlags)
-		{
-			if (DoInclude!(ref thingVal, flags))
-				Field(writer, ref thingVal, flags);
-		}
-
 		static mixin DoTypeOneLine(Type type, BonSerializeFlags flags)
 		{
 			(type.IsPrimitive || (type.IsTypedPrimitive && (!flags.HasFlag(.Verbose) || !type.IsEnum)))
 		}
 
-		public static void Field(BonWriter writer, ref Variant val, BonSerializeFlags flags = .DefaultFlags, bool doOneLineVal = false)
+		[Inline]
+		public static void Thing(BonWriter writer, ref Variant thingVal, BonSerializeFlags flags = .DefaultFlags)
 		{
-			let fieldType = val.VariantType;
+			if (DoInclude!(ref thingVal, flags))
+				Value(writer, ref thingVal, flags);
+		}
+
+		public static void Value(BonWriter writer, ref Variant val, BonSerializeFlags flags = .DefaultFlags, bool doOneLine = false)
+		{
+			let valType = val.VariantType;
 
 			// Make sure that doOneLineVal is only passed when valid
-			Debug.Assert(!doOneLineVal || DoTypeOneLine!(fieldType, flags));
+			Debug.Assert(!doOneLine || DoTypeOneLine!(valType, flags));
 
 			mixin AsThingToString<T>()
 			{
@@ -87,23 +87,14 @@ namespace Bon.Integrated
 
 			mixin Char(Type type)
 			{
-				mixin HandleChar<T>()
-				{
-					T thing = *(T*)val.DataPtr;
-					var str = thing.ToString(.. scope .());
-					let len = str.Length;
-					String.QuoteString(&str[0], len, str);
-					writer.outStr.Append(str[(len + 1)...^2]);
-				}
-
-				writer.outStr.Append('\'');
+				char32 char = 0;
 				switch (type)
 				{
-				case typeof(char8): HandleChar!<char8>();
-				case typeof(char16): HandleChar!<char16>();
-				case typeof(char32): HandleChar!<char32>();
+				case typeof(char8): char = (.)*(char8*)val.DataPtr;
+				case typeof(char16): char = (.)*(char16*)val.DataPtr;
+				case typeof(char32): char = *(char32*)val.DataPtr;
 				}
-				writer.outStr.Append('\'');
+				writer.Char(char);
 			}
 
 			mixin Float(Type type)
@@ -125,39 +116,38 @@ namespace Bon.Integrated
 				else (boolean ? 1 : 0).ToString(writer.outStr);
 			}
 
-			if (fieldType.IsPrimitive)
-			{
-				writer.StartLine(doOneLineVal);
+			writer.EntryStart(doOneLine);
 
-				if (fieldType.IsInteger)
-					Integer!(fieldType);
-				else if (fieldType.IsFloatingPoint)
-					Float!(fieldType);
-				else if (fieldType.IsChar)
-					Char!(fieldType);
-				else if (fieldType == typeof(bool))
+			if (valType.IsPrimitive)
+			{
+				if (valType.IsInteger)
+					Integer!(valType);
+				else if (valType.IsFloatingPoint)
+					Float!(valType);
+				else if (valType.IsChar)
+					Char!(valType);
+				else if (valType == typeof(bool))
 					Bool!();
 				else Debug.FatalError(); // Should be unreachable
 			}
-			else if (fieldType.IsTypedPrimitive)
+			else if (valType.IsTypedPrimitive)
 			{
-				writer.StartLine(doOneLineVal);
-
-				if (fieldType.UnderlyingType.IsInteger)
+				if (valType.UnderlyingType.IsInteger)
 				{
-					if (fieldType.IsEnum && flags.HasFlag(.Verbose))
+					if (valType.IsEnum && flags.HasFlag(.Verbose))
 					{
 						int64 value = 0;
-						Span<uint8>((uint8*)val.DataPtr, fieldType.Size).CopyTo(Span<uint8>((uint8*)&value, fieldType.Size));
+						Span<uint8>((uint8*)val.DataPtr, valType.Size).CopyTo(Span<uint8>((uint8*)&value, valType.Size));
 
 						bool found = false;
-						for (var field in fieldType.GetFields())
+						for (var field in valType.GetFields())
 						{
 							if (field.[Friend]mFieldData.mFlags.HasFlag(.EnumCase) &&
 								*(int64*)&field.[Friend]mFieldData.[Friend]mData == value)
 							{
-								writer.outStr..Append('.').Append(field.Name);
+								writer.Enum(field.Name);
 								found = true;
+								break;
 							}
 						}
 
@@ -179,7 +169,8 @@ namespace Bon.Integrated
 								// Go through all values and find best match in therms of bits
 								int64 bestVal = 0;
 								var bestValBits = 0;
-								for (var field in fieldType.GetFields())
+								bool foundAny = false;
+								for (var field in valType.GetFields())
 								{
 									if (field.[Friend]mFieldData.mFlags.HasFlag(.EnumCase))
 									{
@@ -205,51 +196,43 @@ namespace Bon.Integrated
 								if (bestValBits > 0)
 								{
 									valueLeft &= ~bestVal; // Remove all bits it shares with this
-									writer.outStr..Append('.')..Append(bestValName).Append('|');
+									writer.Enum(bestValName);
+									foundAny = true;
 								}
 								else
 								{
-									if (writer.outStr.EndsWith('|')) // Flags enum
-										(*(uint64*)&valueLeft).ToString(writer.outStr, "X", null);
-									else Integer!(fieldType.UnderlyingType);
+									if (foundAny)
+										writer.EnumAdd();
+									Integer!(valType.UnderlyingType);
 									break;
 								}
 
 								if (valueLeft == 0)
-								{
-									if (writer.outStr.EndsWith('|'))
-										writer.outStr.RemoveFromEnd(1);
 									break;
-								}
 							}
 						}
-
 					}
-					else Integer!(fieldType.UnderlyingType);
+					else Integer!(valType.UnderlyingType);
 				}
-				else if (fieldType.UnderlyingType.IsFloatingPoint)
-					Float!(fieldType.UnderlyingType);
-				else if (fieldType.UnderlyingType.IsChar)
-					Char!(fieldType.UnderlyingType);
-				else if (fieldType.UnderlyingType == typeof(bool))
+				else if (valType.UnderlyingType.IsFloatingPoint)
+					Float!(valType.UnderlyingType);
+				else if (valType.UnderlyingType.IsChar)
+					Char!(valType.UnderlyingType);
+				else if (valType.UnderlyingType == typeof(bool))
 					Bool!();
 				else Debug.FatalError(); // Should be unreachable
 			}
-			else if (fieldType.IsStruct)
+			else if (valType.IsStruct)
 			{
-				if (fieldType == typeof(StringView))
+				if (valType == typeof(StringView))
 				{
-					writer.StartLine(doOneLineVal);
-
 					let view = val.Get<StringView>();
 
 					if (view.Ptr == null)
-						writer.outStr.Append("null");
-					else if (view.Length == 0)
-						writer.outStr.Append("\"\"");
-					else String.QuoteString(&view[0], view.Length, writer.outStr);
+						writer.Null();
+					else writer.String(view);
 				}
-				else if (fieldType.IsEnum && fieldType.IsUnion)
+				else if (valType.IsEnum && valType.IsUnion)
 				{
 					// Enum union in memory:
 					// {<payload>|<discriminator>}
@@ -257,7 +240,7 @@ namespace Bon.Integrated
 					bool didWrite = false;
 					uint64 unionCaseIndex = uint64.MaxValue;
 					uint64 currCaseIndex = 0;
-					for (var enumField in fieldType.GetFields())
+					for (var enumField in valType.GetFields())
 					{
 						if (enumField.[Friend]mFieldData.mFlags.HasFlag(.EnumDiscriminator))
 						{
@@ -302,7 +285,7 @@ namespace Bon.Integrated
 							var unionPayload = Variant.CreateReference(enumField.FieldType, val.DataPtr);
 
 							// Do serialize of discriminator and payload
-							writer.outStr..Append('.').Append(enumField.Name);
+							writer.Enum(enumField.Name);
 							Struct(writer, ref unionPayload, flags);
 
 							didWrite = true;
@@ -314,9 +297,9 @@ namespace Bon.Integrated
 				}
 				else Struct(writer, ref val, flags);
 			}
-			else if (fieldType is SizedArrayType)
+			else if (valType is SizedArrayType)
 			{
-				let t = (SizedArrayType)fieldType;
+				let t = (SizedArrayType)valType;
 				let count = t.ElementCount;
 				if (count > 0)
 				{
@@ -324,15 +307,11 @@ namespace Bon.Integrated
 					// deserialize in any case. But it's nice for manual editing to know how
 					// much the array can hold
 					if (flags.HasFlag(.Verbose))
-					{
-						writer.outStr.Append("<const ");
-						count.ToString(writer.outStr);
-						writer.outStr.Append('>');
-					}
+						writer.Sizer(count, true);
 					
 					let arrType = t.UnderlyingType;
-					let doOneLine = DoTypeOneLine!(arrType, flags);
-					using (writer.StartArray(doOneLine))
+					let doArrayOneLine = DoTypeOneLine!(arrType, flags);
+					using (writer.ArrayBlock(doArrayOneLine))
 					{
 						var includeCount = count;
 						if (!flags.HasFlag(.IncludeDefault))
@@ -357,28 +336,32 @@ namespace Bon.Integrated
 						for (let i < includeCount)
 						{
 							var arrVal = Variant.CreateReference(arrType, ptr);
-							Field(writer, ref arrVal, flags, doOneLine);
+							Value(writer, ref arrVal, flags, doArrayOneLine);
 
 							ptr += arrType.Stride;
 						}
 					}
 				}
 			}
-			else if (fieldType == typeof(String))
+			else if (valType.IsObject)
 			{
-				writer.StartLine(doOneLineVal);
+				if (valType == typeof(String))
+				{
+					let str = val.Get<String>();
 
-				let str = val.Get<String>();
-
-				if (str == null)
-					writer.outStr.Append("null");
-				else if (str.Length == 0)
-					writer.outStr.Append("\"\"");
-				else String.QuoteString(&str[0], str.Length, writer.outStr);
+					if (str == null)
+						writer.Null();
+					else writer.String(str);
+				}
+				else Debug.FatalError(); // TODO
 			}
-			else Debug.FatalError(); // TODO
+			else if (valType.IsPointer)
+			{
+				Debug.FatalError(); // TODO
+			}
+			else Debug.FatalError();
 
-			writer.EndEntry(doOneLineVal);
+			writer.EntryEnd(doOneLine);
 		}
 
 		public static void Struct(BonWriter writer, ref Variant structVal, BonSerializeFlags flags = .DefaultFlags)
@@ -388,7 +371,7 @@ namespace Bon.Integrated
 			Debug.Assert(structType.IsStruct);
 
 			bool hasUnnamedMembers = false;
-			using (writer.StartObject())
+			using (writer.ObjectBlock())
 			{
 				if (structType.FieldCount > 0)
 				{
@@ -408,7 +391,7 @@ namespace Bon.Integrated
 							hasUnnamedMembers = true;
 
 						writer.Identifier(m.Name);
-						Field(writer, ref val, flags);
+						Value(writer, ref val, flags);
 					}
 				}
 			}
