@@ -387,6 +387,7 @@ namespace Bon.Integrated
 
 			Debug.Assert(structType.IsStruct);
 
+			bool hasUnnamedMembers = false;
 			using (writer.StartObject())
 			{
 				if (structType.FieldCount > 0)
@@ -403,16 +404,22 @@ namespace Bon.Integrated
 						if (!DoInclude!(ref val, flags))
 							continue;
 
+						if (flags.HasFlag(.Verbose) && uint64.Parse(m.Name) case .Ok)
+							hasUnnamedMembers = true;
+
 						writer.Identifier(m.Name);
 						Field(writer, ref val, flags);
 					}
 				}
 			}
-
-			if (!structType is TypeInstance)
+			
+			if (flags.HasFlag(.Verbose))
 			{
 				// Just add this as a comment in case anyone wonders...
-				writer.outStr.Append(scope $"/* No reflection data for {structType}. Add [Serializable] or force it */");
+				if (!structType is TypeInstance)
+					writer.outStr.Append(scope $"/* No reflection data for {structType}. Add [Serializable] or force it */");
+				else if (hasUnnamedMembers)
+					writer.outStr.Append(scope $"/* Type has unnamed members */");
 			}
 		}
 	}

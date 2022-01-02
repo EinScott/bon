@@ -333,10 +333,8 @@ namespace Bon.Tests
 		enum Thing
 		{
 			case Nothing;
-			case Text(Vector2 pos, String text, float rotation);
+			case Text(Vector2 pos, String text, int size, float rotation);
 			case Circle(Vector2 pos, float radius);
-			case Rect(Vector2 pos, Vector2 size, float rotation);
-			case Capsule(Vector2 pos, float radius, uint height);
 			case Something(float, float, Vector2);
 		}
 
@@ -356,9 +354,29 @@ namespace Bon.Tests
 			}
 
 			{
+				Thing i = .Text(.(50, 50), "Something!", 24, 90f);
+				let str = Bon.Serialize(i, .. scope .());
+				Test.Assert(str == ".Text{pos={x=50,y=50},text=\"Something!\",size=24,rotation=90}");
+			}
+
+			{
 				Thing i = .Something(5, 4.5f, .(1, 10));
 				let str = Bon.Serialize(i, .. scope .());
-				Test.Assert(str == ".Something{0=5,1=4.5,2={x=1,y=10}}"); //TODO: on verbose mode, put a warning comment in on these, telling you to name your stuff!
+				Test.Assert(str == ".Something{0=5,1=4.5,2={x=1,y=10}}");
+			}
+
+			{
+				Thing i = .Circle(.(10, 1), 4.5f);
+				let str = Bon.Serialize(i, .. scope .(), .Verbose);
+				Test.Assert(str == """
+					.Circle{
+						pos={
+							x=10,
+							y=1
+						},
+						radius=4.5
+					}
+					""");
 			}
 		}
 	}
