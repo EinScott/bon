@@ -16,6 +16,12 @@ namespace Bon.Integrated
 			}
 
 			[Inline]
+			public bool HasMore()
+			{
+				return !r.Check(']');
+			}
+
+			[Inline]
 			public void Dispose()
 			{
 				r.ArrayBlockEnd();
@@ -33,6 +39,12 @@ namespace Bon.Integrated
 			}
 
 			[Inline]
+			public bool HasMore()
+			{
+				return !r.Check('}');
+			}
+
+			[Inline]
 			public void Dispose()
 			{
 				r.ObjectBlockEnd();
@@ -44,7 +56,19 @@ namespace Bon.Integrated
 		public enum Errors
 		{
 			None = 0,
-			UnterminatedComment = 1
+			UnterminatedComment = 1,
+			ExpectedArray = 1 << 2,
+			UnterminatedArray = 1 << 3,
+			ExpectedObject = 1 << 4,
+			UnterminatedObject = 1 << 5,
+			ExpectedString = 1 << 6,
+			UnterminatedString = 1 << 7,
+			ExpectedChar = 1 << 8,
+			UnterminatedChar = 1 << 9,
+			ExpectedSizer = 1 << 10,
+			UnterminatedSizer = 1 << 11,
+			ExpectedComma = 1 << 12,
+			ExpectedEquals = 1 << 13
 		}
 		public Errors errors;
 
@@ -55,10 +79,10 @@ namespace Bon.Integrated
 
 			inStr = str;
 
-			EatEmpty();
+			ConsumeEmpty();
 		}
 
-		void EatEmpty()
+		void ConsumeEmpty()
 		{
 			// Skip space, line breaks, tabs and comments
 			var i = 0;
@@ -109,43 +133,90 @@ namespace Bon.Integrated
 			return inStr.Length == 0;
 		}
 
-		public StringView Identifier()
+		bool Check(char8 token, bool consume = true)
 		{
-			// get identifier
-
-			// consume =
-
-			return ""; // temp
+			if (inStr.StartsWith(token))
+			{
+				if (consume)
+					inStr.RemoveFromStart(1);
+				return true;
+			}
+			else return false;
 		}
 
-		public void Expect(char8 token)
+		StringView ParseName()
 		{
+			var nameLen = 0;
+			for (; nameLen < inStr.Length; nameLen++)
+			{
+				let char = inStr[nameLen];
+				if (!char.IsLetterOrDigit && char != '_')
+					break;
+			}
 
+			let name = inStr.Substring(0, nameLen);
+			inStr.RemoveFromStart(nameLen);
+			return name;
+		}
+
+		// TODO more methods
+
+		public StringView Identifier()
+		{
+			let name = ParseName();
+
+			ConsumeEmpty();
+
+			if (!Check('='))
+				errors |= .ExpectedEquals;
+
+			ConsumeEmpty();
+
+			return name;
 		}
 
 		public ArrayBlockEnd ArrayBlock()
 		{
+			if (!Check('['))
+				errors |= .ExpectedArray;
+
+			ConsumeEmpty();
+
 			return .(this);
 		}
 
 		public ObjectBlockEnd ObjectBlock()
 		{
+			if (!Check('{'))
+				errors |= .ExpectedObject;
+
+			ConsumeEmpty();
+
 			return .(this);
 		}
 		
 		void ArrayBlockEnd()
 		{
+			if (!Check(']'))
+				errors |= .UnterminatedArray;
 
+			ConsumeEmpty();
 		}
 
 		void ObjectBlockEnd()
 		{
+			if (!Check('}'))
+				errors |= .UnterminatedObject;
 
+			ConsumeEmpty();
 		}
 
 		public void EntryEnd()
 		{
+			if (!Check(','))
+				errors |= .UnterminatedObject;
 
+			ConsumeEmpty();
 		}
 	}
 }

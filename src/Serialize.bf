@@ -46,10 +46,15 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
-		public static void Thing(BonWriter writer, ref Variant thingVal, BonSerializeFlags flags = .DefaultFlags)
+		public static void Thing<T>(BonWriter writer, T thing, BonSerializeFlags flags = .DefaultFlags)
 		{
-			if (DoInclude!(ref thingVal, flags))
-				Value(writer, ref thingVal, flags);
+			var thing;
+			var variant = Variant.CreateReference(typeof(T), &thing);
+			if (DoInclude!(ref variant, flags))
+				Value(writer, ref variant, flags);
+			writer.End();
+			if (flags.HasFlag(.Verbose) && writer.outStr.Length == 0)
+				writer.outStr.Append("/* value is default */");
 		}
 
 		public static void Value(BonWriter writer, ref Variant val, BonSerializeFlags flags = .DefaultFlags, bool doOneLine = false)

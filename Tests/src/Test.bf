@@ -208,6 +208,7 @@ namespace Bon.Tests
 			}
 
 			// TODO: test leftover with and without flags enum!
+			// CHAR enums!
 		}
 
 		[Serializable,Ordered]

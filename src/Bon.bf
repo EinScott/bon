@@ -24,29 +24,13 @@ namespace Bon
 		public static void Serialize<T>(T value, String into, BonSerializeFlags flags = .DefaultFlags) where T : struct
 		{
 			let writer = scope BonWriter(into, flags.HasFlag(.Verbose));
-			var value;
-			var variant = Variant.CreateReference(typeof(T), &value);
-			Serialize.Thing(writer, ref variant, flags);
-			writer.End();
+			Serialize.Thing<T>(writer, value, flags);
 		}
 
 		public static Result<void> Deserialize<T>(ref T into, StringView from) where T : struct
 		{
 			let reader = scope BonReader(from);
-
-			// ACTUALLY this should be in the function thats equivalent to Serialize.Thing()
-			// and then we should just Try! that here
-			if (reader.ReachedEnd())
-				into = default;
-			else
-			{
-				// TODO
-
-				if (!reader.ReachedEnd())
-					return .Err;
-			}
-
-
+			Try!(Deserialize.Thing<T>(reader, ref into));
 			return .Ok;
 		}
 
