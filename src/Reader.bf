@@ -159,7 +159,41 @@ namespace Bon.Integrated
 			return name;
 		}
 
-		// TODO more methods
+		public StringView Integer()
+		{
+			var numLen = 0;
+			if (inStr.Length > 0 && inStr[0] == '-')
+				numLen++;
+			while (inStr.Length > numLen + 1 &&  inStr[numLen].IsNumber)
+				numLen++;
+
+			let num = inStr.Substring(0, numLen);
+			inStr.RemoveFromStart(numLen);
+
+			ConsumeEmpty();
+
+			return num;
+		}
+
+		public StringView Floating()
+		{
+			var numLen = 0;
+			while ({
+				let char = inStr[numLen];
+				inStr.Length > numLen + 1 && char.IsNumber || char == '.' || char == '-' || char == 'e'
+			})
+				numLen++;
+
+			if (inStr.StartsWith('f') || inStr.StartsWith('d'))
+				inStr.RemoveFromStart(1);
+
+			let num = inStr.Substring(0, numLen);
+			inStr.RemoveFromStart(numLen);
+
+			ConsumeEmpty();
+
+			return num;
+		}
 
 		public StringView Identifier()
 		{

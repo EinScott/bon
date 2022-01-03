@@ -32,6 +32,73 @@ namespace Bon.Integrated
 		{
 			Type valType = val.VariantType;
 
+			mixin ParseThing<T>(StringView num) where T : var
+			{
+				T thing = default;
+				if (!(T.Parse(.(&num[0], num.Length)) case .Ok(out thing)))
+					return .Err; // "failed to parse"
+#unwarn
+				thing
+			}
+
+			mixin Integer(Type type)
+			{
+				let num = reader.Integer();
+				if (num.Length == 0)
+					return .Err; // TODO do better error report! "expected integer number"
+
+				mixin DoInt<T, T2>(StringView numStr) where T2 : var where T : var
+				{
+					// Not all ints have parse methods (that also filter out letters properly), 
+					// so we need to do this, along with range checks!
+
+					T2 t2Num = ParseThing!<T2>(numStr);
+#unwarn
+					if (t2Num > (T2)T.MaxValue || t2Num < (T2)T.MinValue)
+						return .Err;
+#unwarn
+					(T)t2Num
+				}
+
+				switch (type)
+				{
+				case typeof(int8): *(int8*)val.DataPtr = DoInt!<int8, int64>(num);
+				case typeof(int16): *(int16*)val.DataPtr = DoInt!<int16, int64>(num);
+				case typeof(int32): *(int32*)val.DataPtr = DoInt!<int32, int64>(num);
+				case typeof(int64): *(int64*)val.DataPtr = ParseThing!<int64>(num);
+				case typeof(int): *(int*)val.DataPtr = DoInt!<int, int64>(num);
+
+				case typeof(uint8): *(uint8*)val.DataPtr = DoInt!<uint8, uint64>(num);
+				case typeof(uint16): *(uint16*)val.DataPtr = DoInt!<uint16, uint64>(num);
+				case typeof(uint32): *(uint32*)val.DataPtr = DoInt!<uint32, uint64>(num);
+				case typeof(uint64): *(uint64*)val.DataPtr = ParseThing!<uint64>(num);
+				case typeof(uint): *(uint*)val.DataPtr = DoInt!<uint, uint64>(num);
+				}
+			}
+
+			mixin Float(Type type)
+			{
+				let num = reader.Floating();
+				if (num.Length == 0)
+					return .Err; // "expected floating point number"
+
+				switch (type)
+				{
+				case typeof(float): *(float*)val.DataPtr = ParseThing!<float>(num);
+				case typeof(double): *(double*)val.DataPtr = ParseThing!<double>(num);
+				}
+			}
+
+			mixin Char(Type type)
+			{
+				// TODO
+			}
+
+			mixin Bool()
+			{
+				// TODO
+			}
+
 			if (valType.IsPrimitive)
 			{
 				if (valType.IsInteger)
