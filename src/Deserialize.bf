@@ -62,7 +62,7 @@ namespace Bon.Integrated
 
 				switch (type)
 				{
-				case typeof(int8): *(int8*)val.DataPtr = DoInt!<int8, int64>(num);
+				case typeof(int8): *(int8*)val.DataPtr = DoInt!<int8, int64>(num); // TODO: make a custom parsing func like uint64 to properly parse hex; then allow hex in reader.Integer()
 				case typeof(int16): *(int16*)val.DataPtr = DoInt!<int16, int64>(num);
 				case typeof(int32): *(int32*)val.DataPtr = DoInt!<int32, int64>(num);
 				case typeof(int64): *(int64*)val.DataPtr = ParseThing!<int64>(num);
@@ -91,12 +91,26 @@ namespace Bon.Integrated
 
 			mixin Char(Type type)
 			{
-				// TODO
+				let res = reader.Char();
+				if (res case .Err)
+					return .Err; // "expected floating point number"
+				var char = res.Get();
+
+				switch (type)
+				{
+				case typeof(char8): *(char8*)val.DataPtr = *(char8*)&char;
+				case typeof(char16): *(char16*)val.DataPtr = *(char16*)&char;
+				case typeof(char32): *(char32*)val.DataPtr = *(char32*)&char;
+				}
 			}
 
 			mixin Bool()
 			{
-				// TODO
+				let res = reader.Bool();
+				if (res case .Err)
+					return .Err; // "expected boolean"
+
+				*(bool*)val.DataPtr = res.Get();
 			}
 
 			if (valType.IsPrimitive)
@@ -113,11 +127,33 @@ namespace Bon.Integrated
 			}
 			else if (valType.IsTypedPrimitive)
 			{
+				if (valType.UnderlyingType.IsInteger)
+				{
+					if (valType.IsEnum)
+					{
 
+					}
+					else Integer!(valType.UnderlyingType);
+				}
+				else if (valType.UnderlyingType.IsFloatingPoint)
+					Float!(valType.UnderlyingType);
+				else if (valType.UnderlyingType.IsChar)
+					Char!(valType.UnderlyingType);
+				else if (valType.UnderlyingType == typeof(bool))
+					Bool!();
+				else Debug.FatalError(); // Should be unreachable
 			}
 			else if (valType.IsStruct)
 			{
+				if (valType == typeof(StringView))
+				{
 
+				}
+				else if (valType.IsEnum && valType.IsUnion)
+				{
+
+				}
+				else Struct(reader, ref val);
 			}
 			else if (valType is SizedArrayType)
 			{
@@ -125,229 +161,17 @@ namespace Bon.Integrated
 			}
 			else if (valType.IsObject)
 			{
+				if (valType == typeof(String))
+				{
 
+				}
+				else Debug.FatalError(); // TODO
 			}
 			else if (valType.IsPointer)
 			{
 				Debug.FatalError(); // TODO
 			}
 			else Debug.FatalError();
-
-			if (valType.IsInteger
-				|| valType.IsTypedPrimitive && valType.UnderlyingType.IsInteger)
-			{
-				var numLen = 0;
-				while (buffer.Length > numLen + 1 && buffer[numLen].IsNumber || buffer[numLen] == '-')
-					numLen++;
-
-				if (numLen == 0)
-					LogErrorReturn!("Expected integer literal");
-
-				switch (valType)
-				{
-				case typeof(int8), typeof(int16), typeof(int32), typeof(int64), typeof(int):
-					if (int64.Parse(.(&buffer[0], numLen)) case .Ok(var num))
-						Internal.MemCpy(val.DataPtr, &num, valType.Size);
-					else LogErrorReturn!("Failed to parse integer");
-				default: // unsigned
-					if (uint64.Parse(.(&buffer[0], numLen)) case .Ok(var num))
-						Internal.MemCpy(val.DataPtr, &num, valType.Size);
-					else LogErrorReturn!("Failed to parse integer");
-				}
-
-				buffer.RemoveFromStart(numLen);
-			}
-			else if (valType.IsFloatingPoint
-				|| valType.IsTypedPrimitive && valType.UnderlyingType.IsFloatingPoint)
-			{
-				var numLen = 0;
-				while (buffer.Length > numLen + 1 && buffer[numLen].IsNumber || buffer[numLen] == '.' || buffer[numLen] == '-' || buffer[numLen] == 'e')
-					numLen++;
-
-				if (numLen == 0)
-					LogErrorReturn!("Expected floating point literal");
-
-				switch (valType)
-				{
-				case typeof(float):
-					if (float.Parse(.(&buffer[0], numLen)) case .Ok(let num))
-						*(float*)val.DataPtr = num;
-					else LogErrorReturn!("Failed to parse floating point");
-				case typeof(double):
-					if (double.Parse(.(&buffer[0], numLen)) case .Ok(let num))
-						*(double*)val.DataPtr = num;
-					else LogErrorReturn!("Failed to parse floating point");
-				default:
-					LogErrorReturn!("Unexpected floating point");
-				}
-
-				buffer.RemoveFromStart(numLen);
-			}
-			else if (valType == typeof(bool))
-			{
-				if (buffer.StartsWith(bool.TrueString, .OrdinalIgnoreCase))
-				{
-					*(bool*)val.DataPtr = true;
-					buffer.RemoveFromStart(bool.TrueString.Length);
-				}
-				else if (buffer[0] == '1')
-				{
-					*(bool*)val.DataPtr = true;
-					buffer.RemoveFromStart(1);
-				}
-				else if (buffer.StartsWith(bool.FalseString, .OrdinalIgnoreCase))
-				{
-					// Is already 0, sooOOo nothing to do here
-					buffer.RemoveFromStart(bool.FalseString.Length);
-				}
-				else if (buffer[0] == '0')
-				{
-					// Is already 0, sooOOo nothing to do here
-					buffer.RemoveFromStart(1);
-				}
-				else LogErrorReturn!("Failed to parse bool");
-			}
-			else if (valType is SizedArrayType)
-			{
-				ForceEat!('[', ref buffer);
-				EatSpace!(ref buffer);
-
-				let t = (SizedArrayType)valType;
-				let count = t.ElementCount;
-				let arrType = t.UnderlyingType;
-
-				var i = 0;
-				var ptr = (uint8*)val.DataPtr;
-				while ({
-					EatSpace!(ref buffer);
-					buffer[0] != ']'
-					})
-				{
-					if (i >= count)
-						LogErrorReturn!("Too many elements given in array");
-
-					var arrVal = Variant.CreateReference(arrType, ptr);
-					Try!(Value(scene, ref arrVal, ref buffer, deferResolveEntityRefs));
-
-					ptr += arrType.Size;
-					i++;
-
-					EatSpace!(ref buffer);
-
-					if (buffer[0] == ',')
-						buffer.RemoveFromStart(1);
-				}
-
-				ForceEat!(']', ref buffer);
-			}
-			else if (valType.IsEnum)
-			{
-				// Get enum value
-				var enumLen = 0, isNumber = true;
-				for (; enumLen < buffer.Length; enumLen++)
-					if (!buffer[enumLen].IsDigit)
-					{
-						if (!buffer[enumLen].IsLetter && buffer[enumLen] != '_')
-							break;
-						else isNumber = false;
-					}
-
-				if (enumLen == 0)
-					LogErrorReturn!("Expected enum value");
-
-				let enumVal = buffer.Substring(0, enumLen);
-				buffer.RemoveFromStart(enumLen);
-
-				if (isNumber)
-				{
-					if (valType.IsSigned)
-					{
-						if (int64.Parse(enumVal) case .Ok(var num))
-							Internal.MemCpy(val.DataPtr, &num, valType.Size);
-						else LogErrorReturn!("Failed to parse enum integer");
-					}
-					else
-					{
-						if (uint64.Parse(enumVal) case .Ok(var num))
-							Internal.MemCpy(val.DataPtr, &num, valType.Size);
-						else LogErrorReturn!("Failed to parse enum integer");
-					}
-				}
-				else
-				{
-					FINDFIELD:do
-					{
-						let typeInst = (TypeInstance)valType;
-						for (let field in typeInst.GetFields())
-						{
-							if (enumVal.Equals(field.[Friend]mFieldData.mName, false))
-							{
-								Internal.MemCpy(val.DataPtr, &field.[Friend]mFieldData.mData, valType.Size);
-								break FINDFIELD;
-							}
-						}
-
-						LogErrorReturn!("Failed to parse enum string");
-					}
-				}
-			}
-			else if (valType == typeof(String)
-				|| valType == typeof(StringView))
-			{
-				if (buffer[0] != '"')
-					LogErrorReturn!("String must start with '\"'");
-
-				// Find terminating "
-				int endIdx = -1;
-				bool isEscape = false;
-				for (let c in buffer[1...])
-				{
-					if (c == '"' && !isEscape)
-					{
-						endIdx = @c.Index;
-						break;
-					}	
-
-					if (c == '\\')
-						isEscape = true;
-					else isEscape = false;
-				}
-				if (endIdx == -1)
-					LogErrorReturn!("Unterminated string in asset notation");
-
-				// Manage string!
-				var nameStr = String.UnQuoteString(&buffer[0], endIdx + 2, .. scope .());
-				if (scene.managedStrings.Contains(nameStr))
-				{
-					Debug.Assert(!scene.managedStrings.TryAdd(nameStr, let existantStr));
-
-					nameStr = *existantStr;
-				}
-				else
-				{
-					// Allocate new one, doesnt currently exist!
-					nameStr = scene.managedStrings.Add(.. new .(nameStr));
-				}
-
-				if (valType == typeof(StringView))
-				{
-					// Make and copy stringView
-					var strVal = (StringView)nameStr;
-					Internal.MemCpy(val.DataPtr, &strVal, sizeof(StringView));
-				}
-				else
-				{
-					// Copy pointer to string
-					Internal.MemCpy(val.DataPtr, &nameStr, sizeof(int));
-				}
-
-				buffer.RemoveFromStart(endIdx + 2);
-			}
-			else if (valType.IsStruct)
-			{
-				Try!(Struct(scene, valType, .((uint8*)val.DataPtr, valType.Size), ref buffer, deferResolveEntityRefs));
-			}
-			else LogErrorReturn!("Cannot handle value");
 
 			return .Ok;
 		}

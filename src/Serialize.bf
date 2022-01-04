@@ -57,6 +57,63 @@ namespace Bon.Integrated
 				writer.outStr.Append("/* value is default */");
 		}
 
+		static mixin AsThingToString<T>(BonWriter writer, ref Variant val)
+		{
+			T thing = *(T*)val.DataPtr;
+			thing.ToString(writer.outStr);
+		}
+
+		static mixin Integer(Type type, BonWriter writer, ref Variant val)
+		{
+			switch (type)
+			{
+			case typeof(int8): AsThingToString!<int8>(writer, ref val);
+			case typeof(int16): AsThingToString!<int16>(writer, ref val);
+			case typeof(int32): AsThingToString!<int32>(writer, ref val);
+			case typeof(int64): AsThingToString!<int64>(writer, ref val);
+			case typeof(int): AsThingToString!<int>(writer, ref val);
+
+			case typeof(uint8): AsThingToString!<uint8>(writer, ref val);
+			case typeof(uint16): AsThingToString!<uint16>(writer, ref val);
+			case typeof(uint32): AsThingToString!<uint32>(writer, ref val);
+			case typeof(uint64): AsThingToString!<uint64>(writer, ref val);
+			case typeof(uint): AsThingToString!<uint>(writer, ref val);
+
+			default: Debug.FatalError(); // Should be unreachable
+			}
+		}
+
+		static mixin Char(Type type, BonWriter writer, ref Variant val)
+		{
+			char32 char = 0;
+			switch (type)
+			{
+			case typeof(char8): char = (.)*(char8*)val.DataPtr;
+			case typeof(char16): char = (.)*(char16*)val.DataPtr;
+			case typeof(char32): char = *(char32*)val.DataPtr;
+			}
+			writer.Char(char);
+		}
+
+		static mixin Float(Type type, BonWriter writer, ref Variant val)
+		{
+			switch (type)
+			{
+			case typeof(float): AsThingToString!<float>(writer, ref val);
+			case typeof(double): AsThingToString!<double>(writer, ref val);
+
+			default: Debug.FatalError(); // Should be unreachable
+			}
+		}
+
+		static mixin Bool(BonWriter writer, ref Variant val, BonSerializeFlags flags)
+		{
+			bool boolean = *(bool*)val.DataPtr;
+			if (flags.HasFlag(.Verbose))
+				boolean.ToString(writer.outStr);
+			else (boolean ? 1 : 0).ToString(writer.outStr);
+		}
+
 		public static void Value(BonWriter writer, ref Variant val, BonSerializeFlags flags = .DefaultFlags, bool doOneLine = false)
 		{
 			let valType = val.VariantType;
@@ -64,168 +121,127 @@ namespace Bon.Integrated
 			// Make sure that doOneLineVal is only passed when valid
 			Debug.Assert(!doOneLine || DoTypeOneLine!(valType, flags));
 
-			mixin AsThingToString<T>()
-			{
-				T thing = *(T*)val.DataPtr;
-				thing.ToString(writer.outStr);
-			}
-
-			mixin Integer(Type type)
-			{
-				switch (type)
-				{
-				case typeof(int8): AsThingToString!<int8>();
-				case typeof(int16): AsThingToString!<int16>();
-				case typeof(int32): AsThingToString!<int32>();
-				case typeof(int64): AsThingToString!<int64>();
-				case typeof(int): AsThingToString!<int>();
-
-				case typeof(uint8): AsThingToString!<uint8>();
-				case typeof(uint16): AsThingToString!<uint16>();
-				case typeof(uint32): AsThingToString!<uint32>();
-				case typeof(uint64): AsThingToString!<uint64>();
-				case typeof(uint): AsThingToString!<uint>();
-
-				default: Debug.FatalError(); // Should be unreachable
-				}
-			}
-
-			mixin Char(Type type)
-			{
-				char32 char = 0;
-				switch (type)
-				{
-				case typeof(char8): char = (.)*(char8*)val.DataPtr;
-				case typeof(char16): char = (.)*(char16*)val.DataPtr;
-				case typeof(char32): char = *(char32*)val.DataPtr;
-				}
-				writer.Char(char);
-			}
-
-			mixin Float(Type type)
-			{
-				switch (type)
-				{
-				case typeof(float): AsThingToString!<float>();
-				case typeof(double): AsThingToString!<double>();
-
-				default: Debug.FatalError(); // Should be unreachable
-				}
-			}
-
-			mixin Bool()
-			{
-				bool boolean = *(bool*)val.DataPtr;
-				if (flags.HasFlag(.Verbose))
-					boolean.ToString(writer.outStr);
-				else (boolean ? 1 : 0).ToString(writer.outStr);
-			}
-
 			writer.EntryStart(doOneLine);
 
 			if (valType.IsPrimitive)
 			{
 				if (valType.IsInteger)
-					Integer!(valType);
+					Integer!(valType, writer, ref val);
 				else if (valType.IsFloatingPoint)
-					Float!(valType);
+					Float!(valType, writer, ref val);
 				else if (valType.IsChar)
-					Char!(valType);
+					Char!(valType, writer, ref val);
 				else if (valType == typeof(bool))
-					Bool!();
+					Bool!(writer, ref val, flags);
 				else Debug.FatalError(); // Should be unreachable
 			}
 			else if (valType.IsTypedPrimitive)
 			{
-				if (valType.UnderlyingType.IsInteger)
+				// Is used to change what will be printed if the enum has a remainder
+				// to be printed as a literal
+				int64 enumRemainderVal = 0;
+				var printVal = val;
+
+				bool doPrintLiteral = true;
+				if (valType.IsEnum && flags.HasFlag(.Verbose))
 				{
-					if (valType.IsEnum && flags.HasFlag(.Verbose))
+					doPrintLiteral = false;
+
+					int64 valueData = 0;
+					Span<uint8>((uint8*)val.DataPtr, valType.Size).CopyTo(Span<uint8>((uint8*)&valueData, valType.Size));
+
+					bool found = false;
+					for (var field in valType.GetFields())
 					{
-						int64 value = 0;
-						Span<uint8>((uint8*)val.DataPtr, valType.Size).CopyTo(Span<uint8>((uint8*)&value, valType.Size));
-
-						bool found = false;
-						for (var field in valType.GetFields())
+						if (field.[Friend]mFieldData.mFlags.HasFlag(.EnumCase) &&
+							*(int64*)&field.[Friend]mFieldData.[Friend]mData == valueData)
 						{
-							if (field.[Friend]mFieldData.mFlags.HasFlag(.EnumCase) &&
-								*(int64*)&field.[Friend]mFieldData.[Friend]mData == value)
-							{
-								writer.Enum(field.Name);
-								found = true;
-								break;
-							}
-						}
-
-						if (!found)
-						{
-							// There is no exact named value here, but maybe multiple!
-
-							// We only try once, but that's better than none. If you were
-							// to have this enum { A = 0b0011, B = 0b0111, C = 0b1100 }
-							// and run this on 0b1111, this algorithm would fail to
-							// identify .A | .C, but rather .B | 0b1000 because it takes
-							// the largest match first and never looks back if it doesn't
-							// work out. The easiest way to make something more complicated
-							// work would probably be recursion... maybe in the future
-							int64 valueLeft = value;
-							String bestValName = scope .();
-							while (valueLeft != 0)
-							{
-								// Go through all values and find best match in therms of bits
-								int64 bestVal = 0;
-								var bestValBits = 0;
-								bool foundAny = false;
-								for (var field in valType.GetFields())
-								{
-									if (field.[Friend]mFieldData.mFlags.HasFlag(.EnumCase))
-									{
-										let fieldVal = *(int64*)&field.[Friend]mFieldData.[Friend]mData;
-
-										if (fieldVal == 0 || (fieldVal & ~valueLeft) != 0)
-											continue; // fieldVal contains bits that valueLeft doesn't have
-
-										var bits = 0;
-										for (let i < sizeof(int64) * 8)
-											if (((fieldVal >> i) & 0b1) != 0)
-												bits++;
-
-										if (bits > bestValBits)
-										{
-											bestVal = fieldVal;
-											bestValName.Set(field.Name);
-											bestValBits = bits;
-										}
-									}
-								}
-
-								if (bestValBits > 0)
-								{
-									valueLeft &= ~bestVal; // Remove all bits it shares with this
-									writer.Enum(bestValName);
-									foundAny = true;
-								}
-								else
-								{
-									if (foundAny)
-										writer.EnumAdd();
-									Integer!(valType.UnderlyingType);
-									break;
-								}
-
-								if (valueLeft == 0)
-									break;
-							}
+							writer.Enum(field.Name);
+							found = true;
+							break;
 						}
 					}
-					else Integer!(valType.UnderlyingType);
+
+					if (!found)
+					{
+						// There is no exact named value here, but maybe multiple!
+
+						// We only try once, but that's better than none. If you were
+						// to have this enum { A = 0b0011, B = 0b0111, C = 0b1100 }
+						// and run this on 0b1111, this algorithm would fail to
+						// identify .A | .C, but rather .B | 0b1000 because it takes
+						// the largest match first and never looks back if it doesn't
+						// work out. The easiest way to make something more complicated
+						// work would probably be recursion... maybe in the future
+						enumRemainderVal = valueData;
+						String bestValName = scope .();
+						bool foundAny = false;
+						while (enumRemainderVal != 0)
+						{
+							// Go through all values and find best match in therms of bits
+							int64 bestVal = 0;
+							var bestValBits = 0;
+							for (var field in valType.GetFields())
+							{
+								if (field.[Friend]mFieldData.mFlags.HasFlag(.EnumCase))
+								{
+									let fieldVal = *(int64*)&field.[Friend]mFieldData.[Friend]mData;
+
+									if (fieldVal == 0 || (fieldVal & ~enumRemainderVal) != 0)
+										continue; // fieldVal contains bits that valueLeft doesn't have
+
+									var bits = 0;
+									for (let i < sizeof(int64) * 8)
+										if (((fieldVal >> i) & 0b1) != 0)
+											bits++;
+
+									if (bits > bestValBits)
+									{
+										bestVal = fieldVal;
+										bestValName.Set(field.Name);
+										bestValBits = bits;
+									}
+								}
+							}
+
+							if (bestValBits > 0)
+							{
+								enumRemainderVal &= ~bestVal; // Remove all bits it shares with this
+								writer.Enum(bestValName);
+								foundAny = true;
+							}
+							else
+							{
+								if (foundAny)
+									writer.EnumAdd();
+
+								// Print remainder literal below!
+								doPrintLiteral = true;
+								printVal = Variant.CreateReference(val.VariantType, &enumRemainderVal);
+
+								break;
+							}
+
+							if (enumRemainderVal == 0)
+								break;
+						}
+					}
 				}
-				else if (valType.UnderlyingType.IsFloatingPoint)
-					Float!(valType.UnderlyingType);
-				else if (valType.UnderlyingType.IsChar)
-					Char!(valType.UnderlyingType);
-				else if (valType.UnderlyingType == typeof(bool))
-					Bool!();
-				else Debug.FatalError(); // Should be unreachable
+
+				// Print on non-enum types, and if the enum need to append the leftover value as literal
+				// or in any case if we're not printing verbose
+				if (doPrintLiteral)
+				{
+					if (valType.UnderlyingType.IsInteger)
+						Integer!(valType.UnderlyingType, writer, ref printVal);
+					else if (valType.UnderlyingType.IsFloatingPoint)
+						Float!(valType.UnderlyingType, writer, ref printVal);
+					else if (valType.UnderlyingType.IsChar)
+						Char!(valType.UnderlyingType, writer, ref printVal);
+					else if (valType.UnderlyingType == typeof(bool))
+						Bool!(writer, ref printVal, flags);
+					else Debug.FatalError(); // Should be unreachable
+				}
 			}
 			else if (valType.IsStruct)
 			{

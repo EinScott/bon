@@ -87,19 +87,36 @@ namespace Bon.Integrated
 			// Skip space, line breaks, tabs and comments
 			var i = 0;
 			var commentDepth = 0;
+			bool lineComment = false;
 			let len = inStr.Length; // Since it won't be change in the following loop...
 			for (; i < len; i++)
 			{
 				let char = inStr[[Unchecked]i];
+				if (lineComment)
+				{
+					if (char == '\n')
+						lineComment = false;
+
+					// Ignore this
+				}
 				if (!char.IsWhiteSpace)
 				{
 					if (i + 1 < len)
 					{
-						if (char == '/' && inStr[[Unchecked]i + 1] == '*')
+						if (char == '/')
 						{
-							commentDepth++;
-							i++;
-							continue;
+							if (inStr[[Unchecked]i + 1] == '*')
+							{
+								commentDepth++;
+								i++;
+								continue;
+							}
+							else if (inStr[[Unchecked]i + 1] == '/')
+							{
+								lineComment = true;
+								i++;
+								continue;
+							}
 						}
 						else if (char == '*' && inStr[[Unchecked]i + 1] == '/')
 						{
@@ -193,6 +210,98 @@ namespace Bon.Integrated
 			ConsumeEmpty();
 
 			return num;
+		}
+
+		public StringView String()
+		{
+			if (!Check('"', false))
+			{
+				errors |= .ExpectedString;
+				return default;
+			}
+
+			var strLen = 0;
+			bool isEscaped = false;
+			while (inStr.Length > strLen && (isEscaped || !Check('"')))
+			{
+				isEscaped = inStr[strLen] == '\\' && !isEscaped;
+				strLen++;
+			}
+
+			if (!Check('"', false))
+			{
+				errors |= .UnterminatedString;
+				return default;
+			}
+
+			let str = String.UnQuoteString(&inStr[0], strLen, .. scope .());
+			inStr.RemoveFromStart(strLen);
+
+			ConsumeEmpty();
+
+			return str;
+		}
+
+		public Result<char32> Char()
+		{
+			if (!Check('\'', false))
+			{
+				errors |= .ExpectedString;
+				return .Err;
+			}
+			else inStr[0] = '"';
+
+			// TODO: also parse unicode notation
+
+			var strLen = 0;
+			bool isEscaped = false;
+			while (inStr.Length > strLen && (isEscaped || !Check('\'')))
+			{
+				isEscaped = inStr[strLen] == '\\' && !isEscaped;
+				strLen++;
+			}
+
+			let strBegin = &inStr[0];
+			inStr.RemoveFromStart(strLen);
+
+			if (!Check('\'', false))
+			{
+				errors |= .UnterminatedString;
+				return .Err;
+			}
+			else inStr[0] = '"';
+			inStr.RemoveFromStart(1);
+
+			let str = String.UnQuoteString(strBegin, strLen, .. scope .());
+			if (str.Length > 4)
+				return .Err;
+
+			char32 char = 0;
+			Internal.MemCpy(&char, &str[0], str.Length);
+
+			ConsumeEmpty();
+
+			return char;
+		}
+
+		public Result<bool> Bool()
+		{
+			if (Check('0'))
+				return false;
+			else if (Check('1'))
+				return false;
+			else if (inStr.StartsWith(bool.TrueString, .OrdinalIgnoreCase))
+			{
+				inStr.RemoveFromStart(4);
+				return true;
+			}
+			else if (inStr.StartsWith(bool.FalseString, .OrdinalIgnoreCase))
+			{
+				inStr.RemoveFromStart(4);
+				return false;
+			}
+
+			return .Err;
 		}
 
 		public StringView Identifier()

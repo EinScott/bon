@@ -148,6 +148,14 @@ namespace Bon.Tests
 			Forest = .Tree | .Path,
 		}
 
+		[Serializable]
+		enum SomeTokens : char8
+		{
+			Dot = '.',
+			Slash = '/',
+			Dash = '-'
+		}
+
 		[Test]
 		static void Enums()
 		{
@@ -172,9 +180,33 @@ namespace Bon.Tests
 			}
 
 			{
+				SomeValues i = default;
+				let str = Bon.Serialize(i, .. scope .(), .Verbose|.IncludeDefault);
+				Test.Assert(str == ".Option1");
+			}
+
+			{
 				SomeValues i = .Option2;
 				let str = Bon.Serialize(i, .. scope .(), .Verbose);
 				Test.Assert(str == ".Option2");
+			}
+
+			{
+				SomeValues i = (.)12; // Does not have bits of 1 & 2 set, so it won't find any match
+				let str = Bon.Serialize(i, .. scope .(), .Verbose);
+				Test.Assert(str == "12");
+			}
+
+			{
+				SomeValues i = (.)5; // Shares a bit with Option2 (1), and prints remainder
+				let str = Bon.Serialize(i, .. scope .(), .Verbose);
+				Test.Assert(str == ".Option2|4");
+			}
+
+			{
+				SomeValues i = (.)15;
+				let str = Bon.Serialize(i, .. scope .(), .Verbose);
+				Test.Assert(str == ".Option2|.Option3|12");
 			}
 
 			{
@@ -207,8 +239,17 @@ namespace Bon.Tests
 				Test.Assert(str == ".CozyHut|.Green");
 			}
 
-			// TODO: test leftover with and without flags enum!
-			// CHAR enums!
+			{
+				SomeTokens i = .Dot;
+				let str = Bon.Serialize(i, .. scope .(), .Verbose);
+				Test.Assert(str == ".Dot");
+			}
+
+			{
+				SomeTokens i = .Slash;
+				let str = Bon.Serialize(i, .. scope .());
+				Test.Assert(str == "'/'");
+			}
 		}
 
 		[Serializable,Ordered]
