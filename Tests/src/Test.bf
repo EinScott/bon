@@ -421,26 +421,46 @@ namespace Bon.Tests
 				{
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",important=32656}");
+
+					SomeThings so = default;
+					so.str = scope .();
+					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
 				}
 
 				{
 					let str = Bon.Serialize(s, .. scope .(), .AllowNonPublic);
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",intern=54,important=32656}");
+
+					SomeThings so = default;
+					so.str = scope .();
+					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .(), .AllowNonPublic) == str);
 				}
 
 				{
 					let str = Bon.Serialize(s, .. scope .(), .IncludeDefault);
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",important=32656,n=0}");
+
+					SomeThings so = default;
+					so.str = scope .();
+					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .(), .IncludeDefault) == str);
 				}
 
 				{
 					let str = Bon.Serialize(s, .. scope .(), .IgnoreAttributes);
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",dont=8}");
+
+					SomeThings so = default;
+					so.str = scope .();
+					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .(), .IgnoreAttributes) == str);
 				}
 
 				{
 					let str = Bon.Serialize(s, .. scope .(), .AllowNonPublic|.IgnoreAttributes|.IncludeDefault);
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",intern=54,important=32656,dont=8,n=0}");
+
+					SomeThings so = default; // TODO: in future, should work without defaulting, optionally without the string assign
+					so.str = scope .();
+					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .(), .AllowNonPublic|.IgnoreAttributes|.IncludeDefault) == str);
 				}
 			}
 
@@ -463,6 +483,9 @@ namespace Bon.Tests
 				{
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{thing=651,bs=[{name=\"first element\",age=34,type=1},{name=\"second element\",age=101},{name=\"\"}]}");
+
+					//StructA so = default;
+					//Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
 				}
 
 				{
@@ -486,6 +509,9 @@ namespace Bon.Tests
 							]
 						}
 						""");
+
+					//StructA so = default;
+					//Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
 				}
 			}
 		}
@@ -509,12 +535,18 @@ namespace Bon.Tests
 				Thing i = .Nothing;
 				let str = Bon.Serialize(i, .. scope .(), .IncludeDefault);
 				Test.Assert(str == ".Nothing{}");
+
+				Thing si = default;
+				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si == i);
 			}
 
 			{
 				Thing i = .Circle(.(0, 0), 4.5f);
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == ".Circle{radius=4.5}");
+
+				Thing si = default;
+				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si == i);
 			}
 
 			{
@@ -527,6 +559,9 @@ namespace Bon.Tests
 				Thing i = .Something(5, 4.5f, .(1, 10));
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == ".Something{0=5,1=4.5,2={x=1,y=10}}");
+
+				Thing si = default;
+				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si == i);
 			}
 
 			{
@@ -541,6 +576,9 @@ namespace Bon.Tests
 						radius=4.5
 					}
 					""");
+
+				Thing si = default;
+				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si == i);
 			}
 		}
 
@@ -550,18 +588,31 @@ namespace Bon.Tests
 			int i = ?;
 			char16 c = ?;
 			StringView s = ?;
+			SomeValues e = ?;
 
 			Test.Assert(Bon.Deserialize(ref i, "11 34") case .Err);
 			Test.Assert(Bon.Deserialize(ref i, "  11.") case .Err);
+
 			Test.Assert(Bon.Deserialize(ref s, "\"") case .Err);
 			Test.Assert(Bon.Deserialize(ref s, "\"egnionsoibe") case .Err);
 			Test.Assert(Bon.Deserialize(ref s, "\"egniod d  nsoibe") case .Err);
 			Test.Assert(Bon.Deserialize(ref s, "  \"eg\\\"") case .Err);
 			Test.Assert(Bon.Deserialize(ref s, ",") case .Err);
+
 			Test.Assert(Bon.Deserialize(ref c, "\'\'") case .Err);
 			Test.Assert(Bon.Deserialize(ref c, "\'ad\'") case .Err);
 			Test.Assert(Bon.Deserialize(ref c, "ad\'") case .Err);
 			Test.Assert(Bon.Deserialize(ref c, " '\\\'  \t\n") case .Err);
+
+			Test.Assert(Bon.Deserialize(ref e, ".") case .Err);
+			Test.Assert(Bon.Deserialize(ref e, " .\t ") case .Err);
+			Test.Assert(Bon.Deserialize(ref e, " .ad\t ") case .Err);
+			Test.Assert(Bon.Deserialize(ref e, " .3\t ") case .Err);
+			Test.Assert(Bon.Deserialize(ref e, " .||.|3,\t ") case .Err);
+			Test.Assert(Bon.Deserialize(ref e, "|") case .Err);
+			Test.Assert(Bon.Deserialize(ref e, "234|.2") case .Err);
+			Test.Assert(Bon.Deserialize(ref e, "34  |\t'") case .Err);
+			Test.Assert(Bon.Deserialize(ref e, "23 '|") case .Err);
 
 			Test.Assert(Bon.Deserialize(ref i, " \n\t") case .Ok);
 		}

@@ -56,37 +56,41 @@ namespace Bon.Integrated
 			if (end != currPos)
 				end--;
 
-			int lines = 0;
+			int lines = 1;
 			for (var i = start; i >= 0; i--)
 			{
 				if (origStr[i] == '\n')
 					lines++;
 			}
 
+			var pad = currPos - start;
+			if (startCapped)
+				pad += 6;
+
 			buffer.Append("(line ");
 			lines.ToString(buffer);
 			buffer.Append(")\n");
-
+			
 			buffer.Append("> ");
 			if (startCapped)
-				buffer.Append("... ");
+				buffer.Append("[...] ");
 
 			var part = origStr.Substring(start, end - start + 1);
 			if (part.StartsWith("\n"))
 				part.RemoveFromStart(1);
 			
 			for (let c in part)
-				if (!c.IsControl)
+			{
+				if (!c.IsControl || c == '\t')
 					buffer.Append(c);
+				else pad--;
+			}
 
 			if (endCapped)
-				buffer.Append(" ...");
+				buffer.Append(" [...]");
 
 			buffer.Append("\n> ");
 
-			var pad = currPos - start;
-			if (startCapped)
-				pad += 4;
 			for (let i < pad)
 			{
 				let char = origStr[start + i];
@@ -260,7 +264,7 @@ namespace Bon.Integrated
 
 			inStr.RemoveFromStart(strLen);
 
-			if (!Check('\''))
+			if (!Check('\"'))
 				Debug.FatalError(); // Should not happen, since otherwise strLen would go on until the end of the string!
 
 			Try!(ConsumeEmpty());
@@ -363,8 +367,8 @@ namespace Bon.Integrated
 		[Inline]
 		public bool EnumHasNamed()
 		{
-			return Check('.')
-				&& inStr.Length > 1 && inStr[1].IsLetter; // Don't mistake .95f as a named enum value!
+			return inStr.Length > 1 && inStr[1].IsLetter // Don't mistake .95f as a named enum value!
+				&& Check('.');
 		}
 
 		[Inline]
@@ -424,15 +428,15 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
-		public bool ArrayHasMore(bool consumeIfNot = true)
+		public bool ArrayHasMore()
 		{
-			return !Check('}', consumeIfNot);
+			return !Check('}', false);
 		}
 
 		[Inline]
-		public bool ObjectHasMore(bool consumeIfNot = true)
+		public bool ObjectHasMore()
 		{
-			return !Check('}', consumeIfNot);
+			return !Check('}', false);
 		}
 
 		public Result<void> EntryEnd()

@@ -14,7 +14,7 @@ namespace Bon.Integrated
 
 		public static mixin Error(BonReader reader, String error)
 		{
-#if DEBUG || TEST
+#if (DEBUG || TEST) && !BON_NO_PRINT
 			PrintError(reader, error);
 #endif
 			return .Err(default);
@@ -224,7 +224,64 @@ namespace Bon.Integrated
 				}
 				else if (valType.IsEnum && valType.IsUnion)
 				{
+					if (!reader.EnumHasNamed())
+						Error!(reader, "Expected enum union case name");
+					let name = Try!(reader.EnumName());
 
+					Variant unionPayload = default;
+					uint64 unionDiscrIndex = 0;
+					Variant discrVal = default;
+					bool foundCase = false;
+					for (var enumField in valType.GetFields())
+					{
+						if (enumField.[Friend]mFieldData.mFlags.HasFlag(.EnumCase))
+						{
+							if (name == enumField.Name)
+							{
+								unionPayload = Variant.CreateReference(enumField.FieldType, val.DataPtr);
+								
+								foundCase = true;
+								break;
+							}
+
+							unionDiscrIndex++;
+						}
+						else if (enumField.[Friend]mFieldData.mFlags.HasFlag(.EnumDiscriminator))
+						{
+							let discrType = enumField.FieldType;
+							Debug.Assert(discrType.IsInteger);
+							discrVal = Variant.CreateReference(discrType, (uint8*)val.DataPtr + enumField.[Friend]mFieldData.mData);
+						}
+					}
+
+					Debug.Assert(discrVal != default);
+
+					if (!foundCase)
+						Error!(reader, "Enum union case not found");
+
+					mixin PutVal<T>() where T : var
+					{
+						*(T*)discrVal.DataPtr = *(T*)&unionDiscrIndex;
+					}
+
+					switch (discrVal.VariantType)
+					{
+					case typeof(int8): PutVal!<int8>();
+					case typeof(int16): PutVal!<int16>();
+					case typeof(int32): PutVal!<int32>();
+					case typeof(int64): PutVal!<int64>();
+					case typeof(int): PutVal!<int>();
+
+					case typeof(uint8): PutVal!<uint8>();
+					case typeof(uint16): PutVal!<uint16>();
+					case typeof(uint32): PutVal!<uint32>();
+					case typeof(uint64): PutVal!<uint64>();
+					case typeof(uint): PutVal!<uint>();
+
+					default: Debug.FatalError(); // Should be unreachable
+					}
+
+					Try!(Struct(reader, ref unionPayload));
 				}
 				else Try!(Struct(reader, ref val));
 			}
@@ -253,6 +310,7 @@ namespace Bon.Integrated
 
 						if (str != null)
 							str.Set(parsedStr);
+						else Debug.FatalError(); // TODO
 					}
 				}
 				else Debug.FatalError(); // TODO
@@ -271,6 +329,11 @@ namespace Bon.Integrated
 			let structType = val.VariantType;
 			Try!(reader.ObjectBlock());
 
+			// TODO: put all fields in some lookup??
+			// i mean... even for the one's we don't mention we need to do some stuff
+			// to either default them (except for pointers and class refs i guess??, which we "clear" the location of)
+			// -> look into this
+
 			while (reader.ObjectHasMore())
 			{
 				let name = Try!(reader.Identifier());
@@ -288,7 +351,7 @@ namespace Bon.Integrated
 
 				Try!(Value(reader, ref fieldVal));
 
-				if (reader.ObjectHasMore(false))
+				if (reader.ObjectHasMore())
 					Try!(reader.EntryEnd());
 			}
 

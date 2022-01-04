@@ -263,7 +263,8 @@ namespace Bon.Integrated
 					// {<payload>|<discriminator>}
 
 					bool didWrite = false;
-					uint64 unionCaseIndex = uint64.MaxValue;
+					bool foundCase = false;
+					uint64 unionCaseIndex = 0;
 					uint64 currCaseIndex = 0;
 					for (var enumField in valType.GetFields())
 					{
@@ -295,10 +296,12 @@ namespace Bon.Integrated
 
 							default: Debug.FatalError(); // Should be unreachable
 							}
+
+							foundCase = true;
 						}
 						else if (enumField.[Friend]mFieldData.mFlags.HasFlag(.EnumCase)) // Filter through unioncaseIndex
 						{
-							Debug.Assert(unionCaseIndex != uint64.MaxValue);
+							Debug.Assert(foundCase);
 
 							// Skip enum cases until we get to the selected one
 							if (currCaseIndex != unionCaseIndex)
