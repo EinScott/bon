@@ -181,7 +181,7 @@ namespace Bon.Integrated
 			var numLen = 0;
 			if (inStr.Length > 0 && inStr[0] == '-')
 				numLen++;
-			while (inStr.Length > numLen + 1 &&  inStr[numLen].IsNumber)
+			while (inStr.Length > numLen &&  inStr[numLen].IsNumber)
 				numLen++;
 
 			let num = inStr.Substring(0, numLen);
@@ -197,7 +197,7 @@ namespace Bon.Integrated
 			var numLen = 0;
 			while ({
 				let char = inStr[numLen];
-				inStr.Length > numLen + 1 && char.IsNumber || char == '.' || char == '-' || char == 'e'
+				inStr.Length > numLen && char.IsNumber || char == '.' || char == '-' || char == 'e'
 			})
 				numLen++;
 
@@ -262,7 +262,7 @@ namespace Bon.Integrated
 			}
 
 			let strBegin = &inStr[0];
-			inStr.RemoveFromStart(strLen);
+			inStr.RemoveFromStart(strLen - 1);
 
 			if (!Check('\'', false))
 			{
@@ -276,19 +276,19 @@ namespace Bon.Integrated
 			if (str.Length > 4)
 				return .Err;
 
-			char32 char = 0;
-			Internal.MemCpy(&char, &str[0], str.Length);
+			let res = str.GetChar32(0);
+			Debug.Assert(res.length == str.Length);
 
 			ConsumeEmpty();
 
-			return char;
+			return res.c;
 		}
 
 		public Result<bool> Bool()
 		{
-			if (Check('0'))
-				return false;
-			else if (Check('1'))
+			if (Check('1'))
+				return true;
+			else if (Check('0'))
 				return false;
 			else if (inStr.StartsWith(bool.TrueString, .OrdinalIgnoreCase))
 			{
@@ -316,6 +316,31 @@ namespace Bon.Integrated
 			ConsumeEmpty();
 
 			return name;
+		}
+
+		[Inline]
+		public bool EnumHasNamed()
+		{
+			return Check('.')
+				&& inStr.Length > 1 && inStr[1].IsLetter; // Don't mistake .95f as a named enum value!
+		}
+
+		[Inline]
+		public StringView EnumName()
+		{
+			let name = ParseName();
+
+			ConsumeEmpty();
+			return name;
+		}
+
+		public bool EnumHasMore()
+		{
+			let res = Check('|');
+
+			ConsumeEmpty();
+
+			return res;
 		}
 
 		public ArrayBlockEnd ArrayBlock()

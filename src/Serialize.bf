@@ -63,7 +63,8 @@ namespace Bon.Integrated
 			thing.ToString(writer.outStr);
 		}
 
-		static mixin Integer(Type type, BonWriter writer, ref Variant val)
+		[Inline]
+		static void Integer(Type type, BonWriter writer, ref Variant val)
 		{
 			switch (type)
 			{
@@ -83,7 +84,8 @@ namespace Bon.Integrated
 			}
 		}
 
-		static mixin Char(Type type, BonWriter writer, ref Variant val)
+		[Inline]
+		static void Char(Type type, BonWriter writer, ref Variant val)
 		{
 			char32 char = 0;
 			switch (type)
@@ -95,7 +97,8 @@ namespace Bon.Integrated
 			writer.Char(char);
 		}
 
-		static mixin Float(Type type, BonWriter writer, ref Variant val)
+		[Inline]
+		static void Float(Type type, BonWriter writer, ref Variant val)
 		{
 			switch (type)
 			{
@@ -106,7 +109,8 @@ namespace Bon.Integrated
 			}
 		}
 
-		static mixin Bool(BonWriter writer, ref Variant val, BonSerializeFlags flags)
+		[Inline]
+		static void Bool(BonWriter writer, ref Variant val, BonSerializeFlags flags)
 		{
 			bool boolean = *(bool*)val.DataPtr;
 			if (flags.HasFlag(.Verbose))
@@ -126,13 +130,13 @@ namespace Bon.Integrated
 			if (valType.IsPrimitive)
 			{
 				if (valType.IsInteger)
-					Integer!(valType, writer, ref val);
+					Integer(valType, writer, ref val);
 				else if (valType.IsFloatingPoint)
-					Float!(valType, writer, ref val);
+					Float(valType, writer, ref val);
 				else if (valType.IsChar)
-					Char!(valType, writer, ref val);
+					Char(valType, writer, ref val);
 				else if (valType == typeof(bool))
-					Bool!(writer, ref val, flags);
+					Bool(writer, ref val, flags);
 				else Debug.FatalError(); // Should be unreachable
 			}
 			else if (valType.IsTypedPrimitive)
@@ -233,13 +237,13 @@ namespace Bon.Integrated
 				if (doPrintLiteral)
 				{
 					if (valType.UnderlyingType.IsInteger)
-						Integer!(valType.UnderlyingType, writer, ref printVal);
+						Integer(valType.UnderlyingType, writer, ref printVal);
 					else if (valType.UnderlyingType.IsFloatingPoint)
-						Float!(valType.UnderlyingType, writer, ref printVal);
+						Float(valType.UnderlyingType, writer, ref printVal);
 					else if (valType.UnderlyingType.IsChar)
-						Char!(valType.UnderlyingType, writer, ref printVal);
+						Char(valType.UnderlyingType, writer, ref printVal);
 					else if (valType.UnderlyingType == typeof(bool))
-						Bool!(writer, ref printVal, flags);
+						Bool(writer, ref printVal, flags);
 					else Debug.FatalError(); // Should be unreachable
 				}
 			}

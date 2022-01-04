@@ -13,36 +13,91 @@ namespace Bon.Tests
 				int32 i = 357;
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == "357");
+
+				int32 oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
 			{
 				char8 c = '\n';
 				let str = Bon.Serialize(c, .. scope .());
 				Test.Assert(str == "'\\n'");
+				Test.Assert(str[0] == '\''); // This is weird... the debugger says str[0] == '\"'... but apparently not
+
+				char8 oc = ?;
+				Test.Assert((Bon.Deserialize(ref oc, str) case .Ok) && oc == c);
+			}
+
+			{
+				char8 c = '\'';
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "'\\''");
+
+				char8 oc = ?;
+				Test.Assert((Bon.Deserialize(ref oc, str) case .Ok) && oc == c);
+			}
+
+			{
+				char8 c = '\0';
+				let str = Bon.Serialize(c, .. scope .(), .IncludeDefault);
+				Test.Assert(str == "'\\0'");
+
+				char8 oc = ?;
+				Test.Assert((Bon.Deserialize(ref oc, str) case .Ok) && oc == c);
+			}
+			
+			{
+				char16 c = 'Ā';
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "'Ā'");
+
+				char16 oc = ?;
+				Test.Assert((Bon.Deserialize(ref oc, str) case .Ok) && oc == c);
+			}
+			
+			{
+				char16 c = 'ģ';
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "'ģ'");
+
+				char16 oc = ?;
+				Test.Assert((Bon.Deserialize(ref oc, str) case .Ok) && oc == c);
 			}
 
 			{
 				char16 c = 'ァ';
 				let str = Bon.Serialize(c, .. scope .());
 				Test.Assert(str == "'ァ'");
+
+				char16 oc = ?;
+				Test.Assert((Bon.Deserialize(ref oc, str) case .Ok) && oc == c);
 			}
 
 			{
 				bool b = true;
 				let str = Bon.Serialize(b, .. scope .(), .Verbose);
 				Test.Assert(str == bool.TrueString);
+
+				bool ob = ?;
+				Test.Assert((Bon.Deserialize(ref ob, str) case .Ok) && ob == b);
 			}
 
 			{
 				bool b = true;
 				let str = Bon.Serialize(b, .. scope .());
 				Test.Assert(str == "1");
+
+				bool ob = ?;
+				Test.Assert((Bon.Deserialize(ref ob, str) case .Ok) && ob == b);
 			}
 
 			{
 				bool b = false;
 				let str = Bon.Serialize(b, .. scope .());
 				Test.Assert(str.Length == 0); // Should not be included -> false is default
+
+				bool ob = ?;
+				Test.Assert((Bon.Deserialize(ref ob, str) case .Ok) && ob == b);
 			}
 		}
 
@@ -164,6 +219,9 @@ namespace Bon.Tests
 				TypeA i = .Named120;
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == "120");
+
+				TypeA oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
 			// Not verbose
@@ -171,85 +229,129 @@ namespace Bon.Tests
 				TypeB i = .Count;
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == "2");
+
+				TypeB oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
 			{
 				TypeB i = .Count;
 				let str = Bon.Serialize(i, .. scope .(), .Verbose);
 				Test.Assert(str == ".Count");
+
+				TypeB oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
 			{
 				SomeValues i = default;
 				let str = Bon.Serialize(i, .. scope .(), .Verbose|.IncludeDefault);
 				Test.Assert(str == ".Option1");
+
+				SomeValues oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
 			{
 				SomeValues i = .Option2;
 				let str = Bon.Serialize(i, .. scope .(), .Verbose);
 				Test.Assert(str == ".Option2");
+
+				SomeValues oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
 			{
 				SomeValues i = (.)12; // Does not have bits of 1 & 2 set, so it won't find any match
 				let str = Bon.Serialize(i, .. scope .(), .Verbose);
 				Test.Assert(str == "12");
+
+				SomeValues oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
 			{
 				SomeValues i = (.)5; // Shares a bit with Option2 (1), and prints remainder
 				let str = Bon.Serialize(i, .. scope .(), .Verbose);
 				Test.Assert(str == ".Option2|4");
+
+				SomeValues oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
 			{
 				SomeValues i = (.)15;
 				let str = Bon.Serialize(i, .. scope .(), .Verbose);
 				Test.Assert(str == ".Option2|.Option3|12");
+
+				SomeValues oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
 			{
 				PlaceFlags i = .Park;
 				let str = Bon.Serialize(i, .. scope .(), .Verbose);
 				Test.Assert(str == ".Park");
+
+				PlaceFlags oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
 			{
 				PlaceFlags i = .House | .Street | .Tram;
 				let str = Bon.Serialize(i, .. scope .(), .Verbose);
 				Test.Assert(str == ".City");
+
+				PlaceFlags oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
 			{
 				PlaceFlags i = .SeasideHouse | .Forest;
 				let str = Bon.Serialize(i, .. scope .(), .Verbose);
 				Test.Assert(str == ".SeasideHouse|.Forest");
+
+				PlaceFlags oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
 			{
 				PlaceFlags i = .CozyHut | .Rural;
 				let str = Bon.Serialize(i, .. scope .(), .Verbose);
 				Test.Assert(str == ".CozyHut|.Rural");
+
+				PlaceFlags oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
 			{
 				PlaceFlags i = .Park | .CozyHut; // They have overlap
 				let str = Bon.Serialize(i, .. scope .(), .Verbose);
 				Test.Assert(str == ".CozyHut|.Green");
+
+				PlaceFlags oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
 			{
 				SomeTokens i = .Dot;
 				let str = Bon.Serialize(i, .. scope .(), .Verbose);
 				Test.Assert(str == ".Dot");
+
+				SomeTokens oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
 			{
 				SomeTokens i = .Slash;
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == "'/'");
+
+				SomeTokens oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
+
+			// TODO more tests for paring things like 8 | 2 | 16 | .Some
 		}
 
 		[Serializable,Ordered]

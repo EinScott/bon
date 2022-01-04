@@ -28,120 +28,167 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
+		// TODO: frequently checking reader.HasError()!!!!!
+
+		static mixin ParseThing<T>(StringView num) where T : var
+		{
+			T thing = default;
+			if (!(T.Parse(.(&num[0], num.Length)) case .Ok(out thing)))
+				return .Err(default); // "failed to parse"
+#unwarn
+			thing
+		}
+
+		static mixin DoInt<T, T2>(StringView numStr) where T2 : var where T : var
+		{
+			// Not all ints have parse methods (that also filter out letters properly), 
+			// so we need to do this, along with range checks!
+
+			T2 num = ParseThing!<T2>(numStr);
+#unwarn
+			if (num > (T2)T.MaxValue || num < (T2)T.MinValue)
+				return .Err(default);
+#unwarn
+			(T)num
+		}
+
+		static mixin Integer(Type type, BonReader reader, ref Variant val)
+		{
+			let num = reader.Integer();
+			if (num.Length == 0)
+				return .Err(default); // TODO do better error report! "expected integer number"
+
+			// TODO: make a custom parsing func like uint64 to properly parse hex; then allow hex in reader.Integer()
+
+			switch (type)
+			{
+			case typeof(int8): *(int8*)val.DataPtr = DoInt!<int8, int64>(num);
+			case typeof(int16): *(int16*)val.DataPtr = DoInt!<int16, int64>(num);
+			case typeof(int32): *(int32*)val.DataPtr = DoInt!<int32, int64>(num);
+			case typeof(int64): *(int64*)val.DataPtr = ParseThing!<int64>(num);
+			case typeof(int): *(int*)val.DataPtr = DoInt!<int, int64>(num);
+
+			case typeof(uint8): *(uint8*)val.DataPtr = DoInt!<uint8, uint64>(num);
+			case typeof(uint16): *(uint16*)val.DataPtr = DoInt!<uint16, uint64>(num);
+			case typeof(uint32): *(uint32*)val.DataPtr = DoInt!<uint32, uint64>(num);
+			case typeof(uint64): *(uint64*)val.DataPtr = ParseThing!<uint64>(num);
+			case typeof(uint): *(uint*)val.DataPtr = DoInt!<uint, uint64>(num);
+			}
+		}
+
+		static mixin Float(Type type, BonReader reader, ref Variant val)
+		{
+			let num = reader.Floating();
+			if (num.Length == 0)
+				return .Err(default); // "expected floating point number"
+
+			switch (type)
+			{
+			case typeof(float): *(float*)val.DataPtr = ParseThing!<float>(num);
+			case typeof(double): *(double*)val.DataPtr = ParseThing!<double>(num);
+			}
+		}
+
+		static mixin Char(Type type, BonReader reader, ref Variant val)
+		{
+			let res = reader.Char();
+			if (res case .Err)
+				return .Err(default); // "expected floating point number"
+			var char = res.Get();
+
+			switch (type)
+			{
+			case typeof(char8): *(char8*)val.DataPtr = *(char8*)&char;
+			case typeof(char16): *(char16*)val.DataPtr = *(char16*)&char;
+			case typeof(char32): *(char32*)val.DataPtr = *(char32*)&char;
+			}
+		}
+
+		static mixin Bool(BonReader reader, ref Variant val)
+		{
+			let res = reader.Bool();
+			if (res case .Err)
+				return .Err(default); // "expected boolean"
+
+			*(bool*)val.DataPtr = res.Get();
+		}
+
 		public static Result<void> Value(BonReader reader, ref Variant val)
 		{
 			Type valType = val.VariantType;
 
-			mixin ParseThing<T>(StringView num) where T : var
-			{
-				T thing = default;
-				if (!(T.Parse(.(&num[0], num.Length)) case .Ok(out thing)))
-					return .Err; // "failed to parse"
-#unwarn
-				thing
-			}
-
-			mixin Integer(Type type)
-			{
-				let num = reader.Integer();
-				if (num.Length == 0)
-					return .Err; // TODO do better error report! "expected integer number"
-
-				mixin DoInt<T, T2>(StringView numStr) where T2 : var where T : var
-				{
-					// Not all ints have parse methods (that also filter out letters properly), 
-					// so we need to do this, along with range checks!
-
-					T2 t2Num = ParseThing!<T2>(numStr);
-#unwarn
-					if (t2Num > (T2)T.MaxValue || t2Num < (T2)T.MinValue)
-						return .Err;
-#unwarn
-					(T)t2Num
-				}
-
-				switch (type)
-				{
-				case typeof(int8): *(int8*)val.DataPtr = DoInt!<int8, int64>(num); // TODO: make a custom parsing func like uint64 to properly parse hex; then allow hex in reader.Integer()
-				case typeof(int16): *(int16*)val.DataPtr = DoInt!<int16, int64>(num);
-				case typeof(int32): *(int32*)val.DataPtr = DoInt!<int32, int64>(num);
-				case typeof(int64): *(int64*)val.DataPtr = ParseThing!<int64>(num);
-				case typeof(int): *(int*)val.DataPtr = DoInt!<int, int64>(num);
-
-				case typeof(uint8): *(uint8*)val.DataPtr = DoInt!<uint8, uint64>(num);
-				case typeof(uint16): *(uint16*)val.DataPtr = DoInt!<uint16, uint64>(num);
-				case typeof(uint32): *(uint32*)val.DataPtr = DoInt!<uint32, uint64>(num);
-				case typeof(uint64): *(uint64*)val.DataPtr = ParseThing!<uint64>(num);
-				case typeof(uint): *(uint*)val.DataPtr = DoInt!<uint, uint64>(num);
-				}
-			}
-
-			mixin Float(Type type)
-			{
-				let num = reader.Floating();
-				if (num.Length == 0)
-					return .Err; // "expected floating point number"
-
-				switch (type)
-				{
-				case typeof(float): *(float*)val.DataPtr = ParseThing!<float>(num);
-				case typeof(double): *(double*)val.DataPtr = ParseThing!<double>(num);
-				}
-			}
-
-			mixin Char(Type type)
-			{
-				let res = reader.Char();
-				if (res case .Err)
-					return .Err; // "expected floating point number"
-				var char = res.Get();
-
-				switch (type)
-				{
-				case typeof(char8): *(char8*)val.DataPtr = *(char8*)&char;
-				case typeof(char16): *(char16*)val.DataPtr = *(char16*)&char;
-				case typeof(char32): *(char32*)val.DataPtr = *(char32*)&char;
-				}
-			}
-
-			mixin Bool()
-			{
-				let res = reader.Bool();
-				if (res case .Err)
-					return .Err; // "expected boolean"
-
-				*(bool*)val.DataPtr = res.Get();
-			}
-
 			if (valType.IsPrimitive)
 			{
 				if (valType.IsInteger)
-					Integer!(valType);
+					Integer!(valType, reader, ref val);
 				else if (valType.IsFloatingPoint)
-					Float!(valType);
+					Float!(valType, reader, ref val);
 				else if (valType.IsChar)
-					Char!(valType);
+					Char!(valType, reader, ref val);
 				else if (valType == typeof(bool))
-					Bool!();
+					Bool!(reader, ref val);
 				else Debug.FatalError(); // Should be unreachable
 			}
 			else if (valType.IsTypedPrimitive)
 			{
-				if (valType.UnderlyingType.IsInteger)
+				mixin ParseUnderlyingLiteral(ref Variant parseVal)
 				{
-					if (valType.IsEnum)
-					{
-
-					}
-					else Integer!(valType.UnderlyingType);
+					if (valType.UnderlyingType.IsInteger)
+						Integer!(valType.UnderlyingType, reader, ref parseVal);
+					else if (valType.UnderlyingType.IsFloatingPoint)
+						Float!(valType.UnderlyingType, reader, ref parseVal);
+					else if (valType.UnderlyingType.IsChar)
+						Char!(valType.UnderlyingType, reader, ref parseVal);
+					else if (valType.UnderlyingType == typeof(bool))
+						Bool!(reader, ref parseVal);
+					else Debug.FatalError(); // Should be unreachable
 				}
-				else if (valType.UnderlyingType.IsFloatingPoint)
-					Float!(valType.UnderlyingType);
-				else if (valType.UnderlyingType.IsChar)
-					Char!(valType.UnderlyingType);
-				else if (valType.UnderlyingType == typeof(bool))
-					Bool!();
-				else Debug.FatalError(); // Should be unreachable
+
+				if (valType.IsEnum)
+				{
+					int64 enumValue = 0;
+					repeat
+					{
+						if (reader.EnumHasNamed())
+						{
+							let name = reader.EnumName();
+
+							// Find field on enum
+							bool found = false;
+							for (var field in valType.GetFields())
+								if (field.[Friend]mFieldData.mFlags.HasFlag(.EnumCase)
+									&& name == field.Name)
+								{
+									// Add value of enum case to current enum value
+									enumValue |= *(int64*)&field.[Friend]mFieldData.[Friend]mData;
+									found = true;
+									break;
+								}
+
+							if (!found)
+								return .Err; // "enum case not found"
+						}
+						else
+						{
+							int64 literalData = 0;
+							var parseVal = Variant.CreateReference(val.VariantType, &literalData);
+							ParseUnderlyingLiteral!(ref parseVal);
+							enumValue |= literalData;
+						}
+					}
+					while (reader.EnumHasMore());
+
+					// Assign value
+					switch (valType.Size)
+					{
+					case 1: *(uint8*)val.DataPtr = *(uint8*)&enumValue;
+					case 2: *(uint16*)val.DataPtr = *(uint16*)&enumValue;
+					case 4: *(uint32*)val.DataPtr = *(uint32*)&enumValue;
+					case 8: *(uint64*)val.DataPtr = *(uint64*)&enumValue;
+					default: Debug.FatalError(); // Should be unreachable
+					}
+				}
+				else ParseUnderlyingLiteral!(ref val);
 			}
 			else if (valType.IsStruct)
 			{

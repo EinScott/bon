@@ -19,6 +19,8 @@ namespace Bon
 
 	// REFERENCES "&somethingName" are a way to make the deserializer call a function with this string as the key (also member type, type member is on), which then is expected to provide a variant to put there!
 
+	// TODO: rethink syntax & tokens!
+
 	static class Bon
 	{
 		public static void Serialize<T>(T value, String into, BonSerializeFlags flags = .DefaultFlags) where T : struct
