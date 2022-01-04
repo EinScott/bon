@@ -12,9 +12,30 @@ namespace Bon.Integrated
 
 		// TODO: to deserialize stringView we probably want to include a callback? it could look up the string and return it, or allocate it somewhere!
 
+		public static mixin Error(BonReader reader, String error)
+		{
+#if DEBUG || TEST
+			PrintError(reader, error);
+#endif
+			return .Err(default);
+		}
+
+		static void PrintError(BonReader reader, String error)
+		{
+			let err = scope $"BON ERROR: {error}. ";
+			reader.GetCurrentPos(err);
+#if TEST
+			Console.WriteLine(err);
+#else
+			Debug.WriteLine(err);
+#endif
+		}
+
 		[Inline]
 		public static Result<void> Thing<T>(BonReader reader, ref T into)
 		{
+			Try!(reader.ConsumeEmpty());
+
 			if (reader.ReachedEnd())
 				into = default;
 			else
@@ -23,78 +44,73 @@ namespace Bon.Integrated
 				Try!(Value(reader, ref variant));
 
 				if (!reader.ReachedEnd())
-					return .Err;
+					Error!(reader, "Unexpected end");
 			}
 			return .Ok;
 		}
 
-		// TODO: frequently checking reader.HasError()!!!!!
-
-		static mixin ParseThing<T>(StringView num) where T : var
+		static mixin ParseThing<T>(BonReader reader, StringView num) where T : var
 		{
 			T thing = default;
 			if (!(T.Parse(.(&num[0], num.Length)) case .Ok(out thing)))
-				return .Err(default); // "failed to parse"
-#unwarn
+				return Error!(reader, scope $"Failed to parse {typeof(T)}");
 			thing
 		}
 
-		static mixin DoInt<T, T2>(StringView numStr) where T2 : var where T : var
+		static mixin DoInt<T, T2>(BonReader reader, StringView numStr) where T2 : var where T : var
 		{
 			// Not all ints have parse methods (that also filter out letters properly), 
 			// so we need to do this, along with range checks!
 
-			T2 num = ParseThing!<T2>(numStr);
+			T2 num = ParseThing!<T2>(reader, numStr);
 #unwarn
 			if (num > (T2)T.MaxValue || num < (T2)T.MinValue)
-				return .Err(default);
-#unwarn
+				return Error!(reader, scope $"Integer literal is out of range for {typeof(T)}");
 			(T)num
 		}
 
 		static mixin Integer(Type type, BonReader reader, ref Variant val)
 		{
-			let num = reader.Integer();
-			if (num.Length == 0)
-				return .Err(default); // TODO do better error report! "expected integer number"
+			let num = Try!(reader.Integer());
 
 			// TODO: make a custom parsing func like uint64 to properly parse hex; then allow hex in reader.Integer()
 
 			switch (type)
 			{
-			case typeof(int8): *(int8*)val.DataPtr = DoInt!<int8, int64>(num);
-			case typeof(int16): *(int16*)val.DataPtr = DoInt!<int16, int64>(num);
-			case typeof(int32): *(int32*)val.DataPtr = DoInt!<int32, int64>(num);
-			case typeof(int64): *(int64*)val.DataPtr = ParseThing!<int64>(num);
-			case typeof(int): *(int*)val.DataPtr = DoInt!<int, int64>(num);
+			case typeof(int8): *(int8*)val.DataPtr = DoInt!<int8, int64>(reader, num);
+			case typeof(int16): *(int16*)val.DataPtr = DoInt!<int16, int64>(reader, num);
+			case typeof(int32): *(int32*)val.DataPtr = DoInt!<int32, int64>(reader, num);
+			case typeof(int64): *(int64*)val.DataPtr = ParseThing!<int64>(reader, num);
+			case typeof(int):
+				if (sizeof(int) == 8)
+					*(int*)val.DataPtr = ParseThing!<int64>(reader, num);
+				else *(int*)val.DataPtr = DoInt!<int32, int64>(reader, num);
 
-			case typeof(uint8): *(uint8*)val.DataPtr = DoInt!<uint8, uint64>(num);
-			case typeof(uint16): *(uint16*)val.DataPtr = DoInt!<uint16, uint64>(num);
-			case typeof(uint32): *(uint32*)val.DataPtr = DoInt!<uint32, uint64>(num);
-			case typeof(uint64): *(uint64*)val.DataPtr = ParseThing!<uint64>(num);
-			case typeof(uint): *(uint*)val.DataPtr = DoInt!<uint, uint64>(num);
+			case typeof(uint8): *(uint8*)val.DataPtr = DoInt!<uint8, uint64>(reader, num);
+			case typeof(uint16): *(uint16*)val.DataPtr = DoInt!<uint16, uint64>(reader, num);
+			case typeof(uint32): *(uint32*)val.DataPtr = DoInt!<uint32, uint64>(reader, num);
+			case typeof(uint64): *(uint64*)val.DataPtr = ParseThing!<uint64>(reader, num);
+			case typeof(uint):
+				if (sizeof(uint) == 8)
+					*(uint*)val.DataPtr = ParseThing!<uint64>(reader, num);
+				else *(uint*)val.DataPtr = DoInt!<uint32, uint64>(reader, num);
 			}
 		}
 
 		static mixin Float(Type type, BonReader reader, ref Variant val)
 		{
-			let num = reader.Floating();
-			if (num.Length == 0)
-				return .Err(default); // "expected floating point number"
+			let num = Try!(reader.Floating());
 
 			switch (type)
 			{
-			case typeof(float): *(float*)val.DataPtr = ParseThing!<float>(num);
-			case typeof(double): *(double*)val.DataPtr = ParseThing!<double>(num);
+			case typeof(float): *(float*)val.DataPtr = ParseThing!<float>(reader, num);
+			case typeof(double): *(double*)val.DataPtr = ParseThing!<double>(reader, num);
 			}
 		}
 
 		static mixin Char(Type type, BonReader reader, ref Variant val)
 		{
-			let res = reader.Char();
-			if (res case .Err)
-				return .Err(default); // "expected floating point number"
-			var char = res.Get();
+			var char = Try!(reader.Char());
 
 			switch (type)
 			{
@@ -106,11 +122,9 @@ namespace Bon.Integrated
 
 		static mixin Bool(BonReader reader, ref Variant val)
 		{
-			let res = reader.Bool();
-			if (res case .Err)
-				return .Err(default); // "expected boolean"
+			let b = Try!(reader.Bool());
 
-			*(bool*)val.DataPtr = res.Get();
+			*(bool*)val.DataPtr = b;
 		}
 
 		public static Result<void> Value(BonReader reader, ref Variant val)
@@ -149,9 +163,10 @@ namespace Bon.Integrated
 					int64 enumValue = 0;
 					repeat
 					{
+						reader.EnumNext();
 						if (reader.EnumHasNamed())
 						{
-							let name = reader.EnumName();
+							let name = Try!(reader.EnumName());
 
 							// Find field on enum
 							bool found = false;
@@ -166,7 +181,7 @@ namespace Bon.Integrated
 								}
 
 							if (!found)
-								return .Err; // "enum case not found"
+								Error!(reader, "Enum case not found");
 						}
 						else
 						{
@@ -194,13 +209,24 @@ namespace Bon.Integrated
 			{
 				if (valType == typeof(StringView))
 				{
+					if (reader.HasNull())
+					{
+						*(StringView*)val.DataPtr = default;
+					}
+					else
+					{
+						let parsedStr = Try!(reader.String());
 
+						// TODO: provide allocation options
+
+						*(StringView*)val.DataPtr = parsedStr;
+					}
 				}
 				else if (valType.IsEnum && valType.IsUnion)
 				{
 
 				}
-				else Struct(reader, ref val);
+				else Try!(Struct(reader, ref val));
 			}
 			else if (valType is SizedArrayType)
 			{
@@ -210,7 +236,24 @@ namespace Bon.Integrated
 			{
 				if (valType == typeof(String))
 				{
+					let str = val.Get<String>();
+					if (reader.HasNull())
+					{
+						if (str != null)
+						{
+							// TODO: option to delete string or do nothing
+							// something like .ManageAllocations ??
 
+							str.Clear();
+						}
+					}
+					else
+					{
+						let parsedStr = Try!(reader.String());
+
+						if (str != null)
+							str.Set(parsedStr);
+					}
 				}
 				else Debug.FatalError(); // TODO
 			}
@@ -226,35 +269,30 @@ namespace Bon.Integrated
 		static Result<void> Struct(BonReader reader, ref Variant val)
 		{
 			let structType = val.VariantType;
-			using (let block = reader.ObjectBlock())
+			Try!(reader.ObjectBlock());
+
+			while (reader.ObjectHasMore())
 			{
-				while (block.HasMore())
+				let name = Try!(reader.Identifier());
+
+				FieldInfo fieldInfo;
+				switch (structType.GetField(scope .(name)))
 				{
-					let name = reader.Identifier();
-
-					FieldInfo fieldInfo;
-					switch (structType.GetField(scope .(name)))
-					{
-					case .Ok(let field):
-						fieldInfo = field;
-					case .Err:
-						// TODO: proper errors
-						return .Err; // Field does not exist
-					}
-
-					Variant fieldVal = Variant.CreateReference(fieldInfo.FieldType, ((uint8*)val.DataPtr) + fieldInfo.MemberOffset);
-
-					Try!(Value(reader, ref fieldVal));
-
-					if (block.HasMore())
-						reader.EntryEnd();
-
-					if (reader.HadErrors())
-						return .Err;
+				case .Ok(let field):
+					fieldInfo = field;
+				case .Err:
+					Error!(reader, "Failed to find field");
 				}
+
+				Variant fieldVal = Variant.CreateReference(fieldInfo.FieldType, ((uint8*)val.DataPtr) + fieldInfo.MemberOffset);
+
+				Try!(Value(reader, ref fieldVal));
+
+				if (reader.ObjectHasMore(false))
+					Try!(reader.EntryEnd());
 			}
 
-			return .Ok;
+			return reader.ObjectBlockEnd();
 		}
 	}
 }

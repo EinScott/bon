@@ -99,6 +99,23 @@ namespace Bon.Tests
 				bool ob = ?;
 				Test.Assert((Bon.Deserialize(ref ob, str) case .Ok) && ob == b);
 			}
+
+			{
+				int i = ?;
+				Test.Assert((Bon.Deserialize(ref i, "\t11 ") case .Ok) && i == 11);
+			}
+
+			// Should error (but not crash)
+
+			{
+				bool ob = false;
+				Test.Assert((Bon.Deserialize(ref ob, "223") case .Err));
+			}
+
+			{
+				char8 ob = 0;
+				Test.Assert((Bon.Deserialize(ref ob, "'") case .Err));
+			}
 		}
 
 		[Test]
@@ -352,6 +369,7 @@ namespace Bon.Tests
 			}
 
 			// TODO more tests for paring things like 8 | 2 | 16 | .Some
+			// and for all kinds of errors! (also for the others!) -> float parsing for example
 		}
 
 		[Serializable,Ordered]
@@ -524,6 +542,34 @@ namespace Bon.Tests
 					}
 					""");
 			}
+		}
+
+		[Test]
+		static void Trash()
+		{
+			int i = ?;
+			char16 c = ?;
+			StringView s = ?;
+
+			Test.Assert(Bon.Deserialize(ref i, "11 34") case .Err);
+			Test.Assert(Bon.Deserialize(ref i, "  11.") case .Err);
+			Test.Assert(Bon.Deserialize(ref s, "\"") case .Err);
+			Test.Assert(Bon.Deserialize(ref s, "\"egnionsoibe") case .Err);
+			Test.Assert(Bon.Deserialize(ref s, "\"egniod d  nsoibe") case .Err);
+			Test.Assert(Bon.Deserialize(ref s, "  \"eg\\\"") case .Err);
+			Test.Assert(Bon.Deserialize(ref s, ",") case .Err);
+			Test.Assert(Bon.Deserialize(ref c, "\'\'") case .Err);
+			Test.Assert(Bon.Deserialize(ref c, "\'ad\'") case .Err);
+			Test.Assert(Bon.Deserialize(ref c, "ad\'") case .Err);
+			Test.Assert(Bon.Deserialize(ref c, " '\\\'  \t\n") case .Err);
+
+			Test.Assert(Bon.Deserialize(ref i, " \n\t") case .Ok);
+		}
+
+		[Test]
+		static void Bench()
+		{
+			// TODO
 		}
 	}
 }

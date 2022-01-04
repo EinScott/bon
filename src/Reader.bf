@@ -1,76 +1,14 @@
 using System;
+using System.Collections;
 using System.Diagnostics;
 
 namespace Bon.Integrated
 {
 	class BonReader
 	{
-		public struct ArrayBlockEnd : IDisposable
-		{
-			BonReader r;
-
-			[Inline]
-			public this(BonReader format)
-			{
-				r = format;
-			}
-
-			[Inline]
-			public bool HasMore()
-			{
-				return !r.Check(']');
-			}
-
-			[Inline]
-			public void Dispose()
-			{
-				r.ArrayBlockEnd();
-			}
-		}
-
-		public struct ObjectBlockEnd : IDisposable
-		{
-			BonReader r;
-
-			[Inline]
-			public this(BonReader format)
-			{
-				r = format;
-			}
-
-			[Inline]
-			public bool HasMore()
-			{
-				return !r.Check('}');
-			}
-
-			[Inline]
-			public void Dispose()
-			{
-				r.ObjectBlockEnd();
-			}
-		}
-
 		public StringView inStr;
+		StringView origStr;
 		int objDepth, arrDepth;
-		public enum Errors
-		{
-			None = 0,
-			UnterminatedComment = 1,
-			ExpectedArray = 1 << 2,
-			UnterminatedArray = 1 << 3,
-			ExpectedObject = 1 << 4,
-			UnterminatedObject = 1 << 5,
-			ExpectedString = 1 << 6,
-			UnterminatedString = 1 << 7,
-			ExpectedChar = 1 << 8,
-			UnterminatedChar = 1 << 9,
-			ExpectedSizer = 1 << 10,
-			UnterminatedSizer = 1 << 11,
-			ExpectedComma = 1 << 12,
-			ExpectedEquals = 1 << 13
-		}
-		public Errors errors;
 
 		[Inline]
 		public this(StringView str)
@@ -78,11 +16,94 @@ namespace Bon.Integrated
 			Debug.Assert(str.Ptr != null);
 
 			inStr = str;
-
-			ConsumeEmpty();
+			origStr = str;
 		}
 
-		void ConsumeEmpty()
+		/// Intended for error report. Get current line and trim to around current pos
+		public void GetCurrentPos(String buffer)
+		{
+			let currPos = Math.Min(origStr.Length - inStr.Length, origStr.Length - 1);
+
+			var start = currPos;
+			bool startCapped = false;
+			for (var dist = 0; start >= 0; start--, dist++)
+			{
+				if (origStr[start] == '\n')
+					break;
+
+				if (dist == 51)
+				{
+					startCapped = true;
+					break;
+				}
+			}
+			if (start != currPos)
+				start++;
+
+			var end = currPos;
+			bool endCapped = false;
+			for (var dist = 0; end < origStr.Length; end++, dist++)
+			{
+				if (origStr[end] == '\n')
+					break;
+
+				if (dist == 26)
+				{
+					endCapped = true;
+					break;
+				}
+			}
+			if (end != currPos)
+				end--;
+
+			int lines = 0;
+			for (var i = start; i >= 0; i--)
+			{
+				if (origStr[i] == '\n')
+					lines++;
+			}
+
+			buffer.Append("(line ");
+			lines.ToString(buffer);
+			buffer.Append(")\n");
+
+			buffer.Append("> ");
+			if (startCapped)
+				buffer.Append("... ");
+
+			var part = origStr.Substring(start, end - start + 1);
+			if (part.StartsWith("\n"))
+				part.RemoveFromStart(1);
+
+			for (let c in part)
+			{
+				buffer.Append(part);
+			}	
+
+			if (endCapped)
+				buffer.Append(" ...");
+
+			buffer.Append("\n> ");
+
+			var pad = currPos - start;
+			if (startCapped)
+				pad += 4;
+			for (let i < pad)
+			{
+				let char = origStr[start + i];
+				if (char == '\t')
+					buffer.Append('\t');
+				else buffer.Append(' ');
+			}
+			buffer.Append('^');
+		}
+
+		mixin Error(String error)
+		{
+			Deserialize.Error!(this, error);
+		}
+
+		public Result<void> ConsumeEmpty()
 		{
 			// Skip space, line breaks, tabs and comments
 			var i = 0;
@@ -133,15 +154,11 @@ namespace Bon.Integrated
 			Debug.Assert(commentDepth >= 0);
 
 			if (commentDepth > 0)
-				errors |= .UnterminatedComment; // TODO: tests for things like these! also unexpected string ends!!
+				Error!("Unterminated comment");
 
 			inStr.RemoveFromStart(i);
-		}
 
-		[Inline]
-		public bool HadErrors()
-		{
-			return errors != .None;
+			return .Ok;
 		}
 
 		[Inline]
@@ -176,7 +193,7 @@ namespace Bon.Integrated
 			return name;
 		}
 
-		public StringView Integer()
+		public Result<StringView> Integer()
 		{
 			var numLen = 0;
 			if (inStr.Length > 0 && inStr[0] == '-')
@@ -184,15 +201,17 @@ namespace Bon.Integrated
 			while (inStr.Length > numLen &&  inStr[numLen].IsNumber)
 				numLen++;
 
+			if (numLen == 0)
+				Error!("Expected integer literal");
 			let num = inStr.Substring(0, numLen);
 			inStr.RemoveFromStart(numLen);
 
-			ConsumeEmpty();
+			Try!(ConsumeEmpty());
 
 			return num;
 		}
 
-		public StringView Floating()
+		public Result<StringView> Floating()
 		{
 			var numLen = 0;
 			while ({
@@ -201,87 +220,98 @@ namespace Bon.Integrated
 			})
 				numLen++;
 
-			if (inStr.StartsWith('f') || inStr.StartsWith('d'))
-				inStr.RemoveFromStart(1);
+			if (numLen == 0)
+				Error!("Expected floating point literal");
 
 			let num = inStr.Substring(0, numLen);
 			inStr.RemoveFromStart(numLen);
+			if (inStr.StartsWith('f') || inStr.StartsWith('d'))
+				inStr.RemoveFromStart(1);
 
-			ConsumeEmpty();
+			Try!(ConsumeEmpty());
 
 			return num;
 		}
 
-		public StringView String()
+		public Result<StringView> String()
 		{
-			if (!Check('"', false))
-			{
-				errors |= .ExpectedString;
-				return default;
-			}
+			if (inStr.Length == 0 || !Check('"'))
+				Error!("Expected string literal");
 
 			var strLen = 0;
 			bool isEscaped = false;
-			while (inStr.Length > strLen && (isEscaped || !Check('"')))
+			while (strLen < inStr.Length && (isEscaped || inStr[strLen] != '"'))
 			{
 				isEscaped = inStr[strLen] == '\\' && !isEscaped;
 				strLen++;
 			}
 
-			if (!Check('"', false))
+			if (strLen >= inStr.Length)
 			{
-				errors |= .UnterminatedString;
-				return default;
-			}
+				if (strLen > 0)
+					inStr.RemoveFromStart(inStr.Length - 1);
+				Error!("Unterminated string literal");
+			}	
 
-			let str = String.UnQuoteString(&inStr[0], strLen, .. scope .());
+			let stringContent = StringView(&inStr[0], strLen);
+
+			let str = scope String();
+			if (String.UnQuoteStringContents(stringContent, str) case .Err)
+				Error!("Invalid string literal");
+
 			inStr.RemoveFromStart(strLen);
 
-			ConsumeEmpty();
+			if (!Check('\''))
+				Debug.FatalError(); // Should not happen, since otherwise strLen would go on until the end of the string!
 
-			return str;
+			Try!(ConsumeEmpty());
+
+			return .Ok(str);
 		}
 
 		public Result<char32> Char()
 		{
-			if (!Check('\'', false))
-			{
-				errors |= .ExpectedString;
-				return .Err;
-			}
-			else inStr[0] = '"';
-
-			// TODO: also parse unicode notation
+			if (inStr.Length == 0 || !Check('\''))
+				Error!("Expected char literal");
 
 			var strLen = 0;
 			bool isEscaped = false;
-			while (inStr.Length > strLen && (isEscaped || !Check('\'')))
+			while (strLen < inStr.Length && (isEscaped || inStr[strLen] != '\''))
 			{
 				isEscaped = inStr[strLen] == '\\' && !isEscaped;
 				strLen++;
 			}
 
-			let strBegin = &inStr[0];
-			inStr.RemoveFromStart(strLen - 1);
-
-			if (!Check('\'', false))
+			if (strLen >= inStr.Length)
 			{
-				errors |= .UnterminatedString;
-				return .Err;
-			}
-			else inStr[0] = '"';
-			inStr.RemoveFromStart(1);
+				if (strLen > 0)
+					inStr.RemoveFromStart(inStr.Length - 1);
+				Error!("Unterminated char literal");
+			}	
 
-			let str = String.UnQuoteString(strBegin, strLen, .. scope .());
+			let stringContent = StringView(&inStr[0], strLen);
+
+			let str = scope String();
+			if (String.UnQuoteStringContents(stringContent, str) case .Err)
+				Error!("Invalid char literal");
+
 			if (str.Length > 4)
-				return .Err;
+				Error!("Oversized char literal");
+			else if (str.Length == 0)
+				Error!("Empty char literal");
 
 			let res = str.GetChar32(0);
-			Debug.Assert(res.length == str.Length);
+			if (res.length != str.Length)
+				Error!("Too many chars in char literal");
+			
+			inStr.RemoveFromStart(strLen);
 
-			ConsumeEmpty();
+			if (!Check('\''))
+				Debug.FatalError(); // Should not happen, since otherwise strLen would go on until the end of the string!
 
-			return res.c;
+			Try!(ConsumeEmpty());
+
+			return .Ok(res.c);
 		}
 
 		public Result<bool> Bool()
@@ -301,21 +331,34 @@ namespace Bon.Integrated
 				return false;
 			}
 
-			return .Err;
+			Error!("Expected bool literal");
 		}
 
-		public StringView Identifier()
+		public Result<StringView> Identifier()
 		{
 			let name = ParseName();
+			if (name.Length == 0)
+				Error!("Expected identifier name");
 
-			ConsumeEmpty();
+			Try!(ConsumeEmpty());
 
 			if (!Check('='))
-				errors |= .ExpectedEquals;
+				Error!("Expected equals");
 
-			ConsumeEmpty();
+			Try!(ConsumeEmpty());
 
 			return name;
+		}
+
+		public bool HasNull(bool consumeIfFound = true)
+		{
+			if (inStr.StartsWith("null"))
+			{
+				if (consumeIfFound)
+					inStr.RemoveFromStart(4);
+				return true;
+			}
+			return false;
 		}
 
 		[Inline]
@@ -326,65 +369,79 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
-		public StringView EnumName()
+		public Result<void> EnumNext()
+		{
+			return ConsumeEmpty();
+		}
+
+		[Inline]
+		public Result<StringView> EnumName()
 		{
 			let name = ParseName();
+			if (name.Length == 0)
+				Error!("Expected enum case name");
 
-			ConsumeEmpty();
+			Try!(ConsumeEmpty());
+
 			return name;
 		}
 
+		[Inline]
 		public bool EnumHasMore()
 		{
-			let res = Check('|');
-
-			ConsumeEmpty();
-
-			return res;
+			return Check('|');
 		}
 
-		public ArrayBlockEnd ArrayBlock()
+		public Result<void> ArrayBlock()
 		{
 			if (!Check('['))
-				errors |= .ExpectedArray;
+				Error!("Expected array");
 
-			ConsumeEmpty();
-
-			return .(this);
+			return ConsumeEmpty();
 		}
 
-		public ObjectBlockEnd ObjectBlock()
+		public Result<void> ObjectBlock()
 		{
 			if (!Check('{'))
-				errors |= .ExpectedObject;
+				Error!("Expected object");
 
-			ConsumeEmpty();
-
-			return .(this);
+			return ConsumeEmpty();
 		}
 		
-		void ArrayBlockEnd()
+		public Result<void> ArrayBlockEnd()
 		{
 			if (!Check(']'))
-				errors |= .UnterminatedArray;
+				Error!("Unterminated array");
 
-			ConsumeEmpty();
+			return ConsumeEmpty();
 		}
 
-		void ObjectBlockEnd()
+		public Result<void> ObjectBlockEnd()
 		{
 			if (!Check('}'))
-				errors |= .UnterminatedObject;
+				Error!("Unterminated object");
 
-			ConsumeEmpty();
+			return ConsumeEmpty();
 		}
 
-		public void EntryEnd()
+		[Inline]
+		public bool ArrayHasMore(bool consumeIfNot = true)
+		{
+			return !Check('}', consumeIfNot);
+		}
+
+		[Inline]
+		public bool ObjectHasMore(bool consumeIfNot = true)
+		{
+			return !Check('}', consumeIfNot);
+		}
+
+		public Result<void> EntryEnd()
 		{
 			if (!Check(','))
-				errors |= .UnterminatedObject;
+				Error!("Expected comma");
 
-			ConsumeEmpty();
+			return ConsumeEmpty();
 		}
 	}
 }
