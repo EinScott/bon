@@ -74,11 +74,10 @@ namespace Bon.Integrated
 			var part = origStr.Substring(start, end - start + 1);
 			if (part.StartsWith("\n"))
 				part.RemoveFromStart(1);
-
+			
 			for (let c in part)
-			{
-				buffer.Append(part);
-			}	
+				if (!c.IsControl)
+					buffer.Append(c);
 
 			if (endCapped)
 				buffer.Append(" ...");
@@ -152,7 +151,7 @@ namespace Bon.Integrated
 				}
 			}
 			Debug.Assert(commentDepth >= 0);
-
+			
 			if (commentDepth > 0)
 				Error!("Unterminated comment");
 
