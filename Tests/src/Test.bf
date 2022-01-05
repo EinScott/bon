@@ -22,7 +22,6 @@ namespace Bon.Tests
 				char8 c = '\n';
 				let str = Bon.Serialize(c, .. scope .());
 				Test.Assert(str == "'\\n'");
-				Test.Assert(str[0] == '\''); // This is weird... the debugger says str[0] == '\"'... but apparently not
 
 				char8 oc = ?;
 				Test.Assert((Bon.Deserialize(ref oc, str) case .Ok) && oc == c);
@@ -232,13 +231,13 @@ namespace Bon.Tests
 		{
 			None = 0,
 			House = 1,
-			Hut = 1 << 2,
-			Green = 1 << 3,
-			Street = 1 << 4,
-			Tram = 1 << 5,
-			Path = 1 << 6,
-			Tree = 1 << 7,
-			Water = 1 << 8,
+			Hut = 1 << 1,
+			Green = 1 << 2,
+			Street = 1 << 3,
+			Tram = 1 << 4,
+			Path = 1 << 5,
+			Tree = 1 << 6,
+			Water = 1 << 7,
 
 			SeasideHouse = .House | .Water,
 			Park = .Path | .Tree | .Green,
@@ -396,8 +395,12 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
-			// TODO more tests for paring things like 8 | 2 | 16 | .Some
-			// and for all kinds of errors! (also for the others!) -> float parsing for example
+			{
+				PlaceFlags oi = ?;
+
+				Test.Assert((Bon.Deserialize(ref oi, "1 | 2 | 4") case .Ok) && oi == (.)(1 | 2 | 4));
+				Test.Assert((Bon.Deserialize(ref oi, "1 | .Water") case .Ok) && oi == .SeasideHouse);
+			}
 		}
 
 		[Serializable,Ordered]
@@ -632,6 +635,29 @@ namespace Bon.Tests
 
 				Thing si = default;
 				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si == i);
+			}
+		}
+
+		[Serializable]
+		class AClass
+		{
+			public uint8 thing;
+			public SomeData data;
+		}
+
+		[Test]
+		static void Classes()
+		{
+			// TODO: test with inheritance, polymorphism...
+
+			let c = scope AClass() { thing = uint8.MaxValue, data = .{ value = 10, time = 1 } };
+
+			{
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "{thing=255,data={time=1,value=10}}");
+
+				AClass co = scope .();
+				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && co.thing == c.thing && co.data == c.data);
 			}
 		}
 

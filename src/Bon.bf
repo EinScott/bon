@@ -23,34 +23,26 @@ namespace Bon
 
 	static class Bon
 	{
-		public static void Serialize<T>(T value, String into, BonSerializeFlags flags = .DefaultFlags) where T : struct
+		public static void Serialize<T>(T value, String into, BonSerializeFlags flags = .DefaultFlags)
 		{
 			let writer = scope BonWriter(into, flags.HasFlag(.Verbose));
-			Serialize.Thing<T>(writer, value, flags);
+			var value;
+			var variant = Variant.CreateReference(typeof(T), &value);
+
+			Serialize.Thing(writer, ref variant, flags);
 		}
 
-		public static Result<void> Deserialize<T>(ref T into, StringView from) where T : struct
+		public static Result<void> Deserialize<T>(ref T value, StringView from)
 		{
 			let reader = scope BonReader(from);
-			Try!(Deserialize.Thing<T>(reader, ref into));
-			return .Ok;
+			var variant = Variant.CreateReference(typeof(T), &value);
+
+			return Deserialize.Thing(reader, ref variant);
 		}
 
 		public static Result<T> Deserialize<T>(StringView from)
 		{
 			return .Ok(default);
 		}
-
-		// TODO: class methods
-
-		// UPDATE: I'm since convinced this is a bad idea! We should just document how to properly setup types!
-		// Value would combine the things thats deserialized with List<Object>, that keeps all the
-		// refs for new types created, for example strings for stringViews...
-		// there should be alternatives to this but this seems easy for when you just want to
-		// poke at some data structure
-		/*public static Result<void> Deserialize<T>(BonValue<T> into, StringView from)
-		{
-
-		}*/
 	}
 }

@@ -45,77 +45,13 @@ namespace Bon.Integrated
 			(type.IsPrimitive || (type.IsTypedPrimitive && (!flags.HasFlag(.Verbose) || !type.IsEnum)))
 		}
 
-		[Inline]
-		public static void Thing<T>(BonWriter writer, T thing, BonSerializeFlags flags = .DefaultFlags)
+		public static void Thing(BonWriter writer, ref Variant val, BonSerializeFlags flags = .DefaultFlags)
 		{
-			var thing;
-			var variant = Variant.CreateReference(typeof(T), &thing);
-			if (DoInclude!(ref variant, flags))
-				Value(writer, ref variant, flags);
+			if (DoInclude!(ref val, flags))
+				Value(writer, ref val, flags);
 			writer.End();
 			if (flags.HasFlag(.Verbose) && writer.outStr.Length == 0)
 				writer.outStr.Append("/* value is default */");
-		}
-
-		static mixin AsThingToString<T>(BonWriter writer, ref Variant val)
-		{
-			T thing = *(T*)val.DataPtr;
-			thing.ToString(writer.outStr);
-		}
-
-		[Inline]
-		static void Integer(Type type, BonWriter writer, ref Variant val)
-		{
-			switch (type)
-			{
-			case typeof(int8): AsThingToString!<int8>(writer, ref val);
-			case typeof(int16): AsThingToString!<int16>(writer, ref val);
-			case typeof(int32): AsThingToString!<int32>(writer, ref val);
-			case typeof(int64): AsThingToString!<int64>(writer, ref val);
-			case typeof(int): AsThingToString!<int>(writer, ref val);
-
-			case typeof(uint8): AsThingToString!<uint8>(writer, ref val);
-			case typeof(uint16): AsThingToString!<uint16>(writer, ref val);
-			case typeof(uint32): AsThingToString!<uint32>(writer, ref val);
-			case typeof(uint64): AsThingToString!<uint64>(writer, ref val);
-			case typeof(uint): AsThingToString!<uint>(writer, ref val);
-
-			default: Debug.FatalError(); // Should be unreachable
-			}
-		}
-
-		[Inline]
-		static void Char(Type type, BonWriter writer, ref Variant val)
-		{
-			char32 char = 0;
-			switch (type)
-			{
-			case typeof(char8): char = (.)*(char8*)val.DataPtr;
-			case typeof(char16): char = (.)*(char16*)val.DataPtr;
-			case typeof(char32): char = *(char32*)val.DataPtr;
-			}
-			writer.Char(char);
-		}
-
-		[Inline]
-		static void Float(Type type, BonWriter writer, ref Variant val)
-		{
-			switch (type)
-			{
-			case typeof(float): AsThingToString!<float>(writer, ref val);
-			case typeof(double): AsThingToString!<double>(writer, ref val);
-
-			default: Debug.FatalError(); // Should be unreachable
-			}
-		}
-
-		[Inline]
-		static void Bool(BonWriter writer, ref Variant val, BonSerializeFlags flags)
-		{
-			bool boolean = *(bool*)val.DataPtr;
-			if (flags.HasFlag(.Verbose))
-				boolean.ToString(writer.outStr);
-			else (boolean ? 1 : 0).ToString(writer.outStr);
 		}
 
 		public static void Value(BonWriter writer, ref Variant val, BonSerializeFlags flags = .DefaultFlags, bool doOneLine = false)
@@ -381,7 +317,7 @@ namespace Bon.Integrated
 						writer.Null();
 					else writer.String(str);
 				}
-				else Debug.FatalError(); // TODO
+				else Class(writer, ref val, flags);
 			}
 			else if (valType.IsPointer)
 			{
@@ -392,11 +328,27 @@ namespace Bon.Integrated
 			writer.EntryEnd(doOneLine);
 		}
 
+		public static void Class(BonWriter writer, ref Variant classVal, BonSerializeFlags flags = .DefaultFlags)
+		{
+			let classType = classVal.VariantType;
+
+			Debug.Assert(classType.IsObject);
+
+			let classPtr = (void**)classVal.DataPtr;
+			if (classPtr == null)
+			{
+				writer.Null();
+			}
+			else
+			{
+				var classDataVal = Variant.CreateReference(classType, *classPtr);
+				Struct(writer, ref classDataVal, flags);
+			}
+		}
+
 		public static void Struct(BonWriter writer, ref Variant structVal, BonSerializeFlags flags = .DefaultFlags)
 		{
 			let structType = structVal.VariantType;
-
-			Debug.Assert(structType.IsStruct);
 
 			bool hasUnnamedMembers = false;
 			using (writer.ObjectBlock())
@@ -423,7 +375,7 @@ namespace Bon.Integrated
 					}
 				}
 			}
-			
+
 			if (flags.HasFlag(.Verbose))
 			{
 				// Just add this as a comment in case anyone wonders...
@@ -432,6 +384,67 @@ namespace Bon.Integrated
 				else if (hasUnnamedMembers)
 					writer.outStr.Append(scope $"/* Type has unnamed members */");
 			}
+		}
+
+		static mixin AsThingToString<T>(BonWriter writer, ref Variant val)
+		{
+			T thing = *(T*)val.DataPtr;
+			thing.ToString(writer.outStr);
+		}
+
+		[Inline]
+		static void Integer(Type type, BonWriter writer, ref Variant val)
+		{
+			switch (type)
+			{
+			case typeof(int8): AsThingToString!<int8>(writer, ref val);
+			case typeof(int16): AsThingToString!<int16>(writer, ref val);
+			case typeof(int32): AsThingToString!<int32>(writer, ref val);
+			case typeof(int64): AsThingToString!<int64>(writer, ref val);
+			case typeof(int): AsThingToString!<int>(writer, ref val);
+
+			case typeof(uint8): AsThingToString!<uint8>(writer, ref val);
+			case typeof(uint16): AsThingToString!<uint16>(writer, ref val);
+			case typeof(uint32): AsThingToString!<uint32>(writer, ref val);
+			case typeof(uint64): AsThingToString!<uint64>(writer, ref val);
+			case typeof(uint): AsThingToString!<uint>(writer, ref val);
+
+			default: Debug.FatalError(); // Should be unreachable
+			}
+		}
+
+		[Inline]
+		static void Char(Type type, BonWriter writer, ref Variant val)
+		{
+			char32 char = 0;
+			switch (type)
+			{
+			case typeof(char8): char = (.)*(char8*)val.DataPtr;
+			case typeof(char16): char = (.)*(char16*)val.DataPtr;
+			case typeof(char32): char = *(char32*)val.DataPtr;
+			}
+			writer.Char(char);
+		}
+
+		[Inline]
+		static void Float(Type type, BonWriter writer, ref Variant val)
+		{
+			switch (type)
+			{
+			case typeof(float): AsThingToString!<float>(writer, ref val);
+			case typeof(double): AsThingToString!<double>(writer, ref val);
+
+			default: Debug.FatalError(); // Should be unreachable
+			}
+		}
+
+		[Inline]
+		static void Bool(BonWriter writer, ref Variant val, BonSerializeFlags flags)
+		{
+			bool boolean = *(bool*)val.DataPtr;
+			if (flags.HasFlag(.Verbose))
+				boolean.ToString(writer.outStr);
+			else (boolean ? 1 : 0).ToString(writer.outStr);
 		}
 	}
 }

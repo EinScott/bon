@@ -31,101 +31,31 @@ namespace Bon.Integrated
 #endif
 		}
 
-		[Inline]
-		public static Result<void> Thing<T>(BonReader reader, ref T into)
+		static void MakeDefault(ref Variant val)
+		{
+			let valType = val.VariantType;
+			if (valType.IsObject || valType.IsPointer)
+			{
+				// TODO
+			}
+
+			Internal.MemSet(val.DataPtr, 0, val.VariantType.Size);
+		}
+
+		public static Result<void> Thing(BonReader reader, ref Variant val)
 		{
 			Try!(reader.ConsumeEmpty());
 
 			if (reader.ReachedEnd())
-				into = default;
+				MakeDefault(ref val);
 			else
 			{
-				var variant = Variant.CreateReference(typeof(T), &into);
-				Try!(Value(reader, ref variant));
+				Try!(Value(reader, ref val));
 
 				if (!reader.ReachedEnd())
 					Error!(reader, "Unexpected end");
 			}
 			return .Ok;
-		}
-
-		static mixin ParseThing<T>(BonReader reader, StringView num) where T : var
-		{
-			T thing = default;
-			if (!(T.Parse(.(&num[0], num.Length)) case .Ok(out thing)))
-				return Error!(reader, scope $"Failed to parse {typeof(T)}");
-			thing
-		}
-
-		static mixin DoInt<T, T2>(BonReader reader, StringView numStr) where T2 : var where T : var
-		{
-			// Not all ints have parse methods (that also filter out letters properly), 
-			// so we need to do this, along with range checks!
-
-			T2 num = ParseThing!<T2>(reader, numStr);
-#unwarn
-			if (num > (T2)T.MaxValue || num < (T2)T.MinValue)
-				return Error!(reader, scope $"Integer is out of range for {typeof(T)}");
-			(T)num
-		}
-
-		static mixin Integer(Type type, BonReader reader, ref Variant val)
-		{
-			let num = Try!(reader.Integer());
-
-			// TODO: make a custom parsing func like uint64 to properly parse hex; then allow hex in reader.Integer()
-			// also support binary, as well as _ as separation
-
-			switch (type)
-			{
-			case typeof(int8): *(int8*)val.DataPtr = DoInt!<int8, int64>(reader, num);
-			case typeof(int16): *(int16*)val.DataPtr = DoInt!<int16, int64>(reader, num);
-			case typeof(int32): *(int32*)val.DataPtr = DoInt!<int32, int64>(reader, num);
-			case typeof(int64): *(int64*)val.DataPtr = ParseThing!<int64>(reader, num);
-			case typeof(int):
-				if (sizeof(int) == 8)
-					*(int*)val.DataPtr = ParseThing!<int64>(reader, num);
-				else *(int*)val.DataPtr = DoInt!<int32, int64>(reader, num);
-
-			case typeof(uint8): *(uint8*)val.DataPtr = DoInt!<uint8, uint64>(reader, num);
-			case typeof(uint16): *(uint16*)val.DataPtr = DoInt!<uint16, uint64>(reader, num);
-			case typeof(uint32): *(uint32*)val.DataPtr = DoInt!<uint32, uint64>(reader, num);
-			case typeof(uint64): *(uint64*)val.DataPtr = ParseThing!<uint64>(reader, num);
-			case typeof(uint):
-				if (sizeof(uint) == 8)
-					*(uint*)val.DataPtr = ParseThing!<uint64>(reader, num);
-				else *(uint*)val.DataPtr = DoInt!<uint32, uint64>(reader, num);
-			}
-		}
-
-		static mixin Float(Type type, BonReader reader, ref Variant val)
-		{
-			let num = Try!(reader.Floating());
-
-			switch (type)
-			{
-			case typeof(float): *(float*)val.DataPtr = ParseThing!<float>(reader, num);
-			case typeof(double): *(double*)val.DataPtr = ParseThing!<double>(reader, num);
-			}
-		}
-
-		static mixin Char(Type type, BonReader reader, ref Variant val)
-		{
-			var char = Try!(reader.Char());
-
-			switch (type)
-			{
-			case typeof(char8): *(char8*)val.DataPtr = *(char8*)&char;
-			case typeof(char16): *(char16*)val.DataPtr = *(char16*)&char;
-			case typeof(char32): *(char32*)val.DataPtr = *(char32*)&char;
-			}
-		}
-
-		static mixin Bool(BonReader reader, ref Variant val)
-		{
-			let b = Try!(reader.Bool());
-
-			*(bool*)val.DataPtr = b;
 		}
 
 		public static Result<void> Value(BonReader reader, ref Variant val)
@@ -318,11 +248,14 @@ namespace Bon.Integrated
 						ptr += arrType.Stride;
 					}
 
-					// Null remaining
-					// TODO: may need to revisit this for things like String?
-					// what do we do in general if this is already set? or do we just
-					// forbid it
-					Internal.MemSet(ptr, 0, count - i);
+					// Default unaffected entries (since they aren't serialized)
+					for (let j < count - i)
+					{
+						var arrVal = Variant.CreateReference(arrType, ptr);
+						MakeDefault(ref arrVal);
+
+						ptr += arrType.Stride;
+					}
 				}
 				if (reader.ArrayHasMore())
 					Error!(reader, "Sized array cannot fit element");
@@ -357,7 +290,7 @@ namespace Bon.Integrated
 						else Debug.FatalError(); // TODO
 					}
 				}
-				else Debug.FatalError(); // TODO
+				else Try!(Class(reader, ref val));
 			}
 			else if (valType.IsPointer)
 			{
@@ -368,11 +301,32 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		static Result<void> Struct(BonReader reader, ref Variant val)
+		public static Result<void> Class(BonReader reader, ref Variant val)
+		{
+			let classType = val.VariantType;
+
+			Debug.Assert(classType.IsObject);
+
+			let classPtr = (void**)val.DataPtr;
+			if (reader.HasNull())
+			{
+				// TODO
+			}
+			else
+			{
+				var classDataVal = Variant.CreateReference(classType, *classPtr);
+				Try!(Struct(reader, ref classDataVal));
+			}
+
+			return .Ok;
+		}
+
+		public static Result<void> Struct(BonReader reader, ref Variant val)
 		{
 			let structType = val.VariantType;
 			Try!(reader.ObjectBlock());
 
+			// @CONTINUE
 			// TODO: put all fields in some lookup??
 			// i mean... even for the one's we don't mention we need to do some stuff
 			// to either default them (except for pointers and class refs i guess??, which we "clear" the location of)
@@ -400,6 +354,85 @@ namespace Bon.Integrated
 			}
 
 			return reader.ObjectBlockEnd();
+		}
+
+		static mixin ParseThing<T>(BonReader reader, StringView num) where T : var
+		{
+			T thing = default;
+			if (!(T.Parse(.(&num[0], num.Length)) case .Ok(out thing)))
+				return Error!(reader, scope $"Failed to parse {typeof(T)}");
+			thing
+		}
+
+		static mixin DoInt<T, T2>(BonReader reader, StringView numStr) where T2 : var where T : var
+		{
+			// Not all ints have parse methods (that also filter out letters properly), 
+			// so we need to do this, along with range checks!
+
+			T2 num = ParseThing!<T2>(reader, numStr);
+#unwarn
+			if (num > (T2)T.MaxValue || num < (T2)T.MinValue)
+				return Error!(reader, scope $"Integer is out of range for {typeof(T)}");
+			(T)num
+		}
+
+		static mixin Integer(Type type, BonReader reader, ref Variant val)
+		{
+			let num = Try!(reader.Integer());
+
+			// TODO: make a custom parsing func like uint64 to properly parse hex; then allow hex in reader.Integer()
+			// also support binary, as well as _ as separation
+
+			switch (type)
+			{
+			case typeof(int8): *(int8*)val.DataPtr = DoInt!<int8, int64>(reader, num);
+			case typeof(int16): *(int16*)val.DataPtr = DoInt!<int16, int64>(reader, num);
+			case typeof(int32): *(int32*)val.DataPtr = DoInt!<int32, int64>(reader, num);
+			case typeof(int64): *(int64*)val.DataPtr = ParseThing!<int64>(reader, num);
+			case typeof(int):
+				if (sizeof(int) == 8)
+					*(int*)val.DataPtr = ParseThing!<int64>(reader, num);
+				else *(int*)val.DataPtr = DoInt!<int32, int64>(reader, num);
+
+			case typeof(uint8): *(uint8*)val.DataPtr = DoInt!<uint8, uint64>(reader, num);
+			case typeof(uint16): *(uint16*)val.DataPtr = DoInt!<uint16, uint64>(reader, num);
+			case typeof(uint32): *(uint32*)val.DataPtr = DoInt!<uint32, uint64>(reader, num);
+			case typeof(uint64): *(uint64*)val.DataPtr = ParseThing!<uint64>(reader, num);
+			case typeof(uint):
+				if (sizeof(uint) == 8)
+					*(uint*)val.DataPtr = ParseThing!<uint64>(reader, num);
+				else *(uint*)val.DataPtr = DoInt!<uint32, uint64>(reader, num);
+			}
+		}
+
+		static mixin Float(Type type, BonReader reader, ref Variant val)
+		{
+			let num = Try!(reader.Floating());
+
+			switch (type)
+			{
+			case typeof(float): *(float*)val.DataPtr = ParseThing!<float>(reader, num);
+			case typeof(double): *(double*)val.DataPtr = ParseThing!<double>(reader, num);
+			}
+		}
+
+		static mixin Char(Type type, BonReader reader, ref Variant val)
+		{
+			var char = Try!(reader.Char());
+
+			switch (type)
+			{
+			case typeof(char8): *(char8*)val.DataPtr = *(char8*)&char;
+			case typeof(char16): *(char16*)val.DataPtr = *(char16*)&char;
+			case typeof(char32): *(char32*)val.DataPtr = *(char32*)&char;
+			}
+		}
+
+		static mixin Bool(BonReader reader, ref Variant val)
+		{
+			let b = Try!(reader.Bool());
+
+			*(bool*)val.DataPtr = b;
 		}
 	}
 }
