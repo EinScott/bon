@@ -101,6 +101,11 @@ namespace Bon.Tests
 			}
 
 			{
+				float ob = ?;
+				Test.Assert((Bon.Deserialize(ref ob, "1f") case .Ok) && ob == 1f);
+			}
+
+			{
 				int i = ?;
 				Test.Assert((Bon.Deserialize(ref i, "\t11 ") case .Ok) && i == 11);
 			}
@@ -121,22 +126,33 @@ namespace Bon.Tests
 		[Test]
 		static void Strings()
 		{
+			// TODO: strings work theoretically, but we can't put their mem anywhere atm
+
 			{
 				StringView s = "A normal string";
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "\"A normal string\"");
+
+				StringView so = ?;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) /*&& so == s*/);
 			}
 
 			{
 				StringView s = "";
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "\"\"");
+
+				StringView so = ?;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) /*&& so == s*/);
 			}
 
 			{
 				StringView s = .() {Length = 1};
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "null");
+
+				StringView so = ?;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && so.Ptr == null);
 			}
 		}
 
@@ -147,22 +163,31 @@ namespace Bon.Tests
 				uint8[6] s = .(12, 24, 53, 34,);
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "[12,24,53,34]");
+
+				uint8[6] so = ?;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && so == s);
 			}
 
 			{
 				uint8[6] s = .(12, 24, 53, 34,);
 				let str = Bon.Serialize(s, .. scope .(), .Verbose);
 				Test.Assert(str == "<const 6>[12,24,53,34]");
+
+				uint8[6] so = ?;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && so == s);
 			}
 
 			{
 				uint16[4] s = .(345, 2036, 568, 3511);
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "[345,2036,568,3511]");
+
+				uint16[4] so = ?;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && so == s);
 			}
 
 			{
-				String[4] s = .("hello", "second String", "another entry", "LAST one");
+				StringView[4] s = .("hello", "second String", "another entry", "LAST one");
 				let str = Bon.Serialize(s, .. scope .(), .Verbose);
 				Test.Assert(str == """
 					<const 4>[
@@ -172,6 +197,9 @@ namespace Bon.Tests
 						\"LAST one\"
 					]
 					""");
+
+				StringView[4] so = ?;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) /*&& so == s*/);
 			}
 		}
 
@@ -405,6 +433,13 @@ namespace Bon.Tests
 			public TypeB type;
 		}
 
+		[Serializable]
+		struct SomeData
+		{
+			public double time;
+			public uint64 value;
+		}
+
 		[Test]
 		static void Structs()
 		{
@@ -484,8 +519,8 @@ namespace Bon.Tests
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{thing=651,bs=[{name=\"first element\",age=34,type=1},{name=\"second element\",age=101},{name=\"\"}]}");
 
-					//StructA so = default;
-					//Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
+					StructA so = default;
+					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) /*&& Bon.Serialize(so, .. scope .()) == str*/);
 				}
 
 				{
@@ -510,9 +545,23 @@ namespace Bon.Tests
 						}
 						""");
 
-					//StructA so = default;
-					//Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
+					StructA so = default;
+					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) /*&& Bon.Serialize(so, .. scope .()) == str*/);
 				}
+			}
+
+			{
+				let s = SomeData(){
+					time = 65.5,
+					value = 11917585743392890597
+				};
+
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "{time=65.5,value=11917585743392890597}");
+
+				SomeData so = ?;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && so == s);
+				Test.Assert((Bon.Deserialize(ref so, "{time=6.55e1d,value=11917585743392890597,}") case .Ok) && so == s);
 			}
 		}
 
@@ -553,6 +602,10 @@ namespace Bon.Tests
 				Thing i = .Text(.(50, 50), "Something!", 24, 90f);
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == ".Text{pos={x=50,y=50},text=\"Something!\",size=24,rotation=90}");
+
+				// TODO: fails because we don't currently handle null string refs
+				//Thing si = default;
+				//Test.Assert((Bon.Deserialize(ref si, str) case .Ok) /*&& si == i*/);
 			}
 
 			{
@@ -589,6 +642,9 @@ namespace Bon.Tests
 			char16 c = ?;
 			StringView s = ?;
 			SomeValues e = ?;
+			SomeData d = ?;
+			uint8[2] a = ?;
+			SomeData[2] ad = ?;
 
 			Test.Assert(Bon.Deserialize(ref i, "11 34") case .Err);
 			Test.Assert(Bon.Deserialize(ref i, "  11.") case .Err);
@@ -614,6 +670,34 @@ namespace Bon.Tests
 			Test.Assert(Bon.Deserialize(ref e, "34  |\t'") case .Err);
 			Test.Assert(Bon.Deserialize(ref e, "23 '|") case .Err);
 
+			Test.Assert(Bon.Deserialize(ref d, "{{]") case .Err);
+			Test.Assert(Bon.Deserialize(ref d, "}") case .Err);
+			Test.Assert(Bon.Deserialize(ref d, "{,}") case .Err);
+			Test.Assert(Bon.Deserialize(ref d, "{,,}") case .Err);
+			Test.Assert(Bon.Deserialize(ref d, "{,,") case .Err);
+			Test.Assert(Bon.Deserialize(ref d, "{,,,}") case .Err);
+			Test.Assert(Bon.Deserialize(ref d, "{0,,,}") case .Err);
+
+			Test.Assert(Bon.Deserialize(ref a, "[") case .Err);
+			Test.Assert(Bon.Deserialize(ref a, "[,]") case .Err);
+			Test.Assert(Bon.Deserialize(ref a, "[,,]") case .Err);
+			Test.Assert(Bon.Deserialize(ref a, "[,") case .Err);
+			Test.Assert(Bon.Deserialize(ref a, "[,0]") case .Err);
+			Test.Assert(Bon.Deserialize(ref a, "[1,1,1,]") case .Err);
+			Test.Assert(Bon.Deserialize(ref a, "<[1,1,1,]") case .Err);
+			Test.Assert(Bon.Deserialize(ref a, "<>") case .Err);
+			Test.Assert(Bon.Deserialize(ref a, "<a>[") case .Err);
+			Test.Assert(Bon.Deserialize(ref a, "<-2>[") case .Err);
+			Test.Assert(Bon.Deserialize(ref a, "<const>[") case .Err);
+
+			Test.Assert(Bon.Deserialize(ref ad, "[{,") case .Err);
+			Test.Assert(Bon.Deserialize(ref ad, "[{},0]") case .Err);
+			Test.Assert(Bon.Deserialize(ref ad, "[{aa=1}]") case .Err);
+			Test.Assert(Bon.Deserialize(ref ad, "[{value=\"\"}]") case .Err);
+			Test.Assert(Bon.Deserialize(ref ad, "[{}{}]") case .Err);
+			
+			Test.Assert(Bon.Deserialize(ref a, "<const12>[]") case .Ok); // There is no reason for this to work, but also none for it to not work
+			Test.Assert(Bon.Deserialize(ref a, "<1>[]") case .Ok);
 			Test.Assert(Bon.Deserialize(ref i, " \n\t") case .Ok);
 		}
 

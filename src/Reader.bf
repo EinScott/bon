@@ -22,7 +22,16 @@ namespace Bon.Integrated
 		/// Intended for error report. Get current line and trim to around current pos
 		public void GetCurrentPos(String buffer)
 		{
-			let currPos = Math.Min(origStr.Length - inStr.Length, origStr.Length - 1);
+			var currPos = Math.Min(origStr.Length - inStr.Length, origStr.Length - 1);
+
+			// Often time we have already discarded the empty space after a thing and are
+			// at the start of the next thing. Dial back until we point at something again!
+			for (; currPos >= 0; currPos--)
+			{
+				let char = origStr[currPos];
+				if (!(char.IsControl || char.IsWhiteSpace))
+					break;
+			}
 
 			var start = currPos;
 			bool startCapped = false;
@@ -205,7 +214,7 @@ namespace Bon.Integrated
 				numLen++;
 
 			if (numLen == 0)
-				Error!("Expected integer literal");
+				Error!("Expected integer");
 			let num = inStr.Substring(0, numLen);
 			inStr.RemoveFromStart(numLen);
 
@@ -224,7 +233,7 @@ namespace Bon.Integrated
 				numLen++;
 
 			if (numLen == 0)
-				Error!("Expected floating point literal");
+				Error!("Expected floating point");
 
 			let num = inStr.Substring(0, numLen);
 			inStr.RemoveFromStart(numLen);
@@ -236,10 +245,10 @@ namespace Bon.Integrated
 			return num;
 		}
 
-		public Result<StringView> String()
+		public Result<void> String(String into)
 		{
 			if (inStr.Length == 0 || !Check('"'))
-				Error!("Expected string literal");
+				Error!("Expected string");
 
 			var strLen = 0;
 			bool isEscaped = false;
@@ -253,14 +262,13 @@ namespace Bon.Integrated
 			{
 				if (strLen > 0)
 					inStr.RemoveFromStart(inStr.Length - 1);
-				Error!("Unterminated string literal");
+				Error!("Unterminated string");
 			}	
 
 			let stringContent = StringView(&inStr[0], strLen);
 
-			let str = scope String();
-			if (String.UnQuoteStringContents(stringContent, str) case .Err)
-				Error!("Invalid string literal");
+			if (String.UnQuoteStringContents(stringContent, into) case .Err)
+				Error!("Invalid string");
 
 			inStr.RemoveFromStart(strLen);
 
@@ -269,13 +277,13 @@ namespace Bon.Integrated
 
 			Try!(ConsumeEmpty());
 
-			return .Ok(str);
+			return .Ok;
 		}
 
 		public Result<char32> Char()
 		{
 			if (inStr.Length == 0 || !Check('\''))
-				Error!("Expected char literal");
+				Error!("Expected char");
 
 			var strLen = 0;
 			bool isEscaped = false;
@@ -289,23 +297,23 @@ namespace Bon.Integrated
 			{
 				if (strLen > 0)
 					inStr.RemoveFromStart(inStr.Length - 1);
-				Error!("Unterminated char literal");
+				Error!("Unterminated char");
 			}	
 
 			let stringContent = StringView(&inStr[0], strLen);
 
 			let str = scope String();
 			if (String.UnQuoteStringContents(stringContent, str) case .Err)
-				Error!("Invalid char literal");
+				Error!("Invalid char");
 
 			if (str.Length > 4)
-				Error!("Oversized char literal");
+				Error!("Oversized char");
 			else if (str.Length == 0)
-				Error!("Empty char literal");
+				Error!("Empty char");
 
 			let res = str.GetChar32(0);
 			if (res.length != str.Length)
-				Error!("Too many chars in char literal");
+				Error!("Multiple chars in char");
 			
 			inStr.RemoveFromStart(strLen);
 
@@ -334,7 +342,7 @@ namespace Bon.Integrated
 				return false;
 			}
 
-			Error!("Expected bool literal");
+			Error!("Expected bool");
 		}
 
 		public Result<StringView> Identifier()
@@ -395,6 +403,37 @@ namespace Bon.Integrated
 			return Check('|');
 		}
 
+		public bool ArrayHasSizer()
+		{
+			return Check('<', false);
+		}
+
+		public Result<StringView> ArraySizer(bool constValid)
+		{
+			if (!Check('<'))
+				Error!("Expected array sizer");
+
+			if (inStr.StartsWith("const"))
+			{
+				if (constValid)
+					inStr.RemoveFromStart(5);
+				else Error!("Sizer of dynamic array cannot be const");
+
+				Try!(ConsumeEmpty());
+			}
+
+			let int = Try!(Integer());
+			if (int.StartsWith('-'))
+				Error!("Expected positive integer");
+
+			if (!Check('>'))
+				Error!("Unterminated array sizer");
+
+			Try!(ConsumeEmpty());
+
+			return int;
+		}
+
 		public Result<void> ArrayBlock()
 		{
 			if (!Check('['))
@@ -430,7 +469,7 @@ namespace Bon.Integrated
 		[Inline]
 		public bool ArrayHasMore()
 		{
-			return !Check('}', false);
+			return !Check(']', false);
 		}
 
 		[Inline]

@@ -65,7 +65,7 @@ namespace Bon.Integrated
 			T2 num = ParseThing!<T2>(reader, numStr);
 #unwarn
 			if (num > (T2)T.MaxValue || num < (T2)T.MinValue)
-				return Error!(reader, scope $"Integer literal is out of range for {typeof(T)}");
+				return Error!(reader, scope $"Integer is out of range for {typeof(T)}");
 			(T)num
 		}
 
@@ -74,6 +74,7 @@ namespace Bon.Integrated
 			let num = Try!(reader.Integer());
 
 			// TODO: make a custom parsing func like uint64 to properly parse hex; then allow hex in reader.Integer()
+			// also support binary, as well as _ as separation
 
 			switch (type)
 			{
@@ -215,11 +216,12 @@ namespace Bon.Integrated
 					}
 					else
 					{
-						let parsedStr = Try!(reader.String());
+						String parsedStr = scope .();
+						Try!(reader.String(parsedStr));
 
 						// TODO: provide allocation options
 
-						*(StringView*)val.DataPtr = parsedStr;
+						//*(StringView*)val.DataPtr = parsedStr;
 					}
 				}
 				else if (valType.IsEnum && valType.IsUnion)
@@ -243,7 +245,7 @@ namespace Bon.Integrated
 								foundCase = true;
 								break;
 							}
-
+							
 							unionDiscrIndex++;
 						}
 						else if (enumField.[Friend]mFieldData.mFlags.HasFlag(.EnumDiscriminator))
@@ -287,17 +289,55 @@ namespace Bon.Integrated
 			}
 			else if (valType is SizedArrayType)
 			{
+				if (reader.ArrayHasSizer())
+				{
+					Try!(reader.ArraySizer(true));
 
+					// Ignore sizer content..
+					// we could do some checking, but erroring would be a bit harsh?
+				}
+
+				let t = (SizedArrayType)valType;
+				let count = t.ElementCount;
+				
+				Try!(reader.ArrayBlock());
+
+				if (count > 0)
+				{
+					let arrType = t.UnderlyingType;
+					var ptr = (uint8*)val.DataPtr;
+					var i = 0;
+					for (; i < count && reader.ArrayHasMore(); i++)
+					{
+						var arrVal = Variant.CreateReference(arrType, ptr);
+						Try!(Value(reader, ref arrVal));
+
+						if (reader.ArrayHasMore())
+							Try!(reader.EntryEnd());
+
+						ptr += arrType.Stride;
+					}
+
+					// Null remaining
+					// TODO: may need to revisit this for things like String?
+					// what do we do in general if this is already set? or do we just
+					// forbid it
+					Internal.MemSet(ptr, 0, count - i);
+				}
+				if (reader.ArrayHasMore())
+					Error!(reader, "Sized array cannot fit element");
+
+				Try!(reader.ArrayBlockEnd());
 			}
 			else if (valType.IsObject)
 			{
 				if (valType == typeof(String))
 				{
-					let str = val.Get<String>();
 					if (reader.HasNull())
 					{
-						if (str != null)
+						if (*(String*)val.DataPtr != null)
 						{
+							let str = val.Get<String>();
 							// TODO: option to delete string or do nothing
 							// something like .ManageAllocations ??
 
@@ -306,10 +346,14 @@ namespace Bon.Integrated
 					}
 					else
 					{
-						let parsedStr = Try!(reader.String());
+						String parsedStr = scope .();
+						Try!(reader.String(parsedStr));
 
-						if (str != null)
+						if (*(String*)val.DataPtr != null)
+						{
+							let str = val.Get<String>();
 							str.Set(parsedStr);
+						}
 						else Debug.FatalError(); // TODO
 					}
 				}

@@ -126,7 +126,7 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
-		public void Sizer(int count, bool markConst = false)
+		public void Sizer(uint count, bool markConst = false)
 		{
 			outStr.Append('<');
 			if (markConst)

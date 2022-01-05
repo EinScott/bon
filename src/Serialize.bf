@@ -335,7 +335,7 @@ namespace Bon.Integrated
 					// deserialize in any case. But it's nice for manual editing to know how
 					// much the array can hold
 					if (flags.HasFlag(.Verbose))
-						writer.Sizer(count, true);
+						writer.Sizer((.)count, true);
 					
 					let arrType = t.UnderlyingType;
 					let doArrayOneLine = DoTypeOneLine!(arrType, flags);
