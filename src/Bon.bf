@@ -21,6 +21,16 @@ namespace Bon
 
 	// TODO: rethink syntax & tokens!
 
+	// HOW DO WE ALLOCATED?
+	/**
+	STRINGS seperate?
+	ctx.memoryManage = .Leave, .Allocate, .Delallocate, .ManageFully
+	ctx.provideStrings = .StringViews, .AllStrings
+	ctx.provideStringFunc String(StringView string)
+	ctx.customMemoryAlloc void*(int size)
+	ctx.customMemoryDelete void(void*)
+	*/
+
 	static class Bon
 	{
 		public static void Serialize<T>(T value, String into, BonSerializeFlags flags = .DefaultFlags)

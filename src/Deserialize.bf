@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Reflection;
+using System.Collections;
 
 namespace Bon.Integrated
 {
@@ -290,6 +291,23 @@ namespace Bon.Integrated
 						else Debug.FatalError(); // TODO
 					}
 				}
+				else if (valType is ArrayType)
+				{
+					Debug.FatalError();
+				}
+				else if (let t = valType as SpecializedGenericType && t == typeof(List<>))
+				{
+					Debug.FatalError();
+				}
+				else if (let t = valType as SpecializedGenericType && t == typeof(HashSet<>))
+				{
+					Debug.FatalError();
+				}
+				else if (let t = valType as SpecializedGenericType && t == typeof(Dictionary<,>))
+				{
+					Debug.FatalError();
+				}
+				// TODO: more builtin? maybe with custom handlers!
 				else Try!(Class(reader, ref val));
 			}
 			else if (valType.IsPointer)
@@ -308,12 +326,17 @@ namespace Bon.Integrated
 			Debug.Assert(classType.IsObject);
 
 			let classPtr = (void**)val.DataPtr;
-			if (reader.HasNull())
+			if (reader.HasNull() && classPtr != null)
 			{
-				// TODO
+				
 			}
 			else
 			{
+				if (classPtr == null)
+				{
+					// TODO!
+				}
+
 				var classDataVal = Variant.CreateReference(classType, *classPtr);
 				Try!(Struct(reader, ref classDataVal));
 			}
@@ -326,24 +349,28 @@ namespace Bon.Integrated
 			let structType = val.VariantType;
 			Try!(reader.ObjectBlock());
 
-			// @CONTINUE
-			// TODO: put all fields in some lookup??
-			// i mean... even for the one's we don't mention we need to do some stuff
-			// to either default them (except for pointers and class refs i guess??, which we "clear" the location of)
-			// -> look into this
+			List<FieldInfo> fields = scope .(structType.FieldCount);
+			for (let f in structType.GetFields())
+				fields.Add(f);
 
 			while (reader.ObjectHasMore())
 			{
 				let name = Try!(reader.Identifier());
 
-				FieldInfo fieldInfo;
-				switch (structType.GetField(scope .(name)))
+				FieldInfo fieldInfo = ?;
+				bool found = false;
+				for (let f in fields)
 				{
-				case .Ok(let field):
-					fieldInfo = field;
-				case .Err:
-					Error!(reader, "Failed to find field");
+					if (f.Name == name)
+					{
+						found = true;
+						fieldInfo = f;
+						@f.Remove();
+						break;
+					}
 				}
+				if (!found)
+					Error!(reader, "Failed to find field");
 
 				Variant fieldVal = Variant.CreateReference(fieldInfo.FieldType, ((uint8*)val.DataPtr) + fieldInfo.MemberOffset);
 
@@ -351,6 +378,12 @@ namespace Bon.Integrated
 
 				if (reader.ObjectHasMore())
 					Try!(reader.EntryEnd());
+			}
+
+			for (let f in fields)
+			{
+				Variant fieldVal = Variant.CreateReference(f.FieldType, ((uint8*)val.DataPtr) + f.MemberOffset);
+				MakeDefault(ref fieldVal);
 			}
 
 			return reader.ObjectBlockEnd();
@@ -381,7 +414,7 @@ namespace Bon.Integrated
 			let num = Try!(reader.Integer());
 
 			// TODO: make a custom parsing func like uint64 to properly parse hex; then allow hex in reader.Integer()
-			// also support binary, as well as _ as separation
+			// also support binary, as well as _ as separation (also check theoretical range of input even against uint64!)
 
 			switch (type)
 			{

@@ -460,7 +460,7 @@ namespace Bon.Tests
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",important=32656}");
 
-					SomeThings so = default;
+					SomeThings so = ?;
 					so.str = scope .();
 					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
 				}
@@ -469,7 +469,7 @@ namespace Bon.Tests
 					let str = Bon.Serialize(s, .. scope .(), .AllowNonPublic);
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",intern=54,important=32656}");
 
-					SomeThings so = default;
+					SomeThings so = ?;
 					so.str = scope .();
 					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .(), .AllowNonPublic) == str);
 				}
@@ -478,7 +478,7 @@ namespace Bon.Tests
 					let str = Bon.Serialize(s, .. scope .(), .IncludeDefault);
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",important=32656,n=0}");
 
-					SomeThings so = default;
+					SomeThings so = ?;
 					so.str = scope .();
 					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .(), .IncludeDefault) == str);
 				}
@@ -487,7 +487,7 @@ namespace Bon.Tests
 					let str = Bon.Serialize(s, .. scope .(), .IgnoreAttributes);
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",dont=8}");
 
-					SomeThings so = default;
+					SomeThings so = ?;
 					so.str = scope .();
 					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .(), .IgnoreAttributes) == str);
 				}
@@ -496,7 +496,7 @@ namespace Bon.Tests
 					let str = Bon.Serialize(s, .. scope .(), .AllowNonPublic|.IgnoreAttributes|.IncludeDefault);
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",intern=54,important=32656,dont=8,n=0}");
 
-					SomeThings so = default; // TODO: in future, should work without defaulting, optionally without the string assign
+					SomeThings so = ?;
 					so.str = scope .();
 					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .(), .AllowNonPublic|.IgnoreAttributes|.IncludeDefault) == str);
 				}
