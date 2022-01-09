@@ -163,6 +163,8 @@ namespace Bon.Integrated
 						break;
 				}
 			}
+			// */ shouldn't even be recognized on its own and
+			// does not count as empty space
 			Debug.Assert(commentDepth >= 0);
 			
 			if (commentDepth > 0)

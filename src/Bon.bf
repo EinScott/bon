@@ -1,17 +1,18 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Collections;
 using Bon.Integrated;
 
 namespace Bon
 {
 	// integrated serialize / deserialize
-	// custom serialize handlers by type?
 	// near-arbitrary tree acces through helper methods derived from arbitrary parsing?
-	// [BonHandleAs(.Dictionary)] -- .List ??? or just generic templates for custom handlers... YEAH!
+	//  generic templates for custom handlers... YEAH! IBonList, IBonDict, IBonString
 
 	// GUIDES ON:
 	// how to set up structures (what the lib expects, esp for allocation, ownership)
+	// -> thing has to manage itself, do "if(_!=null)delete _;" if you really need to. Lists need to expect to delete their contents dynamically depending on use case, bon just allocates, you have to bother
 	// how to force reflection data in the IDE (for example when the need for corlib types, such as Hash arises)
 	// -> actually maybe special case the hashes, but still; do we make speical cases out of all non-prims? HOW DO WE EVEN HANDLE THESE, THEY SHOULDN'T BE GLOBAL? THEY ARE.. BUT
 	// 		-> BONENVIRONMENT OBJECT -> has seperate list of handlers, takes static defaults, but ones can be added individually! YUP
@@ -21,19 +22,11 @@ namespace Bon
 
 	// TODO: rethink syntax & tokens!
 
-	// HOW DO WE ALLOCATED?
-	/**
-	STRINGS seperate?
-	ctx.memoryManage = .Leave, .Allocate, .Delallocate, .ManageFully
-	ctx.provideStrings = .StringViews, .AllStrings
-	ctx.provideStringFunc String(StringView string)
-	ctx.customMemoryAlloc void*(int size)
-	ctx.customMemoryDelete void(void*)
-	*/
-
 	static class Bon
 	{
-		public static void Serialize<T>(T value, String into, BonSerializeFlags flags = .DefaultFlags)
+		// TODO: make this use BonEnvironment gBonEnv as default
+
+		public static void Serialize<T>(T value, String into, BonSerializeFlags flags = .Default)
 		{
 			let writer = scope BonWriter(into, flags.HasFlag(.Verbose));
 			var value;

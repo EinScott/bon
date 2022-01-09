@@ -4,26 +4,6 @@ using System.Reflection;
 
 namespace Bon.Integrated
 {
-	public enum BonSerializeFlags : uint8
-	{
-		public static Self DefaultFlags = Default;
-
-		/// Include public fields, don't include default fields, respect attributes (default)
-		case Default = 0;
-
-		/// Include private fields
-		case AllowNonPublic = 1;
-
-		/// Whether or not to include fields default values (e.g. null, etc)
-		case IncludeDefault = 1 << 1;
-
-		/// Ignore field attributes (only recommended for debugging / complete structure dumping)
-		case IgnoreAttributes = 1 << 2;
-
-		/// The produced string will be suitable (and slightly more verbose) for manual editing.
-		case Verbose = 1 << 3;
-	}
-
 	static class Serialize
 	{
 		static mixin VariantDataIsZero(Variant val)
@@ -45,7 +25,7 @@ namespace Bon.Integrated
 			(type.IsPrimitive || (type.IsTypedPrimitive && (!flags.HasFlag(.Verbose) || !type.IsEnum)))
 		}
 
-		public static void Thing(BonWriter writer, ref Variant val, BonSerializeFlags flags = .DefaultFlags)
+		public static void Thing(BonWriter writer, ref Variant val, BonSerializeFlags flags = .Default)
 		{
 			if (DoInclude!(ref val, flags))
 				Value(writer, ref val, flags);
@@ -54,7 +34,7 @@ namespace Bon.Integrated
 				writer.outStr.Append("/* value is default */");
 		}
 
-		public static void Value(BonWriter writer, ref Variant val, BonSerializeFlags flags = .DefaultFlags, bool doOneLine = false)
+		public static void Value(BonWriter writer, ref Variant val, BonSerializeFlags flags = .Default, bool doOneLine = false)
 		{
 			let valType = val.VariantType;
 
@@ -328,7 +308,7 @@ namespace Bon.Integrated
 			writer.EntryEnd(doOneLine);
 		}
 
-		public static void Class(BonWriter writer, ref Variant classVal, BonSerializeFlags flags = .DefaultFlags)
+		public static void Class(BonWriter writer, ref Variant classVal, BonSerializeFlags flags = .Default)
 		{
 			let classType = classVal.VariantType;
 
@@ -346,7 +326,7 @@ namespace Bon.Integrated
 			}
 		}
 
-		public static void Struct(BonWriter writer, ref Variant structVal, BonSerializeFlags flags = .DefaultFlags)
+		public static void Struct(BonWriter writer, ref Variant structVal, BonSerializeFlags flags = .Default)
 		{
 			let structType = structVal.VariantType;
 
