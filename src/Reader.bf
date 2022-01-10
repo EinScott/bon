@@ -132,7 +132,7 @@ namespace Bon.Integrated
 
 					// Ignore this
 				}
-				if (!char.IsWhiteSpace)
+				else if (!char.IsWhiteSpace)
 				{
 					if (i + 1 < len)
 					{

@@ -289,6 +289,21 @@ namespace Bon.Integrated
 			}
 			else if (valType.IsObject)
 			{
+				/*if (valType.IsBoxed) // see todo in Tests:Classes
+				{
+					let classPtr = (void**)val.DataPtr;
+					if (classPtr == null)
+					{
+						writer.Null();
+					}
+					else
+					{
+						let boxedType = val.VariantType;
+
+						var boxedData = Variant.CreateReference(boxedType, *classPtr);
+						Value(writer, ref boxedData, flags);
+					}
+				} else*/
 				if (valType == typeof(String))
 				{
 					let str = val.Get<String>();

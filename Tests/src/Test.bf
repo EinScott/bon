@@ -565,6 +565,12 @@ namespace Bon.Tests
 				SomeData so = ?;
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && so == s);
 				Test.Assert((Bon.Deserialize(ref so, "{time=6.55e1d,value=11917585743392890597,}") case .Ok) && so == s);
+				Test.Assert((Bon.Deserialize(ref so, """
+					{ // look, a comment! }
+						time=6.55e1d /* hello! */,
+						value=11917585743392890597,
+					}
+					""") case .Ok) && so == s);
 			}
 		}
 
@@ -602,9 +608,9 @@ namespace Bon.Tests
 			}
 
 			{
-				Thing i = .Text(.(50, 50), "Something!", 24, 90f);
+				Thing i = .Text(.(50, 50), "Something\"!", 24, 90f);
 				let str = Bon.Serialize(i, .. scope .());
-				Test.Assert(str == ".Text{pos={x=50,y=50},text=\"Something!\",size=24,rotation=90}");
+				Test.Assert(str == ".Text{pos={x=50,y=50},text=\"Something\\\"!\",size=24,rotation=90}");
 
 				// TODO: fails because we don't currently handle null string refs
 				//Thing si = default;
@@ -638,6 +644,31 @@ namespace Bon.Tests
 			}
 		}
 
+		[Test]
+		public static void Boxed()
+		{
+			{
+				let s = scope box SomeData(){
+					time = 65.5,
+					value = 11917585743392890597
+				};
+
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "{time=65.5,value=11917585743392890597}");
+			}
+
+			// TODO: this actually needs polymorphism!
+
+			/*{
+				var i = scope box int(357);
+				let str = Bon.Serialize(i, .. scope .());
+				Test.Assert(str == "357");
+
+				Object oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+			}*/
+		}
+
 		[Serializable]
 		class AClass
 		{
@@ -649,6 +680,18 @@ namespace Bon.Tests
 		static void Classes()
 		{
 			// TODO: test with inheritance, polymorphism...
+			// polymorphism i going to be big problem
+			// we need something to record type info?
+			// -> i mean, what if it's some base type array with different things in it
+			// then we need basically the notation we just for scenes right now?
+			// -> yea we do that, and types used for it/in it must be explicitly marked
+			//    alternatively everything can be marked. Lib-types can be marked with a
+			//    mixin to add to global context, or just adding to a custom context or
+			//    global env manually
+
+			// => all in all, manage context stuff first (with strings... normal stuff)
+			// => then do polymorphism (arrays, objects... classes & boxed stuff)
+			// => then other bon envc stuff
 
 			let c = scope AClass() { thing = uint8.MaxValue, data = .{ value = 10, time = 1 } };
 
