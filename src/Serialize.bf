@@ -289,22 +289,36 @@ namespace Bon.Integrated
 			}
 			else if (valType.IsObject)
 			{
-				/*if (valType.IsBoxed) // see todo in Tests:Classes
+				if (valType.IsBoxed)
 				{
-					let classPtr = (void**)val.DataPtr;
-					if (classPtr == null)
+					let boxPtr = (void**)val.DataPtr;
+					if (boxPtr == null)
 					{
 						writer.Null();
 					}
 					else
 					{
-						let boxedType = val.VariantType;
+						// TODO: hack together a pointer of the payload, as
+						// currently the box doesn't have reflection when
+						// they payload does. If that gets fixed, the box
+						// has a "val" field which we would get the offset of
+						let boxedPtr = (uint8*)*boxPtr + sizeof(int) // mClassVData
+#if BF_DEBUG_ALLOC
+							+ sizeof(int) // mDebugAllocInfo
+#endif
+							;
 
-						var boxedData = Variant.CreateReference(boxedType, *classPtr);
+						let boxedType = val.VariantType.UnderlyingType;
+
+						var boxedData = Variant.CreateReference(boxedType, boxedPtr);
 						Value(writer, ref boxedData, flags);
+
+						// Value adds a ',', but we do also so don't
+						if (writer.outStr.EndsWith(','))
+							writer.outStr.RemoveFromEnd(1);
 					}
-				} else*/
-				if (valType == typeof(String))
+				}
+				else if (valType == typeof(String))
 				{
 					let str = val.Get<String>();
 

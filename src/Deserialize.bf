@@ -259,7 +259,14 @@ namespace Bon.Integrated
 			}
 			else if (valType.IsObject)
 			{
-				if (valType == typeof(String))
+				// TODO: for polymorphism we can't have this structure!
+				// figure out if an explicit type is specified and get the type from it
+
+				if (valType.IsBoxed)
+				{
+					Debug.FatalError();
+				}
+				else if (valType == typeof(String))
 				{
 					if (reader.HasNull())
 					{
@@ -326,9 +333,17 @@ namespace Bon.Integrated
 			}
 			else
 			{
+				// TODO: we might need to edit classType based on poylmorphism info
+				// we read?
+
+				// TODO: do ... based on env!
 				if (classPtr == null)
 				{
-					// TODO!
+					// TODO: alloc
+				}
+				else
+				{
+					// TODO: make sure this is the type we want, otherwise realloc
 				}
 
 				var classDataVal = Variant.CreateReference(classType, *classPtr);

@@ -657,16 +657,15 @@ namespace Bon.Tests
 				Test.Assert(str == "{time=65.5,value=11917585743392890597}");
 			}
 
-			// TODO: this actually needs polymorphism!
-
-			/*{
+			{
 				var i = scope box int(357);
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == "357");
 
-				Object oi = ?;
-				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
-			}*/
+				// TODO: this would need polymorphism!
+				/*Object oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);*/
+			}
 		}
 
 		[Serializable]
