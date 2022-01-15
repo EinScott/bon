@@ -6,6 +6,24 @@ namespace Bon.Tests
 {
 	static
 	{
+		struct PushFlags : IDisposable
+		{
+			BonSerializeFlags old;
+
+			[Inline]
+			public this(BonSerializeFlags flags)
+			{
+				old = gBonEnv.serializeFlags;
+				gBonEnv.serializeFlags = flags;
+			}
+
+			[Inline]
+			public void Dispose()
+			{
+				gBonEnv.serializeFlags = old;
+			}
+		}
+
 		[Test]
 		static void Primitives()
 		{
@@ -36,9 +54,10 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref oc, str) case .Ok) && oc == c);
 			}
 
+			using (PushFlags(.IncludeDefault))
 			{
 				char8 c = '\0';
-				let str = Bon.Serialize(c, .. scope .(), .IncludeDefault);
+				let str = Bon.Serialize(c, .. scope .());
 				Test.Assert(str == "'\\0'");
 
 				char8 oc = ?;
@@ -72,9 +91,10 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref oc, str) case .Ok) && oc == c);
 			}
 
+			using (PushFlags(.Verbose))
 			{
 				bool b = true;
-				let str = Bon.Serialize(b, .. scope .(), .Verbose);
+				let str = Bon.Serialize(b, .. scope .());
 				Test.Assert(str == bool.TrueString);
 
 				bool ob = ?;
@@ -167,9 +187,10 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && so == s);
 			}
 
+			using (PushFlags(.Verbose))
 			{
 				uint8[6] s = .(12, 24, 53, 34,);
-				let str = Bon.Serialize(s, .. scope .(), .Verbose);
+				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "<const 6>[12,24,53,34]");
 
 				uint8[6] so = ?;
@@ -185,9 +206,10 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && so == s);
 			}
 
+			using (PushFlags(.Verbose))
 			{
 				StringView[4] s = .("hello", "second String", "another entry", "LAST one");
-				let str = Bon.Serialize(s, .. scope .(), .Verbose);
+				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == """
 					<const 4>[
 						\"hello\",
@@ -198,7 +220,9 @@ namespace Bon.Tests
 					""");
 
 				StringView[4] so = ?;
-				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) /*&& so == s*/);
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok));
+
+				// TODO test string equality
 			}
 		}
 
@@ -278,112 +302,116 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
 			}
 
+			using (PushFlags(.Verbose))
 			{
-				TypeB i = .Count;
-				let str = Bon.Serialize(i, .. scope .(), .Verbose);
-				Test.Assert(str == ".Count");
+				{
+					TypeB i = .Count;
+					let str = Bon.Serialize(i, .. scope .());
+					Test.Assert(str == ".Count");
 
-				TypeB oi = ?;
-				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
-			}
+					TypeB oi = ?;
+					Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+				}
 
-			{
-				SomeValues i = default;
-				let str = Bon.Serialize(i, .. scope .(), .Verbose|.IncludeDefault);
-				Test.Assert(str == ".Option1");
+				using (PushFlags(.Verbose|.IncludeDefault))
+				{
+					SomeValues i = default;
+					let str = Bon.Serialize(i, .. scope .());
+					Test.Assert(str == ".Option1");
 
-				SomeValues oi = ?;
-				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
-			}
+					SomeValues oi = ?;
+					Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+				}
 
-			{
-				SomeValues i = .Option2;
-				let str = Bon.Serialize(i, .. scope .(), .Verbose);
-				Test.Assert(str == ".Option2");
+				{
+					SomeValues i = .Option2;
+					let str = Bon.Serialize(i, .. scope .());
+					Test.Assert(str == ".Option2");
 
-				SomeValues oi = ?;
-				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
-			}
+					SomeValues oi = ?;
+					Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+				}
 
-			{
-				SomeValues i = (.)12; // Does not have bits of 1 & 2 set, so it won't find any match
-				let str = Bon.Serialize(i, .. scope .(), .Verbose);
-				Test.Assert(str == "12");
+				{
+					SomeValues i = (.)12; // Does not have bits of 1 & 2 set, so it won't find any match
+					let str = Bon.Serialize(i, .. scope .());
+					Test.Assert(str == "12");
 
-				SomeValues oi = ?;
-				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
-			}
+					SomeValues oi = ?;
+					Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+				}
 
-			{
-				SomeValues i = (.)5; // Shares a bit with Option2 (1), and prints remainder
-				let str = Bon.Serialize(i, .. scope .(), .Verbose);
-				Test.Assert(str == ".Option2|4");
+				{
+					SomeValues i = (.)5; // Shares a bit with Option2 (1), and prints remainder
+					let str = Bon.Serialize(i, .. scope .());
+					Test.Assert(str == ".Option2|4");
 
-				SomeValues oi = ?;
-				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
-			}
+					SomeValues oi = ?;
+					Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+				}
 
-			{
-				SomeValues i = (.)15;
-				let str = Bon.Serialize(i, .. scope .(), .Verbose);
-				Test.Assert(str == ".Option2|.Option3|12");
+				{
+					SomeValues i = (.)15;
+					let str = Bon.Serialize(i, .. scope .());
+					Test.Assert(str == ".Option2|.Option3|12");
 
-				SomeValues oi = ?;
-				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
-			}
+					SomeValues oi = ?;
+					Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+				}
 
-			{
-				PlaceFlags i = .Park;
-				let str = Bon.Serialize(i, .. scope .(), .Verbose);
-				Test.Assert(str == ".Park");
+				{
+					PlaceFlags i = .Park;
+					let str = Bon.Serialize(i, .. scope .());
+					Test.Assert(str == ".Park");
 
-				PlaceFlags oi = ?;
-				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
-			}
+					PlaceFlags oi = ?;
+					Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+				}
 
-			{
-				PlaceFlags i = .House | .Street | .Tram;
-				let str = Bon.Serialize(i, .. scope .(), .Verbose);
-				Test.Assert(str == ".City");
+				{
+					PlaceFlags i = .House | .Street | .Tram;
+					let str = Bon.Serialize(i, .. scope .());
+					Test.Assert(str == ".City");
 
-				PlaceFlags oi = ?;
-				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
-			}
+					PlaceFlags oi = ?;
+					Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+				}
 
-			{
-				PlaceFlags i = .SeasideHouse | .Forest;
-				let str = Bon.Serialize(i, .. scope .(), .Verbose);
-				Test.Assert(str == ".SeasideHouse|.Forest");
+				{
+					PlaceFlags i = .SeasideHouse | .Forest;
+					let str = Bon.Serialize(i, .. scope .());
+					Test.Assert(str == ".SeasideHouse|.Forest");
 
-				PlaceFlags oi = ?;
-				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
-			}
+					PlaceFlags oi = ?;
+					Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+				}
 
-			{
-				PlaceFlags i = .CozyHut | .Rural;
-				let str = Bon.Serialize(i, .. scope .(), .Verbose);
-				Test.Assert(str == ".CozyHut|.Rural");
+				{
+					PlaceFlags i = .CozyHut | .Rural;
+					let str = Bon.Serialize(i, .. scope .());
+					Test.Assert(str == ".CozyHut|.Rural");
 
-				PlaceFlags oi = ?;
-				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
-			}
+					PlaceFlags oi = ?;
+					Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+				}
 
-			{
-				PlaceFlags i = .Park | .CozyHut; // They have overlap
-				let str = Bon.Serialize(i, .. scope .(), .Verbose);
-				Test.Assert(str == ".CozyHut|.Green");
+				{
+					PlaceFlags i = .Park | .CozyHut; // They have overlap
+					let str = Bon.Serialize(i, .. scope .());
+					Test.Assert(str == ".CozyHut|.Green");
 
-				PlaceFlags oi = ?;
-				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
-			}
+					PlaceFlags oi = ?;
+					Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+				}
 
-			{
-				SomeTokens i = .Dot;
-				let str = Bon.Serialize(i, .. scope .(), .Verbose);
-				Test.Assert(str == ".Dot");
+				{
+					SomeTokens i = .Dot;
+					let str = Bon.Serialize(i, .. scope .());
+					Test.Assert(str == ".Dot");
 
-				SomeTokens oi = ?;
-				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+					SomeTokens oi = ?;
+					Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+				}
 			}
 
 			{
@@ -465,40 +493,44 @@ namespace Bon.Tests
 					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
 				}
 
+				using (PushFlags(.AllowNonPublic))
 				{
-					let str = Bon.Serialize(s, .. scope .(), .AllowNonPublic);
+					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",intern=54,important=32656}");
 
 					SomeThings so = ?;
 					so.str = scope .();
-					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .(), .AllowNonPublic) == str);
+					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
 				}
 
+				using (PushFlags(.IncludeDefault))
 				{
-					let str = Bon.Serialize(s, .. scope .(), .IncludeDefault);
+					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",important=32656,n=0}");
 
 					SomeThings so = ?;
 					so.str = scope .();
-					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .(), .IncludeDefault) == str);
+					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
 				}
 
+				using (PushFlags(.IgnoreAttributes))
 				{
-					let str = Bon.Serialize(s, .. scope .(), .IgnoreAttributes);
+					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",dont=8}");
 
 					SomeThings so = ?;
 					so.str = scope .();
-					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .(), .IgnoreAttributes) == str);
+					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
 				}
 
+				using (PushFlags(.AllowNonPublic|.IgnoreAttributes|.IncludeDefault))
 				{
-					let str = Bon.Serialize(s, .. scope .(), .AllowNonPublic|.IgnoreAttributes|.IncludeDefault);
+					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",intern=54,important=32656,dont=8,n=0}");
 
 					SomeThings so = ?;
 					so.str = scope .();
-					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .(), .AllowNonPublic|.IgnoreAttributes|.IncludeDefault) == str);
+					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
 				}
 			}
 
@@ -526,8 +558,9 @@ namespace Bon.Tests
 					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) /*&& Bon.Serialize(so, .. scope .()) == str*/);
 				}
 
+				using (PushFlags(.Verbose))
 				{
-					let str = Bon.Serialize(s, .. scope .(), .Verbose);
+					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == """
 						{
 							thing=651,
@@ -589,9 +622,10 @@ namespace Bon.Tests
 		[Test]
 		static void EnumUnions()
 		{
+			using (PushFlags(.IncludeDefault))
 			{
 				Thing i = .Nothing;
-				let str = Bon.Serialize(i, .. scope .(), .IncludeDefault);
+				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == ".Nothing{}");
 
 				Thing si = default;
@@ -626,9 +660,10 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si == i);
 			}
 
+			using (PushFlags(.Verbose))
 			{
 				Thing i = .Circle(.(10, 1), 4.5f);
-				let str = Bon.Serialize(i, .. scope .(), .Verbose);
+				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == """
 					.Circle{
 						pos={

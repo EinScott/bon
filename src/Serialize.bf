@@ -25,21 +25,21 @@ namespace Bon.Integrated
 			(type.IsPrimitive || (type.IsTypedPrimitive && (!flags.HasFlag(.Verbose) || !type.IsEnum)))
 		}
 
-		public static void Thing(BonWriter writer, ref Variant val, BonSerializeFlags flags = .Default)
+		public static void Thing(BonWriter writer, ref Variant val, BonEnvironment env)
 		{
-			if (DoInclude!(ref val, flags))
-				Value(writer, ref val, flags);
+			if (DoInclude!(ref val, env.serializeFlags))
+				Value(writer, ref val, env);
 			writer.End();
-			if (flags.HasFlag(.Verbose) && writer.outStr.Length == 0)
+			if (env.serializeFlags.HasFlag(.Verbose) && writer.outStr.Length == 0)
 				writer.outStr.Append("/* value is default */");
 		}
 
-		public static void Value(BonWriter writer, ref Variant val, BonSerializeFlags flags = .Default, bool doOneLine = false)
+		public static void Value(BonWriter writer, ref Variant val, BonEnvironment env, bool doOneLine = false)
 		{
 			let valType = val.VariantType;
 
 			// Make sure that doOneLineVal is only passed when valid
-			Debug.Assert(!doOneLine || DoTypeOneLine!(valType, flags));
+			Debug.Assert(!doOneLine || DoTypeOneLine!(valType, env.serializeFlags));
 
 			writer.EntryStart(doOneLine);
 
@@ -52,7 +52,7 @@ namespace Bon.Integrated
 				else if (valType.IsChar)
 					Char(valType, writer, ref val);
 				else if (valType == typeof(bool))
-					Bool(writer, ref val, flags);
+					Bool(writer, ref val, env.serializeFlags);
 				else Debug.FatalError(); // Should be unreachable
 			}
 			else if (valType.IsTypedPrimitive)
@@ -63,7 +63,7 @@ namespace Bon.Integrated
 				var printVal = val;
 
 				bool doPrintLiteral = true;
-				if (valType.IsEnum && flags.HasFlag(.Verbose))
+				if (valType.IsEnum && env.serializeFlags.HasFlag(.Verbose))
 				{
 					doPrintLiteral = false;
 
@@ -159,7 +159,7 @@ namespace Bon.Integrated
 					else if (valType.UnderlyingType.IsChar)
 						Char(valType.UnderlyingType, writer, ref printVal);
 					else if (valType.UnderlyingType == typeof(bool))
-						Bool(writer, ref printVal, flags);
+						Bool(writer, ref printVal, env.serializeFlags);
 					else Debug.FatalError(); // Should be unreachable
 				}
 			}
@@ -230,7 +230,7 @@ namespace Bon.Integrated
 
 							// Do serialize of discriminator and payload
 							writer.Enum(enumField.Name);
-							Struct(writer, ref unionPayload, flags);
+							Struct(writer, ref unionPayload, env);
 
 							didWrite = true;
 							break;
@@ -239,7 +239,7 @@ namespace Bon.Integrated
 
 					Debug.Assert(didWrite);
 				}
-				else Struct(writer, ref val, flags);
+				else Struct(writer, ref val, env);
 			}
 			else if (valType is SizedArrayType)
 			{
@@ -250,15 +250,15 @@ namespace Bon.Integrated
 					// Since this is a fixed-size array, this info is not necessary to
 					// deserialize in any case. But it's nice for manual editing to know how
 					// much the array can hold
-					if (flags.HasFlag(.Verbose))
+					if (env.serializeFlags.HasFlag(.Verbose))
 						writer.Sizer((.)count, true);
 					
 					let arrType = t.UnderlyingType;
-					let doArrayOneLine = DoTypeOneLine!(arrType, flags);
+					let doArrayOneLine = DoTypeOneLine!(arrType, env.serializeFlags);
 					using (writer.ArrayBlock(doArrayOneLine))
 					{
 						var includeCount = count;
-						if (!flags.HasFlag(.IncludeDefault))
+						if (!env.serializeFlags.HasFlag(.IncludeDefault))
 						{
 							var ptr = (uint8*)val.DataPtr + arrType.Stride * (count - 1);
 							for (var i = count - 1; i >= 0; i--)
@@ -266,7 +266,7 @@ namespace Bon.Integrated
 								var arrVal = Variant.CreateReference(arrType, ptr);
 
 								// If this gets included, we'll have to include everything until here!
-								if (DoInclude!(ref arrVal, flags))
+								if (DoInclude!(ref arrVal, env.serializeFlags))
 								{
 									includeCount = i + 1;
 									break;
@@ -280,7 +280,7 @@ namespace Bon.Integrated
 						for (let i < includeCount)
 						{
 							var arrVal = Variant.CreateReference(arrType, ptr);
-							Value(writer, ref arrVal, flags, doArrayOneLine);
+							Value(writer, ref arrVal, env, doArrayOneLine);
 
 							ptr += arrType.Stride;
 						}
@@ -311,7 +311,7 @@ namespace Bon.Integrated
 						let boxedType = val.VariantType.UnderlyingType;
 
 						var boxedData = Variant.CreateReference(boxedType, boxedPtr);
-						Value(writer, ref boxedData, flags);
+						Value(writer, ref boxedData, env);
 
 						// Value adds a ',', but we do also so don't
 						if (writer.outStr.EndsWith(','))
@@ -326,7 +326,7 @@ namespace Bon.Integrated
 						writer.Null();
 					else writer.String(str);
 				}
-				else Class(writer, ref val, flags);
+				else Class(writer, ref val, env);
 			}
 			else if (valType.IsPointer)
 			{
@@ -337,7 +337,7 @@ namespace Bon.Integrated
 			writer.EntryEnd(doOneLine);
 		}
 
-		public static void Class(BonWriter writer, ref Variant classVal, BonSerializeFlags flags = .Default)
+		public static void Class(BonWriter writer, ref Variant classVal, BonEnvironment env)
 		{
 			let classType = classVal.VariantType;
 
@@ -351,11 +351,11 @@ namespace Bon.Integrated
 			else
 			{
 				var classDataVal = Variant.CreateReference(classType, *classPtr);
-				Struct(writer, ref classDataVal, flags);
+				Struct(writer, ref classDataVal, env);
 			}
 		}
 
-		public static void Struct(BonWriter writer, ref Variant structVal, BonSerializeFlags flags = .Default)
+		public static void Struct(BonWriter writer, ref Variant structVal, BonEnvironment env)
 		{
 			let structType = structVal.VariantType;
 
@@ -366,6 +366,7 @@ namespace Bon.Integrated
 				{
 					for (let m in structType.GetFields(.Instance))
 					{
+						let flags = env.serializeFlags;
 						if ((!flags.HasFlag(.IgnoreAttributes) && m.GetCustomAttribute<NoSerializeAttribute>() case .Ok) // check hidden
 							|| !flags.HasFlag(.AllowNonPublic) && (m.[Friend]mFieldData.mFlags & .Public == 0) // check protection level
 							&& (flags.HasFlag(.IgnoreAttributes) || !(m.GetCustomAttribute<DoSerializeAttribute>() case .Ok))) // check if we still include it anyway
@@ -380,12 +381,12 @@ namespace Bon.Integrated
 							hasUnnamedMembers = true;
 
 						writer.Identifier(m.Name);
-						Value(writer, ref val, flags);
+						Value(writer, ref val, env);
 					}
 				}
 			}
 
-			if (flags.HasFlag(.Verbose))
+			if (env.serializeFlags.HasFlag(.Verbose))
 			{
 				// Just add this as a comment in case anyone wonders...
 				if (!structType is TypeInstance)

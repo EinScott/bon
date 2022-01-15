@@ -37,7 +37,7 @@ namespace Bon.Integrated
 			Internal.MemSet(val.DataPtr, 0, val.VariantType.Size);
 		}
 
-		public static Result<void> Thing(BonReader reader, ref Variant val)
+		public static Result<void> Thing(BonReader reader, ref Variant val, BonEnvironment env)
 		{
 			Try!(reader.ConsumeEmpty());
 
@@ -45,7 +45,7 @@ namespace Bon.Integrated
 				MakeDefault(ref val);
 			else
 			{
-				Try!(Value(reader, ref val));
+				Try!(Value(reader, ref val, env));
 
 				if (!reader.ReachedEnd())
 					Error!(reader, "Unexpected end");
@@ -53,7 +53,7 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static Result<void> Value(BonReader reader, ref Variant val)
+		public static Result<void> Value(BonReader reader, ref Variant val, BonEnvironment env)
 		{
 			Type valType = val.VariantType;
 
@@ -208,9 +208,9 @@ namespace Bon.Integrated
 					default: Debug.FatalError(); // Should be unreachable
 					}
 
-					Try!(Struct(reader, ref unionPayload));
+					Try!(Struct(reader, ref unionPayload, env));
 				}
-				else Try!(Struct(reader, ref val));
+				else Try!(Struct(reader, ref val, env));
 			}
 			else if (valType is SizedArrayType)
 			{
@@ -235,7 +235,7 @@ namespace Bon.Integrated
 					for (; i < count && reader.ArrayHasMore(); i++)
 					{
 						var arrVal = Variant.CreateReference(arrType, ptr);
-						Try!(Value(reader, ref arrVal));
+						Try!(Value(reader, ref arrVal, env));
 
 						if (reader.ArrayHasMore())
 							Try!(reader.EntryEnd());
@@ -309,7 +309,7 @@ namespace Bon.Integrated
 					Debug.FatalError();
 				}
 				// TODO: more builtin? maybe with custom handlers!
-				else Try!(Class(reader, ref val));
+				else Try!(Class(reader, ref val, env));
 			}
 			else if (valType.IsPointer)
 			{
@@ -320,7 +320,7 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static Result<void> Class(BonReader reader, ref Variant val)
+		public static Result<void> Class(BonReader reader, ref Variant val, BonEnvironment env)
 		{
 			let classType = val.VariantType;
 
@@ -347,13 +347,13 @@ namespace Bon.Integrated
 				}
 
 				var classDataVal = Variant.CreateReference(classType, *classPtr);
-				Try!(Struct(reader, ref classDataVal));
+				Try!(Struct(reader, ref classDataVal, env));
 			}
 
 			return .Ok;
 		}
 
-		public static Result<void> Struct(BonReader reader, ref Variant val)
+		public static Result<void> Struct(BonReader reader, ref Variant val, BonEnvironment env)
 		{
 			let structType = val.VariantType;
 			Try!(reader.ObjectBlock());
@@ -383,7 +383,7 @@ namespace Bon.Integrated
 
 				Variant fieldVal = Variant.CreateReference(fieldInfo.FieldType, ((uint8*)val.DataPtr) + fieldInfo.MemberOffset);
 
-				Try!(Value(reader, ref fieldVal));
+				Try!(Value(reader, ref fieldVal, env));
 
 				if (reader.ObjectHasMore())
 					Try!(reader.EntryEnd());

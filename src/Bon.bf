@@ -8,7 +8,7 @@ namespace Bon
 {
 	// integrated serialize / deserialize
 	// near-arbitrary tree acces through helper methods derived from arbitrary parsing?
-	//  generic templates for custom handlers... YEAH! IBonList, IBonDict, IBonString
+	//  generic templates for custom handlers...
 
 	// GUIDES ON:
 	// how to set up structures (what the lib expects, esp for allocation, ownership)
@@ -24,28 +24,21 @@ namespace Bon
 
 	static class Bon
 	{
-		// TODO: make this use BonEnvironment gBonEnv as default
-
-		public static void Serialize<T>(T value, String into, BonSerializeFlags flags = .Default)
+		public static void Serialize<T>(T value, String into, BonEnvironment env = gBonEnv)
 		{
-			let writer = scope BonWriter(into, flags.HasFlag(.Verbose));
+			let writer = scope BonWriter(into, env.serializeFlags.HasFlag(.Verbose));
 			var value;
 			var variant = Variant.CreateReference(typeof(T), &value);
 
-			Serialize.Thing(writer, ref variant, flags);
+			Serialize.Thing(writer, ref variant, env);
 		}
 
-		public static Result<void> Deserialize<T>(ref T value, StringView from)
+		public static Result<void> Deserialize<T>(ref T value, StringView from, BonEnvironment env = gBonEnv)
 		{
 			let reader = scope BonReader(from);
 			var variant = Variant.CreateReference(typeof(T), &value);
 
-			return Deserialize.Thing(reader, ref variant);
-		}
-
-		public static Result<T> Deserialize<T>(StringView from)
-		{
-			return .Ok(default);
+			return Deserialize.Thing(reader, ref variant, env);
 		}
 	}
 }

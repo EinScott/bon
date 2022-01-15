@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using Bon.Integrated;
 
 namespace Bon
 {
@@ -47,6 +48,7 @@ namespace Bon
 		// TODO
 		// For custom handler registration
 		// -> handler for custom serialize & deserialize
+		// -> question then is, how much do we just convert to that format then?
 
 		/// When bon needs to allocate or deallocate a reference type, a handler is called for it when possible
 		/// instead of allocating with new or deleting. This can be used to gain more control over the allocation
@@ -60,10 +62,14 @@ namespace Bon
 
 		public this()
 		{
-			// TODO: copy global if set
+			if (gBonEnv != null)
+			{
+				serializeFlags = gBonEnv.serializeFlags;
+				deserializeFlags = gBonEnv.deserializeFlags;
+				for (let pair in gBonEnv.instanceHandlers)
+					instanceHandlers.Add(pair);
+			}
 		}
-
-		// TODO methods for access?
 	}
 
 	static
