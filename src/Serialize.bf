@@ -6,15 +6,6 @@ namespace Bon.Integrated
 {
 	static class Serialize
 	{
-		static mixin VariantDataIsZero(Variant val)
-		{
-			bool isZero = true;
-			for (var i < val.VariantType.Size)
-				if (((uint8*)val.DataPtr)[i] != 0)
-					isZero = false;
-			isZero
-		}
-
 		static mixin DoInclude(ref Variant val, BonSerializeFlags flags)
 		{
 			(flags.HasFlag(.IncludeDefault) || !VariantDataIsZero!(val))
@@ -326,10 +317,25 @@ namespace Bon.Integrated
 						writer.Null();
 					else writer.String(str);
 				}
+				else if (valType is ArrayType)
+				{
+					Debug.FatalError();
+				}
+				// TODO consider using interfaces like ICollection<> and so on and using that? -> should also work for structs i guess? but not now
+				// or just use custom stuff right away
+				/*else if (let t = valType as SpecializedGenericType && t == typeof(List<>))
+				{
+					Debug.FatalError(); // List<>, HashSet<>, Dictionary<,>
+				}*/
 				else Class(writer, ref val, env);
 			}
 			else if (valType.IsPointer)
 			{
+				// also handle references to ourselves
+				// however we detect that. -> of base structure if struct put mem ptr + size as range or on reftype put instance ptr + size as bounds for checking
+				// put & and field path in there?
+				// also do this... for classes? -- hash pointers+size (as range test) we've included with some info or something??
+
 				Debug.FatalError(); // TODO
 			}
 			else Debug.FatalError();

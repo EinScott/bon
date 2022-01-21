@@ -9,6 +9,7 @@ namespace Bon
 	// integrated serialize / deserialize
 	// near-arbitrary tree acces through helper methods derived from arbitrary parsing?
 	//  generic templates for custom handlers...
+	//  support Variant serialize?
 
 	// GUIDES ON:
 	// how to set up structures (what the lib expects, esp for allocation, ownership)

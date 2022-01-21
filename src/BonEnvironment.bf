@@ -27,10 +27,14 @@ namespace Bon
 		/// Fully set the state of the target structure based on the given string.
 		case Default = 0;
 
-		// TODO
 		/// Fields not mentioned in the given string will be left as they are
-		/// instead of being nulled.
+		/// instead of being nulled (and possibly deleted).
 		case IgnoreUnmentionedFields = 1;
+
+		// TODO
+ 		/// Ignore miss-matches between the given string and the structure to deserialize
+		/// like a field not existing, or a type error.
+		case IgnoreStructureMissmatch = 1 << 1;
 	}
 
 	/// Defines the behavior of bon. May be modified globally (gBonEnv)
@@ -42,8 +46,8 @@ namespace Bon
 		public BonDeserializeFlags deserializeFlags;
 
 		// TODO: put these into practise, iterate a bit, maybe write helper methods / mixins!
-		public function void MakeThing(Span<uint8> into, Type allocType, Type onType);
-		public function void DestroyThing(Variant thing, Type onType);
+		public function void MakeThing(Variant refIntoVal);
+		public function void DestroyThing(Variant valRef);
 
 		// TODO
 		// For custom handler registration
@@ -55,10 +59,11 @@ namespace Bon
 		/// or specific types, for example to reference existing ones or register allocated instances elsewhere
 		/// as well.
 		/// BON WILL CALL THESE INSTEAD OF ALLOCATING/DEALLOCATING AND TRUSTS THE USER TO MANAGE IT.
-		///
-		/// [!] As a special case, this is always called on StringView. If you want to deserialize it, you must
-		///     provide a handler for it.
 		public Dictionary<Type, (MakeThing make, DestroyThing destroy)> instanceHandlers = new .() ~ delete _;
+
+		/// Will be called for every deserialized StringView string. Must return a valid string view
+		/// of the passed-in string.
+		public function StringView(StringView view) stringViewHandler;
 
 		public this()
 		{

@@ -374,6 +374,17 @@ namespace Bon.Integrated
 			return false;
 		}
 
+		public bool HasDefault(bool consumeIfFound = true)
+		{
+			if (inStr.StartsWith("default"))
+			{
+				if (consumeIfFound)
+					inStr.RemoveFromStart(7);
+				return true;
+			}
+			return false;
+		}
+
 		[Inline]
 		public bool EnumHasNamed()
 		{

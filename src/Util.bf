@@ -1,3 +1,22 @@
+using System;
+
+namespace Bon.Integrated
+{
+	static
+	{
+		public static mixin VariantDataIsZero(Variant val)
+		{
+			bool isZero = true;
+			var ptr = (uint8*)val.DataPtr;
+			let size = val.VariantType.Size;
+			for (var i < size)
+				if (ptr[i] != 0)
+					isZero = false;
+			isZero
+		}
+	}
+}
+
 namespace System
 {
 	extension String

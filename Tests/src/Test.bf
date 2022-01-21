@@ -1,6 +1,7 @@
 using System;
 using Bon;
 using System.Diagnostics;
+using System.Collections;
 
 namespace Bon.Tests
 {
@@ -22,6 +23,51 @@ namespace Bon.Tests
 			{
 				gBonEnv.serializeFlags = old;
 			}
+		}
+
+		static StringView HandleStringView(StringView view)
+		{
+			// Since we're dealing with const strings,
+			// just intern the deserialized views to get
+			// back the exact string literal
+			return view.Intern();
+		}
+
+		static List<String> strings = new .() ~ DeleteContainerAndItems!(_);
+
+		static void MakeString(Variant val)
+		{
+			var val;
+			var str = strings.Add(.. new .());
+
+			*(String*)val.DataPtr = str;
+		}
+
+		static void DestroyString(Variant val)
+		{
+			var val;
+			var str = *((String*)val.DataPtr);
+
+			if (strings.Remove(str))
+				delete str; // We allocated it!
+		}
+
+		static mixin SetupStringViewHandler()
+		{
+			gBonEnv.stringViewHandler = => HandleStringView;
+
+			if (!gBonEnv.instanceHandlers.ContainsKey(typeof(String)))
+			{
+				BonEnvironment.MakeThing make = => MakeString;
+				BonEnvironment.DestroyThing destroy = => DestroyString;
+
+				gBonEnv.instanceHandlers.Add(typeof(String), (make, destroy));
+			}
+		}
+
+		static mixin NoStringHandler()
+		{
+			gBonEnv.instanceHandlers.Remove(typeof(String));
 		}
 
 		[Test]
@@ -145,7 +191,7 @@ namespace Bon.Tests
 		[Test]
 		static void Strings()
 		{
-			// TODO: strings work theoretically, but we can't put their mem anywhere atm
+			SetupStringViewHandler!();
 
 			{
 				StringView s = "A normal string";
@@ -153,7 +199,16 @@ namespace Bon.Tests
 				Test.Assert(str == "\"A normal string\"");
 
 				StringView so = ?;
-				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) /*&& so == s*/);
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && so == s);
+			}
+
+			{
+				String s = "A normal string";
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "\"A normal string\"");
+
+				String so = null;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && so == s);
 			}
 
 			{
@@ -162,7 +217,7 @@ namespace Bon.Tests
 				Test.Assert(str == "\"\"");
 
 				StringView so = ?;
-				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) /*&& so == s*/);
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && so == s);
 			}
 
 			{
@@ -208,6 +263,8 @@ namespace Bon.Tests
 
 			using (PushFlags(.Verbose))
 			{
+				SetupStringViewHandler!();
+
 				StringView[4] s = .("hello", "second String", "another entry", "LAST one");
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == """
@@ -220,9 +277,7 @@ namespace Bon.Tests
 					""");
 
 				StringView[4] so = ?;
-				Test.Assert((Bon.Deserialize(ref so, str) case .Ok));
-
-				// TODO test string equality
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && s == so);
 			}
 		}
 
@@ -555,7 +610,7 @@ namespace Bon.Tests
 					Test.Assert(str == "{thing=651,bs=[{name=\"first element\",age=34,type=1},{name=\"second element\",age=101},{name=\"\"}]}");
 
 					StructA so = default;
-					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) /*&& Bon.Serialize(so, .. scope .()) == str*/);
+					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && s == so);
 				}
 
 				using (PushFlags(.Verbose))
@@ -582,7 +637,7 @@ namespace Bon.Tests
 						""");
 
 					StructA so = default;
-					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) /*&& Bon.Serialize(so, .. scope .()) == str*/);
+					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str && s == so);
 				}
 			}
 
@@ -642,13 +697,14 @@ namespace Bon.Tests
 			}
 
 			{
+				SetupStringViewHandler!();
+
 				Thing i = .Text(.(50, 50), "Something\"!", 24, 90f);
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == ".Text{pos={x=50,y=50},text=\"Something\\\"!\",size=24,rotation=90}");
 
-				// TODO: fails because we don't currently handle null string refs
-				//Thing si = default;
-				//Test.Assert((Bon.Deserialize(ref si, str) case .Ok) /*&& si == i*/);
+				Thing si = default;
+				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si == i);
 			}
 
 			{
@@ -713,6 +769,10 @@ namespace Bon.Tests
 		[Test]
 		static void Classes()
 		{
+			// TODO:
+			// tests for default
+			// also use default when serializing IncludeDefault for structs/classes & arrays! - introduce ForceFullTree or something to make it still print everything!
+
 			// TODO: test with inheritance, polymorphism...
 			// polymorphism i going to be big problem
 			// we need something to record type info?
@@ -723,9 +783,13 @@ namespace Bon.Tests
 			//    mixin to add to global context, or just adding to a custom context or
 			//    global env manually
 
-			// => all in all, manage context stuff first (with strings... normal stuff)
 			// => then do polymorphism (arrays, objects... classes & boxed stuff)
 			// => then other bon envc stuff
+
+			NoStringHandler!();
+
+			// TODO: some tests for deleting stuff though bon (deallocate/destroy)
+			// and also if strings just created by bon leak
 
 			let c = scope AClass() { thing = uint8.MaxValue, data = .{ value = 10, time = 1 } };
 

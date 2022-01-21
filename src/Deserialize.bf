@@ -26,15 +26,92 @@ namespace Bon.Integrated
 #endif
 		}
 
-		static void MakeDefault(ref Variant val)
+		public static mixin Error(Type type, String error)
 		{
+#if (DEBUG || TEST) && !BON_NO_PRINT
+			PrintError(type, error);
+#endif
+			return .Err(default);
+		}
+
+		static void PrintError(Type type, String error)
+		{
+			let err = scope $"BON ERROR: {error}.\nOn type: ";
+			type.ToString(err);
+#if TEST
+			Console.WriteLine(err);
+#else
+			Debug.WriteLine(err);
+#endif
+		}
+
+		static void MakeDefault(ref Variant val, BonEnvironment env)
+		{
+			if (VariantDataIsZero!(val))
+				return;
+
 			let valType = val.VariantType;
 			if (valType.IsObject || valType.IsPointer)
 			{
-				// TODO
+				if (env.instanceHandlers.TryGetValue(val.VariantType, let funcs)
+					&& funcs.destroy != null)
+				{
+					funcs.destroy(val);
+					//GC.Mark(val.DataPtr, sizeof(int));
+				}
+				else
+				{
+					if (val.VariantType.IsPointer)
+					{
+						delete *(void**)val.DataPtr;
+					}
+					else
+					{
+						// TODO: test if this actually matters?
+						delete *(Object*)val.DataPtr;
+					}
+				}
 			}
 
 			Internal.MemSet(val.DataPtr, 0, val.VariantType.Size);
+		}
+
+		public static Result<void> MakeInstanceRef(ref Variant val, BonEnvironment env)
+		{
+			let valType = val.VariantType;
+			Debug.Assert(valType.IsObject || valType.IsPointer);
+
+			if (env.instanceHandlers.TryGetValue(val.VariantType, let funcs)
+				&& funcs.make != null)
+			{
+				funcs.make(val);
+			}
+			else
+			{
+				// TODO: some way to generally change memory allocation method?
+				// something in bonEnv... also copy & edit CreateObject to use that
+				// -> maybe go the string/list route and just make overridable
+				// alloc / delete methods on BonEnv?
+
+				if (val.VariantType.IsPointer)
+				{
+					Debug.FatalError();
+					// TODO: allocate uint8[Size]
+					// but check how to get the actual size from the pointer type
+					// is it UnderlyingType? is it InstanceSize?
+				}
+				else
+				{
+					void* objRef;
+					if (val.VariantType.CreateObject() case .Ok(let createdObj)) // TODO: do our attribs do this?
+						objRef = (void*)createdObj;
+					else Error!(val.VariantType, "Couldn't create object");
+
+					*((void**)val.DataPtr) = objRef;
+				}
+			}
+
+			return .Ok;
 		}
 
 		public static Result<void> Thing(BonReader reader, ref Variant val, BonEnvironment env)
@@ -42,7 +119,10 @@ namespace Bon.Integrated
 			Try!(reader.ConsumeEmpty());
 
 			if (reader.ReachedEnd())
-				MakeDefault(ref val);
+			{
+				if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedFields))
+					MakeDefault(ref val, env);
+			}
 			else
 			{
 				Try!(Value(reader, ref val, env));
@@ -50,6 +130,7 @@ namespace Bon.Integrated
 				if (!reader.ReachedEnd())
 					Error!(reader, "Unexpected end");
 			}
+
 			return .Ok;
 		}
 
@@ -57,7 +138,9 @@ namespace Bon.Integrated
 		{
 			Type valType = val.VariantType;
 
-			if (valType.IsPrimitive)
+			if (reader.HasDefault())
+				MakeDefault(ref val, env);
+			else if (valType.IsPrimitive)
 			{
 				if (valType.IsInteger)
 					Integer!(valType, reader, ref val);
@@ -144,9 +227,15 @@ namespace Bon.Integrated
 						String parsedStr = scope .();
 						Try!(reader.String(parsedStr));
 
-						// TODO: provide allocation options
+						if (env.stringViewHandler != null)
+						{
+							let str = env.stringViewHandler(parsedStr);
+							Debug.Assert(str.Ptr != parsedStr.Ptr, "[BON ENV] Seriously? bonEnvironment.stringViewHandler returned passed in view but should manage the string's memory!");
+							Debug.Assert(str == parsedStr, "[BON ENV] bonEnvironment.stringViewHandler returned altered string!");
 
-						//*(StringView*)val.DataPtr = parsedStr;
+							*(StringView*)val.DataPtr = str;
+						}
+						else Debug.FatalError("[BON ENV] Register a bonEnvironment.stringViewHandler to deserialize StringViews!");
 					}
 				}
 				else if (valType.IsEnum && valType.IsUnion)
@@ -243,13 +332,16 @@ namespace Bon.Integrated
 						ptr += arrType.Stride;
 					}
 
-					// Default unaffected entries (since they aren't serialized)
-					for (let j < count - i)
+					if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedFields))
 					{
-						var arrVal = Variant.CreateReference(arrType, ptr);
-						MakeDefault(ref arrVal);
+						// Default unaffected entries (since they aren't serialized)
+						for (let j < count - i)
+						{
+							var arrVal = Variant.CreateReference(arrType, ptr);
+							MakeDefault(ref arrVal, env);
 
-						ptr += arrType.Stride;
+							ptr += arrType.Stride;
+						}
 					}
 				}
 				if (reader.ArrayHasMore())
@@ -262,54 +354,34 @@ namespace Bon.Integrated
 				// TODO: for polymorphism we can't have this structure!
 				// figure out if an explicit type is specified and get the type from it
 
-				if (valType.IsBoxed)
+				if (reader.HasNull())
 				{
-					Debug.FatalError();
+					if (*(void**)val.DataPtr != null)
+						MakeDefault(ref val, env);
 				}
-				else if (valType == typeof(String))
+				else
 				{
-					if (reader.HasNull())
-					{
-						if (*(String*)val.DataPtr != null)
-						{
-							let str = val.Get<String>();
-							// TODO: option to delete string or do nothing
-							// something like .ManageAllocations ??
-
-							str.Clear();
-						}
-					}
+					if (*(void**)val.DataPtr == null)
+						Try!(MakeInstanceRef(ref val, env));
 					else
+					{
+						// TODO: make sure this is the type we want (polymophism), otherwise realloc
+					}
+
+					if (valType.IsBoxed)
+					{
+						Debug.FatalError();
+					}
+					else if (valType == typeof(String))
 					{
 						String parsedStr = scope .();
 						Try!(reader.String(parsedStr));
 
-						if (*(String*)val.DataPtr != null)
-						{
-							let str = val.Get<String>();
-							str.Set(parsedStr);
-						}
-						else Debug.FatalError(); // TODO
+						let str = *(String*)(void**)val.DataPtr;
+						str.Set(parsedStr);
 					}
+					else Try!(Class(reader, ref val, env));
 				}
-				else if (valType is ArrayType)
-				{
-					Debug.FatalError();
-				}
-				else if (let t = valType as SpecializedGenericType && t == typeof(List<>))
-				{
-					Debug.FatalError();
-				}
-				else if (let t = valType as SpecializedGenericType && t == typeof(HashSet<>))
-				{
-					Debug.FatalError();
-				}
-				else if (let t = valType as SpecializedGenericType && t == typeof(Dictionary<,>))
-				{
-					Debug.FatalError();
-				}
-				// TODO: more builtin? maybe with custom handlers!
-				else Try!(Class(reader, ref val, env));
 			}
 			else if (valType.IsPointer)
 			{
@@ -323,32 +395,13 @@ namespace Bon.Integrated
 		public static Result<void> Class(BonReader reader, ref Variant val, BonEnvironment env)
 		{
 			let classType = val.VariantType;
-
 			Debug.Assert(classType.IsObject);
 
+			// TODO: we might need to edit classType based on poylmorphism info
+			
 			let classPtr = (void**)val.DataPtr;
-			if (reader.HasNull() && classPtr != null)
-			{
-				
-			}
-			else
-			{
-				// TODO: we might need to edit classType based on poylmorphism info
-				// we read?
-
-				// TODO: do ... based on env!
-				if (classPtr == null)
-				{
-					// TODO: alloc
-				}
-				else
-				{
-					// TODO: make sure this is the type we want, otherwise realloc
-				}
-
-				var classDataVal = Variant.CreateReference(classType, *classPtr);
-				Try!(Struct(reader, ref classDataVal, env));
-			}
+			var classDataVal = Variant.CreateReference(classType, *classPtr);
+			Try!(Struct(reader, ref classDataVal, env));
 
 			return .Ok;
 		}
@@ -389,10 +442,13 @@ namespace Bon.Integrated
 					Try!(reader.EntryEnd());
 			}
 
-			for (let f in fields)
+			if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedFields))
 			{
-				Variant fieldVal = Variant.CreateReference(f.FieldType, ((uint8*)val.DataPtr) + f.MemberOffset);
-				MakeDefault(ref fieldVal);
+				for (let f in fields)
+				{
+					Variant fieldVal = Variant.CreateReference(f.FieldType, ((uint8*)val.DataPtr) + f.MemberOffset);
+					MakeDefault(ref fieldVal, env);
+				}
 			}
 
 			return reader.ObjectBlockEnd();
