@@ -73,7 +73,18 @@ namespace Bon.Integrated
 				}
 			}
 
-			Internal.MemSet(val.DataPtr, 0, val.VariantType.Size);
+			let ptr = val.DataPtr;
+			let size = val.VariantType.Size;
+			switch (size)
+			{
+			case 0:
+			case 1: *(uint8*)ptr = 0;
+			case 2: *(uint16*)ptr = 0;
+			case 4: *(uint32*)ptr = 0;
+			case 8: *(uint64*)ptr = 0;
+			default:
+				Internal.MemSet(ptr, 0, size);
+			}
 		}
 
 		public static Result<void> MakeInstanceRef(ref Variant val, BonEnvironment env)

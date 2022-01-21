@@ -9,9 +9,18 @@ namespace Bon.Integrated
 			bool isZero = true;
 			var ptr = (uint8*)val.DataPtr;
 			let size = val.VariantType.Size;
-			for (var i < size)
-				if (ptr[i] != 0)
-					isZero = false;
+			switch (size)
+			{
+			case 0:
+			case 1: isZero = *ptr == 0;
+			case 2: isZero = *(uint16*)ptr == 0;
+			case 4: isZero = *(uint32*)ptr == 0;
+			case 8: isZero = *(uint64*)ptr == 0;
+			default:
+				for (var i < size)
+					if (ptr[i] != 0)
+						isZero = false;
+			}
 			isZero
 		}
 	}
