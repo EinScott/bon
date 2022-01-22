@@ -469,7 +469,7 @@ namespace Bon.Integrated
 		{
 			T thing = default;
 			if (!(T.Parse(.(&num[0], num.Length)) case .Ok(out thing)))
-				return Error!(reader, scope $"Failed to parse {typeof(T)}");
+				Error!(reader, scope $"Failed to parse {typeof(T)}");
 			thing
 		}
 
@@ -481,7 +481,7 @@ namespace Bon.Integrated
 			T2 num = ParseThing!<T2>(reader, numStr);
 #unwarn
 			if (num > (T2)T.MaxValue || num < (T2)T.MinValue)
-				return Error!(reader, scope $"Integer is out of range for {typeof(T)}");
+				Error!(reader, scope $"Integer is out of range for {typeof(T)}");
 			(T)num
 		}
 
