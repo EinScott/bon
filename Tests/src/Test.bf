@@ -3,6 +3,16 @@ using Bon;
 using System.Diagnostics;
 using System.Collections;
 
+/*namespace System
+{
+	// TODO: buildsettings include or this DOES NOT WORK: both link error!
+	[Serializable]
+	extension String
+	{
+
+	}
+}*/
+
 namespace Bon.Tests
 {
 	static
@@ -56,18 +66,29 @@ namespace Bon.Tests
 		{
 			gBonEnv.stringViewHandler = => HandleStringView;
 
-			if (!gBonEnv.instanceHandlers.ContainsKey(typeof(String)))
-			{
-				BonEnvironment.MakeThing make = => MakeString;
-				BonEnvironment.DestroyThing destroy = => DestroyString;
+			gBonEnv.instanceHandlers.Remove(typeof(String));
+			BonEnvironment.MakeThing make = => MakeString;
+			BonEnvironment.DestroyThing destroy = => DestroyString;
 
-				gBonEnv.instanceHandlers.Add(typeof(String), (make, destroy));
-			}
+			gBonEnv.instanceHandlers.Add(typeof(String), (make, destroy));
+		}
+
+		static void MakeStringFix(Variant val)
+		{
+			var val;
+			*(String*)val.DataPtr = new String();
 		}
 
 		static mixin NoStringHandler()
 		{
+			gBonEnv.stringViewHandler = => HandleStringView;
+
+			// TODO This is a fix for not being able to force reflection data on these types currently, see bug at top of file!
+
 			gBonEnv.instanceHandlers.Remove(typeof(String));
+			BonEnvironment.MakeThing make = => MakeStringFix;
+
+			gBonEnv.instanceHandlers.Add(typeof(String), (make, null));
 		}
 
 		[Test]
@@ -766,6 +787,7 @@ namespace Bon.Tests
 		[Serializable]
 		class AClass
 		{
+			public String aStringThing ~ if (_ != null) delete _;
 			public uint8 thing;
 			public SomeData data;
 		}
@@ -794,14 +816,14 @@ namespace Bon.Tests
 			// TODO: some tests for deleting stuff though bon (deallocate/destroy)
 			// and also if strings just created by bon leak
 
-			let c = scope AClass() { thing = uint8.MaxValue, data = .{ value = 10, time = 1 } };
-
 			{
+				let c = scope AClass() { thing = uint8.MaxValue, data = .{ value = 10, time = 1 }, aStringThing = new .("A STRING THING yes") };
+
 				let str = Bon.Serialize(c, .. scope .());
-				Test.Assert(str == "{thing=255,data={time=1,value=10}}");
+				Test.Assert(str == "{aStringThing=\"A STRING THING yes\",thing=255,data={time=1,value=10}}");
 
 				AClass co = scope .();
-				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && co.thing == c.thing && co.data == c.data);
+				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && co.thing == c.thing && co.data == c.data && c.aStringThing == c.aStringThing);
 			}
 		}
 

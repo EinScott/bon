@@ -58,18 +58,7 @@ namespace Bon.Integrated
 				{
 					funcs.destroy(val);
 				}
-				else
-				{
-					if (val.VariantType.IsPointer)
-					{
-						delete *(void**)val.DataPtr;
-					}
-					else
-					{
-						// TODO: test if this actually matters?
-						delete *(Object*)val.DataPtr;
-					}
-				}
+				else delete *(void**)val.DataPtr;
 			}
 
 			let ptr = val.DataPtr;
@@ -115,7 +104,7 @@ namespace Bon.Integrated
 					void* objRef;
 					if (val.VariantType.CreateObject() case .Ok(let createdObj)) // TODO: do our attribs do this?
 						objRef = (void*)createdObj;
-					else Error!(val.VariantType, "Couldn't create object");
+					else Error!(val.VariantType, "Failed to create object");
 
 					*((void**)val.DataPtr) = objRef;
 				}

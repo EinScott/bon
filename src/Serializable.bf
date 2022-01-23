@@ -6,7 +6,7 @@ namespace Bon
 	// info is force included some other way (other attribute or build settings).
 	// This makes it easier to work with types from other libraries (where you can
 	// only retroactively force reflection in the build settings)
-	[AttributeUsage(.Class|.Struct|.Enum, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .AllMembers, AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
+	[AttributeUsage(.Class|.Struct|.Enum, .AlwaysIncludeTarget | .ReflectAttribute, ReflectUser = .AllMembers | .DefaultConstructor, AlwaysIncludeUser = .IncludeAllMethods | .AssumeInstantiated)]
 	struct SerializableAttribute : Attribute {}
 
 	/// Never serialize this field!
