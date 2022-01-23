@@ -214,6 +214,7 @@ namespace Bon.Tests
 			}
 		}
 
+		// TODO: restrict strings more. currently  they go multiline but also include all chars... which is not intended-- like tabs and line breaks!
 		[Test]
 		static void Strings()
 		{

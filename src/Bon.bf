@@ -7,9 +7,17 @@ using Bon.Integrated;
 namespace Bon
 {
 	// integrated serialize / deserialize
+
 	// near-arbitrary tree acces through helper methods derived from arbitrary parsing?
-	//  generic templates for custom handlers...
-	//  support Variant serialize?
+	// -> could be done through a lot of re-parsing and BonContext or something like that on wich to call
+	// -> but overall, THIS IS NOT A CONFIG FILE FORMAT, so NO!
+	// -> could we somehow denote something like... layout version in the same file though?
+	//   -> some meta stuff? { version=1, thing=${} } -> $ sign means "keep this just as a substring... it's a separate bon thing"
+	//      no that's a stupid decision, but we could allow commas on a top level, and make that multiple calls!
+	//      bonContext would be something that is passed around  to hold the string for substrings both when writing addtional stuff or reading the next?
+
+	// generic templates for custom handlers...
+	// support Variant serialize?
 
 	// GUIDES ON:
 	// how to set up structures (what the lib expects, esp for allocation, ownership)
