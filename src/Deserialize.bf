@@ -57,7 +57,6 @@ namespace Bon.Integrated
 					&& funcs.destroy != null)
 				{
 					funcs.destroy(val);
-					//GC.Mark(val.DataPtr, sizeof(int));
 				}
 				else
 				{
@@ -388,7 +387,8 @@ namespace Bon.Integrated
 						String parsedStr = scope .();
 						Try!(reader.String(parsedStr));
 
-						let str = *(String*)(void**)val.DataPtr;
+						var str = *(String*)(void**)val.DataPtr;
+
 						str.Set(parsedStr);
 					}
 					else Try!(Class(reader, ref val, env));

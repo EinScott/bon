@@ -175,15 +175,20 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref i, "\t11 ") case .Ok) && i == 11);
 			}
 
+			{
+				int i = ?;
+				Test.Assert((Bon.Deserialize(ref i, "default") case .Ok) && i == 0);
+			}
+
 			// Should error (but not crash)
 
 			{
-				bool ob = false;
+				bool ob = ?;
 				Test.Assert((Bon.Deserialize(ref ob, "223") case .Err));
 			}
 
 			{
-				char8 ob = 0;
+				char8 ob = ?;
 				Test.Assert((Bon.Deserialize(ref ob, "'") case .Err));
 			}
 		}
@@ -563,8 +568,7 @@ namespace Bon.Tests
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",important=32656,n=0}");
 
-					SomeThings so = ?;
-					so.str = scope .();
+					SomeThings so = default; // All of these need to be nulled so that the string pointer is not pointing somewhere random!
 					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
 				}
 
@@ -573,8 +577,7 @@ namespace Bon.Tests
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",dont=8}");
 
-					SomeThings so = ?;
-					so.str = scope .();
+					SomeThings so = default;
 					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
 				}
 
@@ -583,8 +586,7 @@ namespace Bon.Tests
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",intern=54,important=32656,dont=8,n=0}");
 
-					SomeThings so = ?;
-					so.str = scope .();
+					SomeThings so = default;
 					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
 				}
 			}
@@ -685,6 +687,8 @@ namespace Bon.Tests
 
 				Thing si = default;
 				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si == i);
+
+				Test.Assert((Bon.Deserialize(ref si, "default") case .Ok) && si == i);
 			}
 
 			{
@@ -770,7 +774,6 @@ namespace Bon.Tests
 		static void Classes()
 		{
 			// TODO:
-			// tests for default
 			// also use default when serializing IncludeDefault for structs/classes & arrays! - introduce ForceFullTree or something to make it still print everything!
 
 			// TODO: test with inheritance, polymorphism...
