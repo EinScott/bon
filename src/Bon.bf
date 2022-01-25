@@ -9,12 +9,9 @@ namespace Bon
 	// integrated serialize / deserialize
 
 	// near-arbitrary tree acces through helper methods derived from arbitrary parsing?
-	// -> could be done through a lot of re-parsing and BonContext or something like that on wich to call
-	// -> but overall, THIS IS NOT A CONFIG FILE FORMAT, so NO!
-	// -> could we somehow denote something like... layout version in the same file though?
-	//   -> some meta stuff? { version=1, thing=${} } -> $ sign means "keep this just as a substring... it's a separate bon thing"
-	//      no that's a stupid decision, but we could allow commas on a top level, and make that multiple calls!
-	//      bonContext would be something that is passed around  to hold the string for substrings both when writing addtional stuff or reading the next?
+	// -> could be done through a lot of re-parsing and BonContext or something like that on wich to call... but no?
+
+	// some meta stuff? { version=1, thing=${} } -> $ sign means "keep this just as a substring... it's a separate bon thing" STILL DO THIS ON IT'S OWN-- entry just counts as str
 
 	// generic templates for custom handlers...
 	// support Variant serialize?
@@ -42,9 +39,10 @@ namespace Bon
 			Serialize.Thing(writer, ref variant, env);
 		}
 
-		public static Result<void> Deserialize<T>(ref T value, StringView from, BonEnvironment env = gBonEnv)
+		public static Result<BonContext> Deserialize<T>(ref T value, BonContext from, BonEnvironment env = gBonEnv)
 		{
-			let reader = scope BonReader(from);
+			let reader = scope BonReader();
+			Try!(reader.Setup(from));
 			var variant = Variant.CreateReference(typeof(T), &value);
 
 			return Deserialize.Thing(reader, ref variant, env);

@@ -242,6 +242,16 @@ namespace Bon.Integrated
 				f.NewLine(outStr);
 		}
 
+		public void Start()
+		{
+			if (outStr.Length > 0)
+			{
+				outStr.Append(',');
+				if (doFormatting)
+					f.NewLine(outStr);
+			}
+		}
+
 		public void End()
 		{
 			Debug.Assert(objDepth == 0 && arrDepth == 0);
@@ -255,6 +265,12 @@ namespace Bon.Integrated
 				if (outStr.EndsWith(','))
 					outStr.RemoveFromEnd(1);
 			}
+		}
+
+		[Inline]
+		public void IrrelevantEntry()
+		{
+			outStr.Append('?');
 		}
 	}
 }

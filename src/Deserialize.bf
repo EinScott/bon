@@ -3,6 +3,9 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Collections;
 
+using internal Bon;
+using internal Bon.Integrated;
+
 namespace Bon.Integrated
 {
 	static class Deserialize
@@ -113,24 +116,38 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static Result<void> Thing(BonReader reader, ref Variant val, BonEnvironment env)
+		public static Result<BonContext> Thing(BonReader reader, ref Variant val, BonEnvironment env)
 		{
 			Try!(reader.ConsumeEmpty());
 
 			if (reader.ReachedEnd())
-			{
-				if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedFields))
-					MakeDefault(ref val, env);
-			}
+				Error!(reader, "Expected entry");
 			else
 			{
-				Try!(Value(reader, ref val, env));
+				if (reader.IsIrrelevantEntry())
+				{
+					if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+						MakeDefault(ref val, env);
 
-				if (!reader.ReachedEnd())
-					Error!(reader, "Unexpected end");
+					Try!(reader.ConsumeEmpty());
+				}
+				else Try!(Value(reader, ref val, env));
+
+				if (!reader.ReachedEnd() && !reader.FileHasMore(false))
+					Error!(reader, "Expected entry end");
 			}
 
-			return .Ok;
+			// Remove ',' between this and possibly the next entry
+			let hasMore = reader.FileHasMore();
+
+			// Pass state on
+			let context = BonContext{
+				strLeft = reader.inStr,
+				origStr = reader.origStr,
+				hasMore = hasMore
+			};
+
+			return .Ok(context);
 		}
 
 		public static Result<void> Value(BonReader reader, ref Variant val, BonEnvironment env)
@@ -139,6 +156,8 @@ namespace Bon.Integrated
 
 			if (reader.HasDefault())
 				MakeDefault(ref val, env);
+			else if (reader.IsIrrelevantEntry())
+				Error!(reader, "Ignored is only valid in arrays");
 			else if (valType.IsPrimitive)
 			{
 				if (valType.IsInteger)
@@ -323,7 +342,14 @@ namespace Bon.Integrated
 					for (; i < count && reader.ArrayHasMore(); i++)
 					{
 						var arrVal = Variant.CreateReference(arrType, ptr);
-						Try!(Value(reader, ref arrVal, env));
+
+						if (reader.IsIrrelevantEntry())
+						{
+							// Null unless we leave these alone!
+							if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+								MakeDefault(ref arrVal, env);
+						}
+						else Try!(Value(reader, ref arrVal, env));
 
 						if (reader.ArrayHasMore())
 							Try!(reader.EntryEnd());
@@ -331,7 +357,7 @@ namespace Bon.Integrated
 						ptr += arrType.Stride;
 					}
 
-					if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedFields))
+					if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
 					{
 						// Default unaffected entries (since they aren't serialized)
 						for (let j < count - i)
@@ -442,7 +468,7 @@ namespace Bon.Integrated
 					Try!(reader.EntryEnd());
 			}
 
-			if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedFields))
+			if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
 			{
 				for (let f in fields)
 				{

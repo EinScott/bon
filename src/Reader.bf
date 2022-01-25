@@ -2,31 +2,41 @@ using System;
 using System.Collections;
 using System.Diagnostics;
 
+using internal Bon;
+
 namespace Bon.Integrated
 {
 	class BonReader
 	{
 		public StringView inStr;
-		StringView origStr;
+		internal StringView origStr;
 		int objDepth, arrDepth;
 
 		[Inline]
-		public this(StringView str)
+		public Result<void> Setup(BonContext con)
 		{
-			Debug.Assert(str.Ptr != null);
+			Debug.Assert(con.strLeft.Ptr != null);
 
-			inStr = str;
-			origStr = str;
+			inStr = con.strLeft;
+			origStr = con.origStr;
+
+			if (!con.hasMore)
+				Error!("End of entries already reached");
+
+			return .Ok;
 		}
 
 		/// Intended for error report. Get current line and trim to around current pos
 		public void GetCurrentPos(String buffer)
 		{
+			if (origStr.Ptr == null || inStr.Ptr == null)
+				return;
+
 			var currPos = Math.Min(origStr.Length - inStr.Length, origStr.Length - 1);
 
 			// Often time we have already discarded the empty space after a thing and are
 			// at the start of the next thing. Dial back until we point at something again!
-			for (; currPos >= 0; currPos--)
+			for (; currPos > 0; currPos--)
 			{
 				let char = origStr[currPos];
 				if (!(char.IsControl || char.IsWhiteSpace))
@@ -178,7 +188,7 @@ namespace Bon.Integrated
 		[Inline]
 		public bool ReachedEnd()
 		{
-			return inStr.Length == 0;
+			return inStr.Length == 0 && objDepth == 0 && arrDepth == 0;
 		}
 
 		bool Check(char8 token, bool consume = true)
@@ -497,6 +507,22 @@ namespace Bon.Integrated
 				Error!("Expected comma");
 
 			return ConsumeEmpty();
+		}
+
+		public bool FileHasMore(bool consume = true)
+		{
+			let res = Check(',', consume);
+
+			if (objDepth != 0 || arrDepth != 0)
+				return false;
+
+			return res;
+		}
+
+		[Inline]
+		public bool IsIrrelevantEntry()
+		{
+			return Check('?');
 		}
 	}
 }

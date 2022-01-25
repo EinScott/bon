@@ -27,14 +27,9 @@ namespace Bon
 		/// Fully set the state of the target structure based on the given string.
 		case Default = 0;
 
-		/// Fields not mentioned in the given string will be left as they are
+		/// Values not mentioned in the given string will be left as they are
 		/// instead of being nulled (and possibly deleted).
-		case IgnoreUnmentionedFields = 1;
-
-		// TODO
- 		/// Ignore miss-matches between the given string and the structure to deserialize
-		/// like a field not existing, or a type error.
-		case IgnoreStructureMissmatch = 1 << 1;
+		case IgnoreUnmentionedValues = 1;
 	}
 
 	/// Defines the behavior of bon. May be modified globally (gBonEnv)

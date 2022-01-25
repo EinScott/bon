@@ -180,7 +180,7 @@ namespace Bon.Tests
 			{
 				bool b = false;
 				let str = Bon.Serialize(b, .. scope .());
-				Test.Assert(str.Length == 0); // Should not be included -> false is default
+				Test.Assert(str == "?"); // Should not be included -> false is default
 
 				bool ob = ?;
 				Test.Assert((Bon.Deserialize(ref ob, str) case .Ok) && ob == b);
@@ -215,6 +215,7 @@ namespace Bon.Tests
 		}
 
 		// TODO: restrict strings more. currently  they go multiline but also include all chars... which is not intended-- like tabs and line breaks!
+		// we should be able to read multiline strings, but 
 		[Test]
 		static void Strings()
 		{
@@ -624,14 +625,14 @@ namespace Bon.Tests
 						name = "second element",
 						age = 101,
 						type = .AThing
-					}, .{
+					}, default, .{
 						name = ""
 					},)
 				};
 
 				{
 					let str = Bon.Serialize(s, .. scope .());
-					Test.Assert(str == "{thing=651,bs=[{name=\"first element\",age=34,type=1},{name=\"second element\",age=101},{name=\"\"}]}");
+					Test.Assert(str == "{thing=651,bs=[{name=\"first element\",age=34,type=1},{name=\"second element\",age=101},?,{name=\"\"}]}");
 
 					StructA so = default;
 					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && s == so);
@@ -653,6 +654,7 @@ namespace Bon.Tests
 									name="second element",
 									age=101
 								},
+								?,
 								{
 									name=""
 								}
@@ -707,9 +709,9 @@ namespace Bon.Tests
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == ".Nothing{}");
 
-				Thing si = default;
+				Thing si = .Circle(.(0, 0), 4.5f);
 				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si == i);
-
+				si = .Circle(.(0, 0), 4.5f);
 				Test.Assert((Bon.Deserialize(ref si, "default") case .Ok) && si == i);
 			}
 
@@ -828,6 +830,76 @@ namespace Bon.Tests
 			}
 		}
 
+		[Serializable]
+		struct Compat
+		{
+			public uint version;
+		}
+
+		[Test]
+		static void FileLevel()
+		{
+			SetupStringViewHandler!();
+
+			{
+				let s = StructB() {
+					age = 23,
+					type = .OtherThing,
+					name = "nice name"
+				};
+				let sv = Compat() {
+					version = 1
+				};
+
+				let str = Bon.Serialize(sv, .. scope .());
+				Bon.Serialize(s, str);
+				Test.Assert(str == "{version=1},{name=\"nice name\",age=23,type=1}");
+
+				Compat svo = ?;
+				StructB so = ?;
+
+				switch (Bon.Deserialize(ref svo, str))
+				{
+				case .Err:
+					Test.FatalError();
+				case .Ok(let con):
+
+					Test.Assert(svo == sv);
+
+					Test.Assert((Bon.Deserialize(ref so, con) case .Ok) && so == s);
+				}
+			}
+
+			{
+				let s = StructB() {
+					age = 23,
+					type = .OtherThing,
+					name = "nice name"
+				};
+				let sv = Compat();
+
+				let str = Bon.Serialize(sv, .. scope .());
+				Bon.Serialize(s, str);
+				Test.Assert(str == "?,{name=\"nice name\",age=23,type=1}");
+
+				Compat svo = ?;
+				StructB so = ?;
+
+				switch (Bon.Deserialize(ref svo, str))
+				{
+				case .Err:
+					Test.FatalError();
+				case .Ok(let con):
+
+					Test.Assert(svo == sv);
+
+					Test.Assert((Bon.Deserialize(ref so, con) case .Ok) && so == s);
+				}
+			}
+		}
+
+		// TODO: tests for .IgnoreUnmentionedValues
+
 		[Test]
 		static void Trash()
 		{
@@ -841,6 +913,7 @@ namespace Bon.Tests
 
 			Test.Assert(Bon.Deserialize(ref i, "11 34") case .Err);
 			Test.Assert(Bon.Deserialize(ref i, "  11.") case .Err);
+			Test.Assert(Bon.Deserialize(ref i, " \n\t") case .Err);
 
 			Test.Assert(Bon.Deserialize(ref s, "\"") case .Err);
 			Test.Assert(Bon.Deserialize(ref s, "\"egnionsoibe") case .Err);
@@ -866,6 +939,9 @@ namespace Bon.Tests
 			Test.Assert(Bon.Deserialize(ref d, "{{]") case .Err);
 			Test.Assert(Bon.Deserialize(ref d, "}") case .Err);
 			Test.Assert(Bon.Deserialize(ref d, "{,}") case .Err);
+			Test.Assert(Bon.Deserialize(ref d, "{?}") case .Err);
+			Test.Assert(Bon.Deserialize(ref d, "{time=?}") case .Err);
+			Test.Assert(Bon.Deserialize(ref d, "{timedd=}") case .Err);
 			Test.Assert(Bon.Deserialize(ref d, "{,,}") case .Err);
 			Test.Assert(Bon.Deserialize(ref d, "{,,") case .Err);
 			Test.Assert(Bon.Deserialize(ref d, "{,,,}") case .Err);
@@ -889,9 +965,9 @@ namespace Bon.Tests
 			Test.Assert(Bon.Deserialize(ref ad, "[{value=\"\"}]") case .Err);
 			Test.Assert(Bon.Deserialize(ref ad, "[{}{}]") case .Err);
 			
-			Test.Assert(Bon.Deserialize(ref a, "<const12>[]") case .Ok); // There is no reason for this to work, but also none for it to not work
+			Test.Assert(Bon.Deserialize(ref a, "<const12>[]\n\n") case .Ok); // There is no reason for this to work, but also none for it to not work
 			Test.Assert(Bon.Deserialize(ref a, "<1>[]") case .Ok);
-			Test.Assert(Bon.Deserialize(ref i, " \n\t") case .Ok);
+			Test.Assert(Bon.Deserialize(ref a, "[?, ?],blahblah") case .Ok); // Only checks current entry...
 		}
 
 		[Test]

@@ -18,11 +18,18 @@ namespace Bon.Integrated
 
 		public static void Thing(BonWriter writer, ref Variant val, BonEnvironment env)
 		{
+			writer.Start();
 			if (DoInclude!(ref val, env.serializeFlags))
 				Value(writer, ref val, env);
+			
+			if (writer.outStr.Length == 0)
+			{
+				// We never explicitly place default automatically to enable DeserializeFlags.IgnoreUnmentionedValues
+				// we still need this in order to not shift the file-level "array"
+				Irrelevant(writer);
+			}
+
 			writer.End();
-			if (env.serializeFlags.HasFlag(.Verbose) && writer.outStr.Length == 0)
-				writer.outStr.Append("/* value is default */");
 		}
 
 		public static void Value(BonWriter writer, ref Variant val, BonEnvironment env, bool doOneLine = false)
@@ -249,7 +256,7 @@ namespace Bon.Integrated
 					using (writer.ArrayBlock(doArrayOneLine))
 					{
 						var includeCount = count;
-						if (!env.serializeFlags.HasFlag(.IncludeDefault))
+						if (!env.serializeFlags.HasFlag(.IncludeDefault)) // DoInclude! would return true on anything anyway
 						{
 							var ptr = (uint8*)val.DataPtr + arrType.Stride * (count - 1);
 							for (var i = count - 1; i >= 0; i--)
@@ -271,7 +278,13 @@ namespace Bon.Integrated
 						for (let i < includeCount)
 						{
 							var arrVal = Variant.CreateReference(arrType, ptr);
-							Value(writer, ref arrVal, env, doArrayOneLine);
+							if (doArrayOneLine || DoInclude!(ref arrVal, env.serializeFlags))
+								Value(writer, ref arrVal, env, doArrayOneLine);
+							else
+							{
+								// Shorten this... as mentioned in Thing() we don't automatically place default, but ?
+								Irrelevant(writer);
+							}
 
 							ptr += arrType.Stride;
 						}
@@ -400,6 +413,14 @@ namespace Bon.Integrated
 				else if (hasUnnamedMembers)
 					writer.outStr.Append(scope $"/* Type has unnamed members */");
 			}
+		}
+
+		[Inline]
+		public static void Irrelevant(BonWriter writer)
+		{
+			writer.EntryStart();
+			writer.IrrelevantEntry();
+			writer.EntryEnd();
 		}
 
 		static mixin AsThingToString<T>(BonWriter writer, ref Variant val)
