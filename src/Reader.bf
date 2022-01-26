@@ -267,6 +267,11 @@ namespace Bon.Integrated
 			while (strLen < inStr.Length && (isEscaped || inStr[strLen] != '"'))
 			{
 				isEscaped = inStr[strLen] == '\\' && !isEscaped;
+				if (inStr[strLen] == '\n')
+				{
+					inStr.RemoveFromStart(strLen - 1);
+					Error!("Newline not allowed in string");
+				}
 				strLen++;
 			}
 

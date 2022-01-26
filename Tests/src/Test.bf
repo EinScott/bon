@@ -214,8 +214,7 @@ namespace Bon.Tests
 			}
 		}
 
-		// TODO: restrict strings more. currently  they go multiline but also include all chars... which is not intended-- like tabs and line breaks!
-		// we should be able to read multiline strings, but 
+		// TODO: multiline strings maybe?
 		[Test]
 		static void Strings()
 		{
@@ -255,6 +254,14 @@ namespace Bon.Tests
 
 				StringView so = ?;
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && so.Ptr == null);
+			}
+
+			{
+				StringView so = ?;
+				Test.Assert(Bon.Deserialize(ref so, """
+					"Some string
+					"
+					""") case .Err);
 			}
 		}
 
