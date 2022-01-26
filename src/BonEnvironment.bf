@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
+using System.Reflection;
 using Bon.Integrated;
+using System.Diagnostics;
 
 namespace Bon
 {
@@ -59,6 +61,16 @@ namespace Bon
 		/// Will be called for every deserialized StringView string. Must return a valid string view
 		/// of the passed-in string.
 		public function StringView(StringView view) stringViewHandler;
+
+		/// Collection of registered types used in polymorphism.
+		/// Required to get a type info from a serialized name.
+		public Dictionary<String, Type> polyTypes = new .() ~ delete _;
+
+		public mixin RegisterPolyType(Type type)
+		{
+			Debug.Assert(type is TypeInstance, "Type not set up properly! Put [Serializable,PolySerialize] on it or force reflection info & always include.");
+			polyTypes.Add(((TypeInstance)type).[Friend]mName, type);
+		}
 
 		public this()
 		{

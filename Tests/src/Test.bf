@@ -256,6 +256,16 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && so.Ptr == null);
 			}
 
+			using (PushFlags(.IncludeDefault))
+			{
+				String s = null;
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "null"); // Without .IncludeDefault, this naturally would be '?'
+
+				String so = null;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && so == null);
+			}
+
 			{
 				StringView so = ?;
 				Test.Assert(Bon.Deserialize(ref so, """
@@ -805,9 +815,6 @@ namespace Bon.Tests
 		[Test]
 		static void Classes()
 		{
-			// TODO:
-			// also use default when serializing IncludeDefault for structs/classes & arrays! - introduce ForceFullTree or something to make it still print everything!
-
 			// TODO: test with inheritance, polymorphism...
 			// polymorphism i going to be big problem
 			// we need something to record type info?

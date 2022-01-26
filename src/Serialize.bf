@@ -133,7 +133,7 @@ namespace Bon.Integrated
 								if (foundAny)
 									writer.EnumAdd();
 
-								// Print remainder literal below!
+								// Print remainder literal
 								doPrintLiteral = true;
 								printVal = Variant.CreateReference(val.VariantType, &enumRemainderVal);
 
@@ -293,20 +293,20 @@ namespace Bon.Integrated
 			}
 			else if (valType.IsObject)
 			{
-				if (valType.IsBoxed)
+				if (*(void**)val.DataPtr == null)
+					writer.Null();
+				else
 				{
-					let boxPtr = (void**)val.DataPtr;
-					if (boxPtr == null)
-					{
-						writer.Null();
-					}
-					else
+					let polyType = (*(Object*)val.DataPtr).GetType();
+					Debug.Assert(polyType == valType, "CONTINUE POLY IMPLEMENTATION!");
+
+					if (valType.IsBoxed)
 					{
 						// TODO: hack together a pointer of the payload, as
 						// currently the box doesn't have reflection when
 						// they payload does. If that gets fixed, the box
 						// has a "val" field which we would get the offset of
-						let boxedPtr = (uint8*)*boxPtr + sizeof(int) // mClassVData
+						let boxedPtr = (uint8*)*(void**)val.DataPtr + sizeof(int) // mClassVData
 #if BF_DEBUG_ALLOC
 							+ sizeof(int) // mDebugAllocInfo
 #endif
@@ -321,26 +321,23 @@ namespace Bon.Integrated
 						if (writer.outStr.EndsWith(','))
 							writer.outStr.RemoveFromEnd(1);
 					}
+					else if (valType == typeof(String))
+					{
+						let str = val.Get<String>();
+						writer.String(str);
+					}
+					else if (valType is ArrayType)
+					{
+						Debug.FatalError();
+					}
+					// TODO consider using interfaces like ICollection<> and so on and using that? -> should also work for structs i guess? but not now
+					// or just use custom stuff right away
+					/*else if (let t = valType as SpecializedGenericType && t == typeof(List<>))
+					{
+						Debug.FatalError(); // List<>, HashSet<>, Dictionary<,>
+					}*/
+					else Class(writer, ref val, env);
 				}
-				else if (valType == typeof(String))
-				{
-					let str = val.Get<String>();
-
-					if (str == null)
-						writer.Null();
-					else writer.String(str);
-				}
-				else if (valType is ArrayType)
-				{
-					Debug.FatalError();
-				}
-				// TODO consider using interfaces like ICollection<> and so on and using that? -> should also work for structs i guess? but not now
-				// or just use custom stuff right away
-				/*else if (let t = valType as SpecializedGenericType && t == typeof(List<>))
-				{
-					Debug.FatalError(); // List<>, HashSet<>, Dictionary<,>
-				}*/
-				else Class(writer, ref val, env);
 			}
 			else if (valType.IsPointer)
 			{
@@ -362,16 +359,8 @@ namespace Bon.Integrated
 
 			Debug.Assert(classType.IsObject);
 
-			let classPtr = (void**)classVal.DataPtr;
-			if (classPtr == null)
-			{
-				writer.Null();
-			}
-			else
-			{
-				var classDataVal = Variant.CreateReference(classType, *classPtr);
-				Struct(writer, ref classDataVal, env);
-			}
+			var classDataVal = Variant.CreateReference(classType, *(void**)classVal.DataPtr);
+			Struct(writer, ref classDataVal, env);
 		}
 
 		public static void Struct(BonWriter writer, ref Variant structVal, BonEnvironment env)
