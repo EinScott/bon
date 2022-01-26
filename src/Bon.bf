@@ -14,6 +14,7 @@ namespace Bon
 	// some meta stuff? { version=1, thing=${} } -> $ sign means "keep this just as a substring... it's a separate bon thing" STILL DO THIS ON IT'S OWN-- entry just counts as str
 
 	// generic templates for custom handlers...
+	// just funtions for array(ptr, len & what else is needed) i guess? that array (of course) call but also something like SizedList<> which we could use as a demo?
 	// support Variant serialize?
 
 	// GUIDES ON:
@@ -25,6 +26,7 @@ namespace Bon
 	//		-> also put things like custom allocator and "oh a reference to this is wanted here" in there!
 
 	// REFERENCES "&somethingName" are a way to make the deserializer call a function with this string as the key (also member type, type member is on), which then is expected to provide a variant to put there!
+	// this could be a templated handler that calls a function? i guess... would do the parsing & being called in the first place part automatically then?
 
 	// TODO: rethink syntax & tokens!
 

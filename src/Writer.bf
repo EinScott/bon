@@ -150,6 +150,12 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
+		public void PolyType(StringView typeName)
+		{
+			outStr..Append('(')..Append(typeName)..Append(')');
+		}
+
+		[Inline]
 		public void Char(char32 char)
 		{
 			outStr.Append('\'');

@@ -34,7 +34,7 @@ namespace Bon.Integrated
 
 		public static void Value(BonWriter writer, ref Variant val, BonEnvironment env, bool doOneLine = false)
 		{
-			let valType = val.VariantType;
+			var valType = val.VariantType;
 
 			// Make sure that doOneLineVal is only passed when valid
 			Debug.Assert(!doOneLine || DoTypeOneLine!(valType, env.serializeFlags));
@@ -297,10 +297,21 @@ namespace Bon.Integrated
 					writer.Null();
 				else
 				{
-					let polyType = (*(Object*)val.DataPtr).GetType();
-					Debug.Assert(polyType == valType, "CONTINUE POLY IMPLEMENTATION!");
+					// Do this before getting actual type
+					let isBoxed = valType.IsBoxed;
 
-					if (valType.IsBoxed)
+					var polyType = (*(Object*)val.DataPtr).GetType();
+					if (polyType != valType)
+					{
+						// Change type of pointer to actual type
+						valType = polyType;
+						val.[Friend]mStructType = ((int)Internal.UnsafeCastToPtr(polyType) & ~3) | val.[Friend]mStructType & 3;
+
+						let name = valType.GetFullName(.. scope .());
+						writer.PolyType(name);
+					}
+
+					if (isBoxed)
 					{
 						// TODO: hack together a pointer of the payload, as
 						// currently the box doesn't have reflection when
@@ -312,9 +323,15 @@ namespace Bon.Integrated
 #endif
 							;
 
-						let boxedType = val.VariantType.UnderlyingType;
+						// TODO: polyTpye already is what we would get here
+						// question is... how do we de-serialize this?
+						// --> struct would have to be polytype marked....
+						// --> we don't actually get the box type...
+						// ... maybe treat boxed different alltogether?
+						//     depends on if we can get box to reflect?
+						//let boxedType = val.VariantType.UnderlyingType;
 
-						var boxedData = Variant.CreateReference(boxedType, boxedPtr);
+						var boxedData = Variant.CreateReference(valType, boxedPtr);
 						Value(writer, ref boxedData, env);
 
 						// Value adds a ',', but we do also so don't

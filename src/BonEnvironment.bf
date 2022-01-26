@@ -62,14 +62,14 @@ namespace Bon
 		/// of the passed-in string.
 		public function StringView(StringView view) stringViewHandler;
 
-		/// Collection of registered types used in polymorphism.
-		/// Required to get a type info from a serialized name.
-		public Dictionary<String, Type> polyTypes = new .() ~ delete _;
+		// Collection of registered types used in polymorphism.
+		// Required to get a type info from a serialized name.
+		internal Dictionary<String, Type> polyTypes = new .() ~ DeleteDictionaryAndKeys!(_);
 
 		public mixin RegisterPolyType(Type type)
 		{
 			Debug.Assert(type is TypeInstance, "Type not set up properly! Put [Serializable,PolySerialize] on it or force reflection info & always include.");
-			polyTypes.Add(((TypeInstance)type).[Friend]mName, type);
+			polyTypes.Add(type.GetFullName(.. new .()), type);
 		}
 
 		public this()
