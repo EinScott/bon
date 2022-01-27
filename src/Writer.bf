@@ -150,7 +150,7 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
-		public void PolyType(StringView typeName)
+		public void Type(StringView typeName)
 		{
 			outStr..Append('(')..Append(typeName)..Append(')');
 		}
@@ -163,6 +163,22 @@ namespace Bon.Integrated
 			let len = string.Length;
 			outStr..Append(String.QuoteString(&string[[Unchecked]0], len, .. string)[(len + 1)...^2])
 				.Append('\'');
+		}
+		
+		[Inline]
+		public void IrrelevantEntry()
+		{
+			outStr.Append('?');
+		}
+		
+		public void Start()
+		{
+			if (outStr.Length > 0)
+			{
+				outStr.Append(',');
+				if (doFormatting)
+					f.NewLine(outStr);
+			}
 		}
 
 		public ArrayBlockEnd ArrayBlock(bool doOneLine = false)
@@ -248,16 +264,6 @@ namespace Bon.Integrated
 				f.NewLine(outStr);
 		}
 
-		public void Start()
-		{
-			if (outStr.Length > 0)
-			{
-				outStr.Append(',');
-				if (doFormatting)
-					f.NewLine(outStr);
-			}
-		}
-
 		public void End()
 		{
 			Debug.Assert(objDepth == 0 && arrDepth == 0);
@@ -271,12 +277,6 @@ namespace Bon.Integrated
 				if (outStr.EndsWith(','))
 					outStr.RemoveFromEnd(1);
 			}
-		}
-
-		[Inline]
-		public void IrrelevantEntry()
-		{
-			outStr.Append('?');
 		}
 	}
 }

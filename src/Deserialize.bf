@@ -6,13 +6,17 @@ using System.Collections;
 using internal Bon;
 using internal Bon.Integrated;
 
+#if (DEBUG || TEST) && !BON_NO_PRINT
+#define BON_PRINT
+#endif
+
 namespace Bon.Integrated
 {
 	static class Deserialize
 	{
 		public static mixin Error(BonReader reader, String error)
 		{
-#if (DEBUG || TEST) && !BON_NO_PRINT
+#if BON_PRINT
 			PrintError(reader, error);
 #endif
 			return .Err(default);
@@ -31,7 +35,7 @@ namespace Bon.Integrated
 
 		public static mixin Error(Type type, String error)
 		{
-#if (DEBUG || TEST) && !BON_NO_PRINT
+#if BON_PRINT
 			PrintError(type, error);
 #endif
 			return .Err(default);
@@ -106,7 +110,7 @@ namespace Bon.Integrated
 				{
 					void* objRef;
 					if (val.VariantType.CreateObject() case .Ok(let createdObj)) // TODO: do our attribs do this?
-						objRef = (void*)createdObj;
+						objRef = Internal.UnsafeCastToPtr(createdObj);
 					else Error!(val.VariantType, "Failed to create object");
 
 					*((void**)val.DataPtr) = objRef;
@@ -152,9 +156,30 @@ namespace Bon.Integrated
 
 		public static Result<void> Value(BonReader reader, ref Variant val, BonEnvironment env)
 		{
-			Type valType = val.VariantType;
+			let valType = val.VariantType;
+			var polyType = valType;
 
-			if (reader.HasDefault())
+			if (reader.IsTyped())
+			{
+				if (valType.IsObject)
+				{
+					let typeName = reader.Type();
+
+					if (env.polyTypes.TryGetValue(scope .(typeName), let type))
+					{
+						if (!type.IsSubtypeOf(valType))
+							Error!(reader, "Specified type is not a sub-type of the value's type");
+
+						// Store it but don't apply it, so that we still easily
+						// select the IsObject case even for boxed structs
+						polyType = type;
+					}
+					else Error!(reader, "Specified type not found in bonEnvironment.polyTypes");
+				}
+				else Error!(reader, "Type markers are only valid on reference types");
+			}
+
+			if (reader.IsDefault())
 				MakeDefault(ref val, env);
 			else if (reader.IsIrrelevantEntry())
 				Error!(reader, "Ignored is only valid in arrays");
@@ -236,7 +261,7 @@ namespace Bon.Integrated
 			{
 				if (valType == typeof(StringView))
 				{
-					if (reader.HasNull())
+					if (reader.IsNull())
 					{
 						*(StringView*)val.DataPtr = default;
 					}
@@ -376,37 +401,51 @@ namespace Bon.Integrated
 			}
 			else if (valType.IsObject)
 			{
-				// TODO: for polymorphism we can't have this structure!
-				// figure out if an explicit type is specified and get the type from it
-
-				if (reader.HasNull())
+				if (reader.IsNull())
 				{
 					if (*(void**)val.DataPtr != null)
 						MakeDefault(ref val, env);
 				}
 				else
 				{
-					if (*(void**)val.DataPtr == null)
-						Try!(MakeInstanceRef(ref val, env));
-					else
-					{
-						// TODO: make sure this is the type we want (polymophism), otherwise realloc
-					}
-
 					if (valType.IsBoxed)
 					{
-						Debug.FatalError();
+						Debug.Assert(valType != polyType && !polyType.IsObject);
+
+						let boxType = polyType.BoxedType;
+						if (boxType != null)
+						{
+							Debug.FatalError(); // CONTINUE
+						}
+						else Error!(reader, "Failed to retrive boxed type.");
 					}
-					else if (valType == typeof(String))
+					else
 					{
-						String parsedStr = scope .();
-						Try!(reader.String(parsedStr));
+						if (polyType != valType)
+						{
+							// Current reference is of a different type, so clean
+							// it up to make our type instance below
+							if (*(void**)val.DataPtr != null
+								&& (*(Object*)val.DataPtr).GetType() != polyType)
+								MakeDefault(ref val, env);
 
-						var str = *(String*)(void**)val.DataPtr;
+							val.UnsafeSetType(polyType);
+						}	
 
-						str.Set(parsedStr);
+						if (*(void**)val.DataPtr == null)
+							Try!(MakeInstanceRef(ref val, env));
+
+						if (polyType == typeof(String))
+						{
+							String parsedStr = scope .();
+							Try!(reader.String(parsedStr));
+
+							var str = *(String*)(void**)val.DataPtr;
+
+							str.Set(parsedStr);
+						}
+						else Try!(Class(reader, ref val, env));
 					}
-					else Try!(Class(reader, ref val, env));
 				}
 			}
 			else if (valType.IsPointer)

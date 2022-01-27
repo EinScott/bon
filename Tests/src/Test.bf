@@ -790,13 +790,13 @@ namespace Bon.Tests
 				};
 
 				let str = Bon.Serialize(s, .. scope .());
-				Test.Assert(str == "{time=65.5,value=11917585743392890597}");
+				Test.Assert(str == "(Bon.Tests.SomeData){time=65.5,value=11917585743392890597}");
 			}
 
 			{
 				var i = scope box int(357);
 				let str = Bon.Serialize(i, .. scope .());
-				Test.Assert(str == "357");
+				Test.Assert(str == "(System.Int)357");
 
 				// TODO: this would need polymorphism!
 				/*Object oi = ?;
@@ -804,7 +804,7 @@ namespace Bon.Tests
 			}
 		}
 
-		[Serializable]
+		[Serializable,PolySerialize]
 		class AClass
 		{
 			public String aStringThing ~ if (_ != null) delete _;
@@ -816,16 +816,7 @@ namespace Bon.Tests
 		static void Classes()
 		{
 			// TODO: test with inheritance, polymorphism...
-			// polymorphism i going to be big problem
-			// we need something to record type info?
-			// -> i mean, what if it's some base type array with different things in it
-			// then we need basically the notation we just for scenes right now?
-			// -> yea we do that, and types used for it/in it must be explicitly marked
-			//    alternatively everything can be marked. Lib-types can be marked with a
-			//    mixin to add to global context, or just adding to a custom context or
-			//    global env manually
-
-			// => then do polymorphism (arrays, objects... classes & boxed stuff)
+			// => polymorphism for boxed!
 			// => then other bon envc stuff
 
 			NoStringHandler!();
@@ -841,6 +832,27 @@ namespace Bon.Tests
 
 				AClass co = scope .();
 				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && co.thing == c.thing && co.data == c.data && c.aStringThing == c.aStringThing);
+			}
+
+			{
+				Object c = scope AClass() { thing = uint8.MaxValue, data = .{ value = 10, time = 1 }, aStringThing = new .("A STRING THING yes") };
+
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "(Bon.Tests.AClass){aStringThing=\"A STRING THING yes\",thing=255,data={time=1,value=10}}");
+
+				Object co = null;
+				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType());
+				delete co;
+			}
+
+			{
+				// do also with alloc arrays
+
+				/*let a = Object[4](
+					scope AClass(),
+					scope box 10,
+					scope String("look, a string!"),
+					scope Object());*/
 			}
 		}
 

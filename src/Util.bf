@@ -28,6 +28,15 @@ namespace Bon.Integrated
 
 namespace System
 {
+	extension Variant
+	{
+		[Inline]
+		public void UnsafeSetType(Type type) mut
+		{
+			mStructType = ((int)Internal.UnsafeCastToPtr(type) & ~3) | mStructType & 3;
+		}
+	}
+
 	extension String
 	{
 		public static Result<void> UnQuoteStringContents(StringView view, String outString)

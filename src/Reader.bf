@@ -202,13 +202,13 @@ namespace Bon.Integrated
 			else return false;
 		}
 
-		StringView ParseName()
+		StringView ParseName(bool allowDot = false)
 		{
 			var nameLen = 0;
 			for (; nameLen < inStr.Length; nameLen++)
 			{
 				let char = inStr[nameLen];
-				if (!char.IsLetterOrDigit && char != '_')
+				if (!char.IsLetterOrDigit && char != '_' && (!allowDot || char != '.'))
 					break;
 			}
 
@@ -266,11 +266,12 @@ namespace Bon.Integrated
 			bool isEscaped = false;
 			while (strLen < inStr.Length && (isEscaped || inStr[strLen] != '"'))
 			{
-				isEscaped = inStr[strLen] == '\\' && !isEscaped;
-				if (inStr[strLen] == '\n')
+				let char = inStr[strLen];
+				isEscaped = char == '\\' && !isEscaped;
+				if ((char >= (char8)0) && (char <= (char8)0x1F))
 				{
 					inStr.RemoveFromStart(strLen - 1);
-					Error!("Newline not allowed in string");
+					Error!("Char not allowed in string. Use escape notation");
 				}
 				strLen++;
 			}
@@ -306,7 +307,10 @@ namespace Bon.Integrated
 			bool isEscaped = false;
 			while (strLen < inStr.Length && (isEscaped || inStr[strLen] != '\''))
 			{
-				isEscaped = inStr[strLen] == '\\' && !isEscaped;
+				let char = inStr[strLen];
+				isEscaped = char == '\\' && !isEscaped;
+				if ((char >= (char8)0) && (char <= (char8)0x1F))
+					Error!("Char not allowed. Use escape notation");
 				strLen++;
 			}
 
@@ -378,7 +382,7 @@ namespace Bon.Integrated
 			return name;
 		}
 
-		public bool HasNull(bool consumeIfFound = true)
+		public bool IsNull(bool consumeIfFound = true)
 		{
 			if (inStr.StartsWith("null"))
 			{
@@ -389,7 +393,7 @@ namespace Bon.Integrated
 			return false;
 		}
 
-		public bool HasDefault(bool consumeIfFound = true)
+		public bool IsDefault(bool consumeIfFound = true)
 		{
 			if (inStr.StartsWith("default"))
 			{
@@ -398,6 +402,36 @@ namespace Bon.Integrated
 				return true;
 			}
 			return false;
+		}
+
+		[Inline]
+		public bool IsIrrelevantEntry()
+		{
+			return Check('?');
+		}
+
+		[Inline]
+		public bool IsTyped()
+		{
+			return Check('(');
+		}
+
+		public Result<StringView> Type()
+		{
+			Try!(ConsumeEmpty());
+
+			let name = ParseName(true);
+			if (name.Length == 0)
+				Error!("Epected type name");
+
+			Try!(ConsumeEmpty());
+
+			if (!Check(')'))
+				Error!("Unterminated type mark");
+
+			Try!(ConsumeEmpty());
+
+			return name;
 		}
 
 		[Inline]
@@ -522,12 +556,6 @@ namespace Bon.Integrated
 				return false;
 
 			return res;
-		}
-
-		[Inline]
-		public bool IsIrrelevantEntry()
-		{
-			return Check('?');
 		}
 	}
 }
