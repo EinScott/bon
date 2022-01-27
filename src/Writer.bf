@@ -114,7 +114,7 @@ namespace Bon.Integrated
 		[Inline]
 		public void Enum(StringView caseName)
 		{
-			if (!(outStr.Length == 0 || outStr.EndsWith('=') || outStr.EndsWith(':')))
+			if (outStr.Length != 0 && { let char = outStr[outStr.Length - 1]; char.IsLetterOrDigit || char == '\'' })
 				EnumAdd();
 			outStr..Append('.').Append(caseName);
 		}

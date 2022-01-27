@@ -109,7 +109,7 @@ namespace Bon.Integrated
 				else
 				{
 					void* objRef;
-					if (val.VariantType.CreateObject() case .Ok(let createdObj)) // TODO: do our attribs do this?
+					if (val.VariantType.CreateObject() case .Ok(let createdObj))
 						objRef = Internal.UnsafeCastToPtr(createdObj);
 					else Error!(val.VariantType, "Failed to create object");
 
@@ -167,7 +167,7 @@ namespace Bon.Integrated
 
 					if (env.polyTypes.TryGetValue(scope .(typeName), let type))
 					{
-						if (!type.IsSubtypeOf(valType))
+						if (type.IsObject /* boxed structs or primitives */ && !type.IsSubtypeOf(valType))
 							Error!(reader, "Specified type is not a sub-type of the value's type");
 
 						// Store it but don't apply it, so that we still easily
@@ -408,16 +408,34 @@ namespace Bon.Integrated
 				}
 				else
 				{
-					if (valType.IsBoxed)
+					if (!polyType.IsObject)
 					{
-						Debug.Assert(valType != polyType && !polyType.IsObject);
+						Debug.Assert(valType != polyType);
 
 						let boxType = polyType.BoxedType;
 						if (boxType != null)
 						{
-							Debug.FatalError(); // CONTINUE
+							// Current reference is of a different type, so clean
+							// it up to make our type instance below
+							if (*(void**)val.DataPtr != null
+								&& (*(Object*)val.DataPtr).GetType() != boxType)
+								MakeDefault(ref val, env);
+
+							val.UnsafeSetType(boxType);
+
+							if (*(void**)val.DataPtr == null)
+								Try!(MakeInstanceRef(ref val, env));
+
+							let boxedPtr = (uint8*)*(void**)val.DataPtr + sizeof(int) // mClassVData
+#if BF_DEBUG_ALLOC
+								+ sizeof(int) // mDebugAllocInfo
+#endif
+								;
+
+							var boxedData = Variant.CreateReference(polyType, boxedPtr);
+							Try!(Value(reader, ref boxedData, env));
 						}
-						else Error!(reader, "Failed to retrive boxed type.");
+						else Error!(reader, "Failed to access boxed type.");
 					}
 					else
 					{
@@ -430,7 +448,7 @@ namespace Bon.Integrated
 								MakeDefault(ref val, env);
 
 							val.UnsafeSetType(polyType);
-						}	
+						}
 
 						if (*(void**)val.DataPtr == null)
 							Try!(MakeInstanceRef(ref val, env));
@@ -462,10 +480,7 @@ namespace Bon.Integrated
 			let classType = val.VariantType;
 			Debug.Assert(classType.IsObject);
 
-			// TODO: we might need to edit classType based on poylmorphism info
-			
-			let classPtr = (void**)val.DataPtr;
-			var classDataVal = Variant.CreateReference(classType, *classPtr);
+			var classDataVal = Variant.CreateReference(classType, *(void**)val.DataPtr);
 			Try!(Struct(reader, ref classDataVal, env));
 
 			return .Ok;
@@ -579,15 +594,25 @@ namespace Bon.Integrated
 			}
 		}
 
+		static mixin DoChar<T, TI>(BonReader reader, ref Variant val, char32 char) where T : var where TI : var
+		{
+			if ((uint)char > TI.MaxValue)
+				Error!(reader, scope $"Char is out of range for {typeof(T)}");
+
+			*(T*)val.DataPtr = *(T*)&char;
+		}
+
 		static mixin Char(Type type, BonReader reader, ref Variant val)
 		{
 			var char = Try!(reader.Char());
 
+			// @report: just putting "mixin DO" here perma hardcrashes.. stackoverflow?!
+			
 			switch (type)
 			{
-			case typeof(char8): *(char8*)val.DataPtr = *(char8*)&char;
-			case typeof(char16): *(char16*)val.DataPtr = *(char16*)&char;
-			case typeof(char32): *(char32*)val.DataPtr = *(char32*)&char;
+			case typeof(char8): DoChar!<char8, uint8>(reader, ref val, char);
+			case typeof(char16): DoChar!<char16, uint16>(reader, ref val, char);
+			case typeof(char32): DoChar!<char32, uint32>(reader, ref val, char);
 			}
 		}
 

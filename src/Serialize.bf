@@ -300,7 +300,7 @@ namespace Bon.Integrated
 					let polyType = (*(Object*)val.DataPtr).GetType();
 					if (polyType != valType)
 					{
-						Debug.Assert(valType.IsBoxed || polyType.IsSubtypeOf(valType));
+						Debug.Assert(!polyType.IsObject || polyType.IsSubtypeOf(valType));
 
 						// Change type of pointer to actual type
 						val.UnsafeSetType(polyType);
@@ -309,23 +309,19 @@ namespace Bon.Integrated
 						writer.Type(typeName);
 					}
 
-					if (valType.IsBoxed)
+					if (!polyType.IsObject)
 					{
-						// TODO: hack together a pointer of the payload, as
+						// TODO: DO PROPERLY... currently we
+						// hack together a pointer of the payload, as
 						// currently the box doesn't have reflection when
 						// they payload does. If that gets fixed, the box
 						// has a "val" field which we would get the offset of
+						// -> we do the same thing in Deserialize.bf
 						let boxedPtr = (uint8*)*(void**)val.DataPtr + sizeof(int) // mClassVData
 #if BF_DEBUG_ALLOC
 							+ sizeof(int) // mDebugAllocInfo
 #endif
 							;
-
-						// TODO: polyTpye already is what we would get here
-						// question is... how do we de-serialize this?
-						// -> REGISTER BOXED STRUCT AS POLYTYPE
-						//    then process it to get 
-						//    let boxType = valType.BoxedType;
 
 						Debug.Assert(!polyType.IsObject);
 
@@ -336,6 +332,8 @@ namespace Bon.Integrated
 						// Value adds a ',', but we do also so don't
 						if (writer.outStr.EndsWith(','))
 							writer.outStr.RemoveFromEnd(1);
+						else if (env.serializeFlags.HasFlag(.Verbose) && writer.outStr.EndsWith(",\n"))
+							writer.outStr.RemoveFromEnd(2);
 					}
 					else if (polyType == typeof(String))
 					{

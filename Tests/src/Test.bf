@@ -130,7 +130,7 @@ namespace Bon.Tests
 				char8 oc = ?;
 				Test.Assert((Bon.Deserialize(ref oc, str) case .Ok) && oc == c);
 			}
-			
+
 			{
 				char16 c = 'Ā';
 				let str = Bon.Serialize(c, .. scope .());
@@ -202,6 +202,16 @@ namespace Bon.Tests
 			}
 
 			// Should error (but not crash)
+
+			{
+				int8 oi = ?;
+				Test.Assert(Bon.Deserialize(ref oi, "299") case .Err);
+			}
+
+			{
+				char8 oc = ?;
+				Test.Assert(Bon.Deserialize(ref oc, "'Ā'") case .Err);
+			}
 
 			{
 				bool ob = ?;
@@ -371,7 +381,7 @@ namespace Bon.Tests
 			Forest = .Tree | .Path,
 		}
 
-		[Serializable]
+		[Serializable,PolySerialize] // Also used for boxing tests
 		enum SomeTokens : char8
 		{
 			Dot = '.',
@@ -564,7 +574,7 @@ namespace Bon.Tests
 			public TypeB type;
 		}
 
-		[Serializable]
+		[Serializable,PolySerialize] // Also use it for boxing tests
 		struct SomeData
 		{
 			public double time;
@@ -708,7 +718,7 @@ namespace Bon.Tests
 		[Serializable]
 		struct Vector2 : this(float x, float y);
 
-		[Serializable]
+		[Serializable, PolySerialize]
 		enum Thing
 		{
 			case Nothing;
@@ -784,24 +794,61 @@ namespace Bon.Tests
 		public static void Boxed()
 		{
 			{
-				let s = scope box SomeData(){
+				Object s = scope box SomeData(){
 					time = 65.5,
 					value = 11917585743392890597
 				};
 
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "(Bon.Tests.SomeData){time=65.5,value=11917585743392890597}");
+
+				Object os = null;
+				Test.Assert((Bon.Deserialize(ref os, str) case .Ok) && os.GetType() == s.GetType() && Bon.Serialize(os, .. scope .()) == str);
+				delete os;
 			}
 
 			{
-				var i = scope box int(357);
+				Object i = scope box int(357);
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == "(System.Int)357");
 
-				// TODO: this would need polymorphism!
-				/*Object oi = ?;
-				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);*/
+				Object oi = null;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi.GetType() == i.GetType() && Bon.Serialize(oi, .. scope .()) == str);
+				delete oi;
 			}
+
+			{
+				var i = scope box SomeTokens.Dash;
+				let str = Bon.Serialize(i, .. scope .());
+				Test.Assert(str == "(Bon.Tests.SomeTokens)'-'");
+
+				Object oi = null;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi.GetType() == i.GetType() && Bon.Serialize(oi, .. scope .()) == str);
+				delete oi;
+			}
+
+			using (PushFlags(.Verbose))
+			{
+				Object i = scope box SomeTokens.Dash;
+				let str = Bon.Serialize(i, .. scope .());
+				Test.Assert(str == "(Bon.Tests.SomeTokens).Dash");
+
+				Object oi = null;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi.GetType() == i.GetType() && Bon.Serialize(oi, .. scope .()) == str);
+				delete oi;
+			}
+
+			{
+				Object i = scope box Thing.Circle(.(20, 50), 1);
+				let str = Bon.Serialize(i, .. scope .());
+				Test.Assert(str == "(Bon.Tests.Thing).Circle{pos={x=20,y=50},radius=1}");
+
+				Object oi = null;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi.GetType() == i.GetType() && Bon.Serialize(oi, .. scope .()) == str);
+				delete oi;
+			}
+
+			// TODO tests for dealloc / clear of prev poly thing in. Check if type check works!
 		}
 
 		[Serializable,PolySerialize]
@@ -815,13 +862,11 @@ namespace Bon.Tests
 		[Test]
 		static void Classes()
 		{
-			// TODO: test with inheritance, polymorphism...
-			// => polymorphism for boxed!
-			// => then other bon envc stuff
-
 			NoStringHandler!();
 
-			// TODO: some tests for deleting stuff though bon (deallocate/destroy)
+			// TODO: test with inheritance, polymorphism...
+
+			// TODO: some tests for deleting stuff through bon (deallocate/destroy)
 			// and also if strings just created by bon leak
 
 			{

@@ -30,6 +30,8 @@ namespace Bon
 
 	// TODO: rethink syntax & tokens!
 
+	// TODO: directly from & to files & streams?
+
 	static class Bon
 	{
 		public static void Serialize<T>(T value, String into, BonEnvironment env = gBonEnv)
