@@ -329,11 +329,9 @@ namespace Bon.Integrated
 						var boxedData = Variant.CreateReference(polyType, boxedPtr);
 						Value(writer, ref boxedData, env);
 
-						// Value adds a ',', but we do also so don't
-						if (writer.outStr.EndsWith(','))
-							writer.outStr.RemoveFromEnd(1);
-						else if (env.serializeFlags.HasFlag(.Verbose) && writer.outStr.EndsWith(",\n"))
-							writer.outStr.RemoveFromEnd(2);
+						// After this we only end the line but the Value call
+						// above has already done that.
+						return;
 					}
 					else if (polyType == typeof(String))
 					{

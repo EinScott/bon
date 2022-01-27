@@ -435,7 +435,7 @@ namespace Bon.Integrated
 							var boxedData = Variant.CreateReference(polyType, boxedPtr);
 							Try!(Value(reader, ref boxedData, env));
 						}
-						else Error!(reader, "Failed to access boxed type.");
+						else Error!(reader, "Failed to access boxed type");
 					}
 					else
 					{
