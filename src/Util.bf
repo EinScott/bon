@@ -71,17 +71,21 @@ namespace System
 					char8 nextC = *(ptr++);
 					switch (nextC)
 					{
-					case '\'': outString.Append("'");
-					case '\"': outString.Append("\"");
-					case '\\': outString.Append("\\");
-					case '0': outString.Append("\0");
-					case 'a': outString.Append("\a");
-					case 'b': outString.Append("\b");
-					case 'f': outString.Append("\f");
-					case 'n': outString.Append("\n");
-					case 'r': outString.Append("\r");
-					case 't': outString.Append("\t");
-					case 'v': outString.Append("\v");
+					case '\'': outString.Append('\'');
+					case '\"': outString.Append('"');
+					case '\\': outString.Append('\\');
+					case '0': outString.Append('\0');
+					case 'a': outString.Append('\a');
+					case 'b': outString.Append('\b');
+					case 'f': outString.Append('\f');
+					case 'n': outString.Append('\n');
+					case 'r': outString.Append('\r');
+					case 't': outString.Append('\t');
+					case 'v': outString.Append('\v');
+					case 'x':
+						// TODO
+					case 'u':
+						// TODO
 					default:
 						return .Err;
 					}

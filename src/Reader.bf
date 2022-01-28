@@ -220,9 +220,23 @@ namespace Bon.Integrated
 		public Result<StringView> Integer()
 		{
 			var numLen = 0;
+			bool hasHex = false;
 			if (inStr.Length > 0 && inStr[0] == '-')
 				numLen++;
-			while (inStr.Length > numLen &&  inStr[numLen].IsNumber)
+			if (inStr.Length > numLen + 1 && inStr[numLen] == '0')
+			{
+				let c = inStr[numLen + 1];
+				if (c == 'b' || c == 'o')
+					numLen += 2;
+				else if (c == 'x')
+				{
+					hasHex = true;
+					numLen += 2;
+				}
+			}
+
+			while (inStr.Length > numLen && (inStr[numLen].[Inline]IsNumber
+				|| hasHex && { let c = inStr[numLen]; ((((c >= 'A') && (c <= 'F')) || ((c >= 'a') && (c <= 'f')))) }))
 				numLen++;
 
 			if (numLen == 0)

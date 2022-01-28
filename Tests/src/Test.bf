@@ -104,6 +104,15 @@ namespace Bon.Tests
 			}
 
 			{
+				int32 i = -67;
+				let str = Bon.Serialize(i, .. scope .());
+				Test.Assert(str == "-67");
+
+				int32 oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+			}
+
+			{
 				char8 c = '\n';
 				let str = Bon.Serialize(c, .. scope .());
 				Test.Assert(str == "'\\n'");
@@ -198,7 +207,34 @@ namespace Bon.Tests
 
 			{
 				int i = ?;
+				Test.Assert((Bon.Deserialize(ref i, "0xF5a") case .Ok) && i == 3930);
+			}
+
+			{
+				int8 i = ?;
+				Test.Assert((Bon.Deserialize(ref i, "0b101") case .Ok) && i == 5);
+			}
+
+			{
+				int8 i = ?;
+				Test.Assert((Bon.Deserialize(ref i, "0o75") case .Ok) && i == 61);
+			}
+
+			{
+				int i = ?;
 				Test.Assert((Bon.Deserialize(ref i, "default") case .Ok) && i == 0);
+			}
+
+			// TODO: allow this!
+
+			{
+				char16 oc = ?;
+				Test.Assert((Bon.Deserialize(ref oc, "'\u{30A1}'") case .Ok) && oc == '\u{30A1}');
+			}
+
+			{
+				char8 oc = ?;
+				Test.Assert((Bon.Deserialize(ref oc, "'\x2a'") case .Ok) && oc == '\x2a');
 			}
 
 			// Should error (but not crash)
@@ -206,6 +242,21 @@ namespace Bon.Tests
 			{
 				int8 oi = ?;
 				Test.Assert(Bon.Deserialize(ref oi, "299") case .Err);
+			}
+
+			{
+				int8 oi = ?;
+				Test.Assert(Bon.Deserialize(ref oi, "0b2") case .Err);
+			}
+
+			{
+				int8 oi = ?;
+				Test.Assert(Bon.Deserialize(ref oi, "0xg") case .Err);
+			}
+
+			{
+				int8 oi = ?;
+				Test.Assert(Bon.Deserialize(ref oi, "0o8") case .Err);
 			}
 
 			{

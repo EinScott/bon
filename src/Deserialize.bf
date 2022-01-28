@@ -546,6 +546,83 @@ namespace Bon.Integrated
 			return reader.ObjectBlockEnd();
 		}
 
+		static Result<T> ParseInt<T>(BonReader reader, StringView val, bool allowNonDecimal = true) where T : IInteger, var //IInteger, operator explicit int, operator T * T, operator T + T where bool : operator T > T // @report putting just ", T" crashes
+		{
+			var len = val.Length;
+			if (len == 0)
+				return .Err;
+
+			uint64 prevRes = 0;
+			uint64 result = 0;
+			bool isNegative = false;
+			bool allowBaseSpec = false;
+			uint64 radix = 10;
+			int digits = 0;
+
+			for (var i = 0; i < len; i++)
+			{
+				let c = val[[Unchecked]i];
+
+				if ((c == '0') || (c == '1'))
+				{
+					if (digits == 0 && c == '0')
+					{
+						allowBaseSpec = true;
+						continue;
+					}
+					result = result*radix + (.)(c - '0');
+				}
+				else if (radix > 0b10 && (c >= '2') && (c <= '7')
+					|| radix > 0o10 && ((c == '8') || (c == '9')))
+					result = result*radix + (.)(c - '0');
+				else if (radix > 10 && (c >= 'A') && (c <= 'F'))
+					result = result*radix + (.)(c - 'A') + 10;
+				else if (radix > 10 && (c >= 'a') && (c <= 'f'))
+					result = result*radix + (.)(c - 'a') + 10;
+				else if (digits == 0 && allowBaseSpec)
+				{
+					switch (c)
+					{
+					case 'x': radix = 0x10;
+					case 'b': radix = 0b10;
+					case 'o': radix = 0o10;
+					}
+					allowBaseSpec = false;
+					continue;
+				}
+				else if (digits == 0 && c == '-' && typeof(T).IsSigned)
+				{
+					isNegative = true;
+					continue;
+				}
+				else if (c == '\'')
+					continue;
+				else Error!(reader, scope $"Failed to parse {typeof(T)}");
+
+				digits++;
+
+				if (result < prevRes)
+					Error!(reader, scope $"Integer is out of range for {typeof(T)}");
+				prevRes = result;
+			}
+
+			// Check overflow
+			if (isNegative)
+			{
+				let num = (T)-(int64)result;
+				if (num < T.MinValue || num > T.MaxValue)
+					Error!(reader, scope $"Integer is out of range for {typeof(T)}");
+				else return .Ok(num);
+			}
+			else
+			{
+				let num = (T)result;
+				if (result > T.MaxValue)
+					Error!(reader, scope $"Integer is out of range for {typeof(T)}");
+				else return .Ok(num);
+			}
+		}
+
 		static mixin ParseThing<T>(BonReader reader, StringView num) where T : var
 		{
 			T thing = default;
@@ -554,44 +631,31 @@ namespace Bon.Integrated
 			thing
 		}
 
-		static mixin DoInt<T, T2>(BonReader reader, StringView numStr) where T2 : var where T : var
+		static mixin DoInt<T>(BonReader reader, StringView numStr) where T : var
 		{
 			// Not all ints have parse methods (that also filter out letters properly), 
 			// so we need to do this, along with range checks!
 
-			T2 num = ParseThing!<T2>(reader, numStr);
-#unwarn
-			if (num > (T2)T.MaxValue || num < (T2)T.MinValue)
-				Error!(reader, scope $"Integer is out of range for {typeof(T)}");
-			(T)num
+			Try!(ParseInt<T>(reader, numStr))
 		}
 
 		static mixin Integer(Type type, BonReader reader, ref Variant val)
 		{
 			let num = Try!(reader.Integer());
 
-			// TODO: make a custom parsing func like uint64 to properly parse hex; then allow hex in reader.Integer()
-			// also support binary, as well as _ as separation (also check theoretical range of input even against uint64!)
-
 			switch (type)
 			{
-			case typeof(int8): *(int8*)val.DataPtr = DoInt!<int8, int64>(reader, num);
-			case typeof(int16): *(int16*)val.DataPtr = DoInt!<int16, int64>(reader, num);
-			case typeof(int32): *(int32*)val.DataPtr = DoInt!<int32, int64>(reader, num);
-			case typeof(int64): *(int64*)val.DataPtr = ParseThing!<int64>(reader, num);
-			case typeof(int):
-				if (sizeof(int) == 8)
-					*(int*)val.DataPtr = ParseThing!<int64>(reader, num);
-				else *(int*)val.DataPtr = DoInt!<int32, int64>(reader, num);
+			case typeof(int8): *(int8*)val.DataPtr = DoInt!<int8>(reader, num);
+			case typeof(int16): *(int16*)val.DataPtr = DoInt!<int16>(reader, num);
+			case typeof(int32): *(int32*)val.DataPtr = DoInt!<int32>(reader, num);
+			case typeof(int64): *(int64*)val.DataPtr = DoInt!<int64>(reader, num);
+			case typeof(int): *(int*)val.DataPtr = DoInt!<int>(reader, num);
 
-			case typeof(uint8): *(uint8*)val.DataPtr = DoInt!<uint8, uint64>(reader, num);
-			case typeof(uint16): *(uint16*)val.DataPtr = DoInt!<uint16, uint64>(reader, num);
-			case typeof(uint32): *(uint32*)val.DataPtr = DoInt!<uint32, uint64>(reader, num);
-			case typeof(uint64): *(uint64*)val.DataPtr = ParseThing!<uint64>(reader, num);
-			case typeof(uint):
-				if (sizeof(uint) == 8)
-					*(uint*)val.DataPtr = ParseThing!<uint64>(reader, num);
-				else *(uint*)val.DataPtr = DoInt!<uint32, uint64>(reader, num);
+			case typeof(uint8): *(uint8*)val.DataPtr = DoInt!<uint8>(reader, num);
+			case typeof(uint16): *(uint16*)val.DataPtr = DoInt!<uint16>(reader, num);
+			case typeof(uint32): *(uint32*)val.DataPtr = DoInt!<uint32>(reader, num);
+			case typeof(uint64): *(uint64*)val.DataPtr = DoInt!<uint64>(reader, num);
+			case typeof(uint): *(uint*)val.DataPtr = DoInt!<uint>(reader, num);
 			}
 		}
 
