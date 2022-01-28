@@ -65,7 +65,12 @@ namespace Bon.Integrated
 				{
 					funcs.destroy(val);
 				}
-				else delete *(void**)val.DataPtr;
+				else
+				{
+					if (valType.IsPointer)
+						delete *(void**)val.DataPtr;
+					else delete Internal.UnsafeCastToObject(*(void**)val.DataPtr);
+				}
 			}
 
 			let ptr = val.DataPtr;
@@ -161,20 +166,26 @@ namespace Bon.Integrated
 
 			if (reader.IsTyped())
 			{
-				if (valType.IsObject)
+				if (TypeHoldsObject!(valType))
 				{
 					let typeName = reader.Type();
 
 					if (env.polyTypes.TryGetValue(scope .(typeName), let type))
 					{
-						if (type.IsObject /* boxed structs or primitives */ && !type.IsSubtypeOf(valType))
-							Error!(reader, "Specified type is not a sub-type of the value's type");
+						if (valType.IsInterface)
+						{
+							if (!type.HasInterface(valType))
+								Error!(reader, scope $"Specified type does not implement {valType}");
+						}
+						else if (type.IsObject /* boxed structs or primitives */ && !type.IsSubtypeOf(valType))
+							Error!(reader, scope $"Specified type is not a sub-type of {valType}");
 
 						// Store it but don't apply it, so that we still easily
 						// select the IsObject case even for boxed structs
 						polyType = type;
 					}
-					else Error!(reader, "Specified type not found in bonEnvironment.polyTypes");
+					else if (typeName != (StringView)valType.GetFullName(.. scope .())) // It's the base type itself, and we got that!
+						Error!(reader, "Specified type not found in bonEnvironment.polyTypes");
 				}
 				else Error!(reader, "Type markers are only valid on reference types");
 			}
@@ -399,7 +410,7 @@ namespace Bon.Integrated
 
 				Try!(reader.ArrayBlockEnd());
 			}
-			else if (valType.IsObject)
+			else if (TypeHoldsObject!(valType))
 			{
 				if (reader.IsNull())
 				{
@@ -418,7 +429,7 @@ namespace Bon.Integrated
 							// Current reference is of a different type, so clean
 							// it up to make our type instance below
 							if (*(void**)val.DataPtr != null
-								&& (*(Object*)val.DataPtr).GetType() != boxType)
+								&& (*(Object*)val.DataPtr).GetType() != polyType) // Box still returns type of boxed
 								MakeDefault(ref val, env);
 
 							val.UnsafeSetType(boxType);
@@ -449,6 +460,7 @@ namespace Bon.Integrated
 
 							val.UnsafeSetType(polyType);
 						}
+						else Debug.Assert(!valType.IsInterface);
 
 						if (*(void**)val.DataPtr == null)
 							Try!(MakeInstanceRef(ref val, env));

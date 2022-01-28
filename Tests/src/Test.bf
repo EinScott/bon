@@ -575,7 +575,7 @@ namespace Bon.Tests
 		}
 
 		[Serializable,PolySerialize] // Also use it for boxing tests
-		struct SomeData
+		struct SomeData : IThing
 		{
 			public double time;
 			public uint64 value;
@@ -603,7 +603,7 @@ namespace Bon.Tests
 					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
 				}
 
-				using (PushFlags(.AllowNonPublic))
+				using (PushFlags(.IncludeNonPublic))
 				{
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",intern=54,important=32656}");
@@ -631,7 +631,7 @@ namespace Bon.Tests
 					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
 				}
 
-				using (PushFlags(.AllowNonPublic|.IgnoreAttributes|.IncludeDefault))
+				using (PushFlags(.IncludeNonPublic|.IgnoreAttributes|.IncludeDefault))
 				{
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",intern=54,important=32656,dont=8,n=0}");
@@ -822,9 +822,8 @@ namespace Bon.Tests
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == "(Bon.Tests.SomeTokens)'-'");
 
-				Object oi = null;
+				Object oi = scope box SomeTokens.Slash;
 				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi.GetType() == i.GetType() && Bon.Serialize(oi, .. scope .()) == str);
-				delete oi;
 			}
 
 			using (PushFlags(.Verbose))
@@ -843,12 +842,10 @@ namespace Bon.Tests
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == "(Bon.Tests.Thing).Circle{pos={x=20,y=50},radius=1}");
 
-				Object oi = null;
+				Object oi = new box SomeTokens.Dash; // oops- wrong type
 				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi.GetType() == i.GetType() && Bon.Serialize(oi, .. scope .()) == str);
 				delete oi;
 			}
-
-			// TODO tests for dealloc / clear of prev poly thing in. Check if type check works!
 		}
 
 		[Serializable,PolySerialize]
@@ -859,15 +856,39 @@ namespace Bon.Tests
 			public SomeData data;
 		}
 
+		[Serializable] // Base classes also need to be marked!
+		abstract class BaseThing
+		{
+			public abstract int Number { get; set; }
+
+			public String Name = new .("nothing") ~ delete _;
+		}
+
+		interface IThing
+		{
+
+		}
+
+		[Serializable,PolySerialize]
+		class OtherClassThing : BaseThing, IThing
+		{
+			public uint32 something;
+
+			public override int Number { get; set; }
+		}
+
+		[Serializable]
+		class FinClass : OtherClassThing
+		{
+			public new uint64 something;
+		}
+
+		// TODO: test type marker with <T> ?
+
 		[Test]
 		static void Classes()
 		{
 			NoStringHandler!();
-
-			// TODO: test with inheritance, polymorphism...
-
-			// TODO: some tests for deleting stuff through bon (deallocate/destroy)
-			// and also if strings just created by bon leak
 
 			{
 				let c = scope AClass() { thing = uint8.MaxValue, data = .{ value = 10, time = 1 }, aStringThing = new .("A STRING THING yes") };
@@ -886,7 +907,58 @@ namespace Bon.Tests
 				Test.Assert(str == "(Bon.Tests.AClass){aStringThing=\"A STRING THING yes\",thing=255,data={time=1,value=10}}");
 
 				Object co = null;
-				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType());
+				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType() && Bon.Serialize(co, .. scope .()) == str);
+				delete co;
+			}
+
+			using (PushFlags(.IncludeNonPublic))
+			{
+				OtherClassThing c = scope OtherClassThing() { Number = 59992, something = 222252222 };
+				c.Name.Set("ohh");
+
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "{something=222252222,prop__Number=59992,Name=\"ohh\"}");
+
+				OtherClassThing co = null;
+				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType() && Bon.Serialize(co, .. scope .()) == str);
+				delete co;
+			}
+
+			using (PushFlags(.IncludeNonPublic))
+			{
+				Object c = scope OtherClassThing() { Number = 59992, something = 222252222 };
+
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "(Bon.Tests.OtherClassThing){something=222252222,prop__Number=59992,Name=\"nothing\"}");
+
+				Object co = new AClass(); // oops.. wrong type there!
+				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType() && Bon.Serialize(co, .. scope .()) == str);
+				delete co;
+			}
+
+			using (PushFlags(.IncludeNonPublic))
+			{
+				BaseThing c = scope OtherClassThing() { Number = 59992, something = 222252222 };
+
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "(Bon.Tests.OtherClassThing){something=222252222,prop__Number=59992,Name=\"nothing\"}");
+
+				BaseThing co = null;
+				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType() && Bon.Serialize(co, .. scope .()) == str);
+				delete co;
+			}
+
+			{
+				BaseThing c = scope FinClass() { something = 222252222, @something = 26 };
+				c.Name.Set("fin");
+
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "(Bon.Tests.FinClass){something=222252222,something=26,Name=\"fin\"}");
+
+				// This is dependent on the order of the two "something"s. It's cursed, but
+				// I'm still glad it just works. Outermost class' fields first, then down the inheritance tree
+				FinClass co = null;
+				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType() && Bon.Serialize(co, .. scope .()) == "{something=222252222,something=26,Name=\"fin\"}");
 				delete co;
 			}
 
@@ -898,6 +970,50 @@ namespace Bon.Tests
 					scope box 10,
 					scope String("look, a string!"),
 					scope Object());*/
+			}
+		}
+
+		[Test]
+		static void Interfaces()
+		{
+			using (PushFlags(.IncludeNonPublic))
+			{
+				IThing c = scope OtherClassThing() { Number = 59992, something = 222252222 };
+
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "(Bon.Tests.OtherClassThing){something=222252222,prop__Number=59992,Name=\"nothing\"}");
+
+				IThing co = null;
+				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType() && Bon.Serialize(co, .. scope .()) == str);
+				delete co;
+			}
+
+			{
+				IThing s = scope box SomeData(){
+					time = 65.5,
+					value = 11917585743392890597
+				};
+
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "(Bon.Tests.SomeData){time=65.5,value=11917585743392890597}");
+
+				IThing os = null;
+				Test.Assert((Bon.Deserialize(ref os, str) case .Ok) && os.GetType() == s.GetType() && Bon.Serialize(os, .. scope .()) == str);
+				delete os;
+			}
+
+			{
+				IThing s = SomeData(){
+					time = 65.5,
+					value = 11917585743392890597
+				};
+
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "(Bon.Tests.SomeData){time=65.5,value=11917585743392890597}");
+
+				IThing os = null;
+				Test.Assert((Bon.Deserialize(ref os, str) case .Ok) && os.GetType() == s.GetType() && Bon.Serialize(os, .. scope .()) == str);
+				delete os;
 			}
 		}
 

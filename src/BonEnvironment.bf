@@ -12,7 +12,7 @@ namespace Bon
 		case Default = 0;
 
 		/// Include private fields
-		case AllowNonPublic = 1;
+		case IncludeNonPublic = 1;
 
 		/// Whether or not to include fields default values (e.g. null, etc)
 		case IncludeDefault = 1 << 1;

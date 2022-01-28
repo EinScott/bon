@@ -291,7 +291,7 @@ namespace Bon.Integrated
 					}
 				}
 			}
-			else if (valType.IsObject)
+			else if (TypeHoldsObject!(valType))
 			{
 				if (*(void**)val.DataPtr == null)
 					writer.Null();
@@ -300,7 +300,7 @@ namespace Bon.Integrated
 					let polyType = (*(Object*)val.DataPtr).GetType();
 					if (polyType != valType)
 					{
-						Debug.Assert(!polyType.IsObject || polyType.IsSubtypeOf(valType));
+						Debug.Assert(!polyType.IsObject || polyType.IsSubtypeOf(valType) || (valType.IsInterface && polyType.HasInterface(valType)));
 
 						// Change type of pointer to actual type
 						val.UnsafeSetType(polyType);
@@ -308,6 +308,7 @@ namespace Bon.Integrated
 						let typeName = polyType.GetFullName(.. scope .());
 						writer.Type(typeName);
 					}
+					else Debug.Assert(!valType.IsInterface);
 
 					if (!polyType.IsObject)
 					{
@@ -388,7 +389,7 @@ namespace Bon.Integrated
 					{
 						let flags = env.serializeFlags;
 						if ((!flags.HasFlag(.IgnoreAttributes) && m.GetCustomAttribute<NoSerializeAttribute>() case .Ok) // check hidden
-							|| !flags.HasFlag(.AllowNonPublic) && (m.[Friend]mFieldData.mFlags & .Public == 0) // check protection level
+							|| !flags.HasFlag(.IncludeNonPublic) && (m.[Friend]mFieldData.mFlags & .Public == 0) // check protection level
 							&& (flags.HasFlag(.IgnoreAttributes) || !(m.GetCustomAttribute<DoSerializeAttribute>() case .Ok))) // check if we still include it anyway
 							continue;
 

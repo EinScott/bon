@@ -50,7 +50,7 @@ namespace Bon.Integrated
 				if (origStr[start] == '\n')
 					break;
 
-				if (dist == 51)
+				if (dist == 64)
 				{
 					startCapped = true;
 					break;
@@ -66,7 +66,7 @@ namespace Bon.Integrated
 				if (origStr[end] == '\n')
 					break;
 
-				if (dist == 26)
+				if (dist == 32)
 				{
 					endCapped = true;
 					break;

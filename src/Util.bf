@@ -23,11 +23,27 @@ namespace Bon.Integrated
 			}
 			isZero
 		}
+
+		public static mixin TypeHoldsObject(Type type)
+		{
+			(type.IsObject || type.IsInterface)
+		}
 	}
 }
 
 namespace System
 {
+	extension Type
+	{
+		public bool HasInterface(Type interfaceType)
+		{
+			for (let i in Interfaces)
+				if (i == interfaceType)
+					return true;
+			return false;
+		}
+	}
+
 	extension Variant
 	{
 		[Inline]
