@@ -546,7 +546,7 @@ namespace Bon.Integrated
 			return reader.ObjectBlockEnd();
 		}
 
-		static Result<T> ParseInt<T>(BonReader reader, StringView val, bool allowNonDecimal = true) where T : IInteger, var //IInteger, operator explicit int, operator T * T, operator T + T where bool : operator T > T // @report putting just ", T" crashes
+		static Result<T> ParseInt<T>(BonReader reader, StringView val, bool allowNonDecimal = true) where T : IInteger, var // @report putting just "T" instead of "var" hardcrashes
 		{
 			var len = val.Length;
 			if (len == 0)
