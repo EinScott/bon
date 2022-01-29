@@ -609,17 +609,19 @@ namespace Bon.Integrated
 			// Check overflow
 			if (isNegative)
 			{
-				let num = (T)-(int64)result;
+				if (result > int64.MaxValue)
+					Error!(reader, scope $"Integer is out of range for {typeof(T)}");
+				let num = -(*(int64*)&result);
 				if (num < T.MinValue || num > T.MaxValue)
 					Error!(reader, scope $"Integer is out of range for {typeof(T)}");
-				else return .Ok(num);
+				else return .Ok((T)num);
 			}
 			else
 			{
-				let num = (T)result;
+				let num = result;
 				if (result > T.MaxValue)
 					Error!(reader, scope $"Integer is out of range for {typeof(T)}");
-				else return .Ok(num);
+				else return .Ok((T)num);
 			}
 		}
 
