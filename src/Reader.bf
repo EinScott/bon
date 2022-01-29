@@ -282,10 +282,12 @@ namespace Bon.Integrated
 			{
 				let char = inStr[strLen];
 				isEscaped = char == '\\' && !isEscaped;
-				if ((char >= (char8)0) && (char <= (char8)0x1F))
+				if ((char >= (char8)0) && (char <= (char8)0x1F) && char != '\t')
 				{
 					inStr.RemoveFromStart(strLen - 1);
-					Error!("Char not allowed in string. Use escape sequence");
+					if (char == '\n') // Specify since it's easily confusing as it counts as white space
+						Error!("Newline not allowed in string. Use escape sequence");
+					else Error!("Char not allowed in string. Use escape sequence");
 				}
 				strLen++;
 			}

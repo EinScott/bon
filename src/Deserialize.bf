@@ -612,14 +612,14 @@ namespace Bon.Integrated
 				if (result > int64.MaxValue)
 					Error!(reader, scope $"Integer is out of range for {typeof(T)}");
 				let num = -(*(int64*)&result);
-				if (num < T.MinValue || num > T.MaxValue)
+				if (num < (int64)T.MinValue || num > (int64)T.MaxValue)
 					Error!(reader, scope $"Integer is out of range for {typeof(T)}");
 				else return .Ok((T)num);
 			}
 			else
 			{
 				let num = result;
-				if (result > T.MaxValue)
+				if (result > (uint64)T.MaxValue)
 					Error!(reader, scope $"Integer is out of range for {typeof(T)}");
 				else return .Ok((T)num);
 			}

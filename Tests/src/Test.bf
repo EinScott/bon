@@ -325,9 +325,9 @@ namespace Bon.Tests
 			SetupStringViewHandler!();
 
 			{
-				StringView s = "A normal string";
+				StringView s = "A normal string	";
 				let str = Bon.Serialize(s, .. scope .());
-				Test.Assert(str == "\"A normal string\"");
+				Test.Assert(str == "\"A normal string\\t\"");
 
 				StringView so = ?;
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && so == s);
@@ -376,6 +376,13 @@ namespace Bon.Tests
 					"Some string
 					"
 					""") case .Err);
+			}
+
+			{
+				StringView so = ?;
+				Test.Assert(Bon.Deserialize(ref so, """
+					"Some string	" // Beef allows this too, so...
+					""") case .Ok);
 			}
 		}
 
