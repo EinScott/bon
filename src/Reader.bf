@@ -285,7 +285,7 @@ namespace Bon.Integrated
 				if ((char >= (char8)0) && (char <= (char8)0x1F))
 				{
 					inStr.RemoveFromStart(strLen - 1);
-					Error!("Char not allowed in string. Use escape notation");
+					Error!("Char not allowed in string. Use escape sequence");
 				}
 				strLen++;
 			}
@@ -299,8 +299,11 @@ namespace Bon.Integrated
 
 			let stringContent = StringView(&inStr[0], strLen);
 
-			if (String.UnQuoteStringContents(stringContent, into) case .Err)
-				Error!("Invalid string");
+			if (String.UnQuoteStringContents(stringContent, into) case .Err(let errPos))
+			{
+				inStr.RemoveFromStart(errPos);
+				Error!("Invalid escape sequence");
+			}	
 
 			inStr.RemoveFromStart(strLen);
 
@@ -324,7 +327,7 @@ namespace Bon.Integrated
 				let char = inStr[strLen];
 				isEscaped = char == '\\' && !isEscaped;
 				if ((char >= (char8)0) && (char <= (char8)0x1F))
-					Error!("Char not allowed. Use escape notation");
+					Error!("Char not allowed. Use escape sequence");
 				strLen++;
 			}
 
@@ -338,8 +341,11 @@ namespace Bon.Integrated
 			let stringContent = StringView(&inStr[0], strLen);
 
 			let str = scope String();
-			if (String.UnQuoteStringContents(stringContent, str) case .Err)
-				Error!("Invalid char");
+			if (String.UnQuoteStringContents(stringContent, str) case .Err(let errPos))
+			{
+				inStr.RemoveFromStart(errPos);
+				Error!("Invalid escape sequence");
+			}	
 
 			if (str.Length > 4)
 				Error!("Oversized char");

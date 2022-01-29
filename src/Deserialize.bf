@@ -631,31 +631,23 @@ namespace Bon.Integrated
 			thing
 		}
 
-		static mixin DoInt<T>(BonReader reader, StringView numStr) where T : var
-		{
-			// Not all ints have parse methods (that also filter out letters properly), 
-			// so we need to do this, along with range checks!
-
-			Try!(ParseInt<T>(reader, numStr))
-		}
-
 		static mixin Integer(Type type, BonReader reader, ref Variant val)
 		{
 			let num = Try!(reader.Integer());
 
 			switch (type)
 			{
-			case typeof(int8): *(int8*)val.DataPtr = DoInt!<int8>(reader, num);
-			case typeof(int16): *(int16*)val.DataPtr = DoInt!<int16>(reader, num);
-			case typeof(int32): *(int32*)val.DataPtr = DoInt!<int32>(reader, num);
-			case typeof(int64): *(int64*)val.DataPtr = DoInt!<int64>(reader, num);
-			case typeof(int): *(int*)val.DataPtr = DoInt!<int>(reader, num);
+			case typeof(int8): *(int8*)val.DataPtr = Try!(ParseInt<int8>(reader, num));
+			case typeof(int16): *(int16*)val.DataPtr = Try!(ParseInt<int16>(reader, num));
+			case typeof(int32): *(int32*)val.DataPtr = Try!(ParseInt<int32>(reader, num));
+			case typeof(int64): *(int64*)val.DataPtr = Try!(ParseInt<int64>(reader, num));
+			case typeof(int): *(int*)val.DataPtr = Try!(ParseInt<int>(reader, num));
 
-			case typeof(uint8): *(uint8*)val.DataPtr = DoInt!<uint8>(reader, num);
-			case typeof(uint16): *(uint16*)val.DataPtr = DoInt!<uint16>(reader, num);
-			case typeof(uint32): *(uint32*)val.DataPtr = DoInt!<uint32>(reader, num);
-			case typeof(uint64): *(uint64*)val.DataPtr = DoInt!<uint64>(reader, num);
-			case typeof(uint): *(uint*)val.DataPtr = DoInt!<uint>(reader, num);
+			case typeof(uint8): *(uint8*)val.DataPtr = Try!(ParseInt<uint8>(reader, num));
+			case typeof(uint16): *(uint16*)val.DataPtr = Try!(ParseInt<uint16>(reader, num));
+			case typeof(uint32): *(uint32*)val.DataPtr = Try!(ParseInt<uint32>(reader, num));
+			case typeof(uint64): *(uint64*)val.DataPtr = Try!(ParseInt<uint64>(reader, num));
+			case typeof(uint): *(uint*)val.DataPtr = Try!(ParseInt<uint>(reader, num));
 			}
 		}
 

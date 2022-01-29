@@ -55,9 +55,15 @@ namespace System
 
 	extension String
 	{
-		public static Result<void> UnQuoteStringContents(StringView view, String outString)
+		public static Result<void, int> UnQuoteStringContents(StringView view, String outString)
 		{
 			var ptr = view.Ptr;
+
+			mixin Err()
+			{
+				return .Err(ptr - view.Ptr);
+			}
+
 			char8* endPtr = view.EndPtr;
 
 			while (ptr < endPtr)
@@ -66,7 +72,7 @@ namespace System
 				if (c == '\\')
 				{
 					if (ptr == endPtr)
-						return .Err;
+						Err!();
 
 					char8 nextC = *(ptr++);
 					switch (nextC)
@@ -83,11 +89,64 @@ namespace System
 					case 't': outString.Append('\t');
 					case 'v': outString.Append('\v');
 					case 'x':
-						// TODO
+						uint8 num = 0;
+						for (let i < 2)
+						{
+							if (ptr == endPtr)
+								Err!();
+							let hexC = *(ptr++);
+
+							if ((hexC >= '0') && (hexC <= '9'))
+								num = num*0x10 + (uint8)(hexC - '0');
+							else if ((hexC >= 'A') && (hexC <= 'F'))
+								num = num*0x10 + (uint8)(c - 'A') + 10;
+							else if ((hexC >= 'a') && (hexC <= 'f'))
+								num = num*0x10 + (uint8)(hexC - 'a') + 10;
+							else Err!();
+						}
+
+						outString.Append((char8)num);
+
 					case 'u':
-						// TODO
+						if (ptr == endPtr)
+							Err!();
+
+						char8 uniC = *(ptr++);
+						if (uniC != '{')
+							Err!();
+
+						uint32 num = 0;
+						for (let i < 7)
+						{
+							if (ptr == endPtr)
+								Err!();
+							uniC = *(ptr++);
+
+							if (uniC == '}')
+							{
+								if (i == 0)
+									Err!();
+								break;
+							}
+							else if (i == 7)
+								Err!();
+
+							if ((uniC >= '0') && (uniC <= '9'))
+								num = num*0x10 + (uint32)(uniC - '0');
+							else if ((uniC >= 'A') && (uniC <= 'F'))
+								num = num*0x10 + (uint32)(uniC - 'A') + 10;
+							else if ((uniC >= 'a') && (uniC <= 'f'))
+								num = num*0x10 + (uint32)(uniC - 'a') + 10;
+							else Err!();
+						}
+
+						if (num > 0x10FFFF)
+							Err!();
+
+						outString.Append((char32)num);
+
 					default:
-						return .Err;
+						Err!();
 					}
 					continue;
 				}

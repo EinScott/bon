@@ -225,16 +225,19 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref i, "default") case .Ok) && i == 0);
 			}
 
-			// TODO: allow this!
+			{
+				char32 oc = ?;
+				Test.Assert((Bon.Deserialize(ref oc, "'\\u{10FFFF}'") case .Ok) && oc == '\u{10FFFF}');
+			}
 
 			{
-				char16 oc = ?;
-				Test.Assert((Bon.Deserialize(ref oc, "'\u{30A1}'") case .Ok) && oc == '\u{30A1}');
+				char32 oc = ?;
+				Test.Assert((Bon.Deserialize(ref oc, "'\\u{30A1}'") case .Ok) && oc == '\u{30A1}');
 			}
 
 			{
 				char8 oc = ?;
-				Test.Assert((Bon.Deserialize(ref oc, "'\x2a'") case .Ok) && oc == '\x2a');
+				Test.Assert((Bon.Deserialize(ref oc, "'\\x2a'") case .Ok) && oc == '\x2a');
 			}
 
 			// Should error (but not crash)
@@ -262,6 +265,46 @@ namespace Bon.Tests
 			{
 				char8 oc = ?;
 				Test.Assert(Bon.Deserialize(ref oc, "'Ā'") case .Err);
+			}
+
+			{
+				char8 oc = ?;
+				Test.Assert(Bon.Deserialize(ref oc, "'\\x'") case .Err);
+			}
+
+			{
+				char8 oc = ?;
+				Test.Assert(Bon.Deserialize(ref oc, "'\\x2'") case .Err);
+			}
+
+			{
+				char8 oc = ?;
+				Test.Assert(Bon.Deserialize(ref oc, "'\\x2z'") case .Err);
+			}
+
+			{
+				char8 oc = ?;
+				Test.Assert(Bon.Deserialize(ref oc, "'\\x2aa'") case .Err);
+			}
+
+			{
+				char8 oc = ?;
+				Test.Assert(Bon.Deserialize(ref oc, "'\\u'") case .Err);
+			}
+
+			{
+				char8 oc = ?;
+				Test.Assert(Bon.Deserialize(ref oc, "'\\u{'") case .Err);
+			}
+
+			{
+				char8 oc = ?;
+				Test.Assert(Bon.Deserialize(ref oc, "'\\u{}'") case .Err);
+			}
+
+			{
+				char8 oc = ?;
+				Test.Assert(Bon.Deserialize(ref oc, "'\\u{5g}'") case .Err);
 			}
 
 			{
