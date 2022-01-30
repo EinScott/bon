@@ -3,15 +3,14 @@ using Bon;
 using System.Diagnostics;
 using System.Collections;
 
-/*namespace System
+namespace System
 {
-	// TODO: buildsettings include or this DOES NOT WORK: both link error!
 	[Serializable]
 	extension String
 	{
 
 	}
-}*/
+}
 
 namespace Bon.Tests
 {
@@ -62,33 +61,23 @@ namespace Bon.Tests
 				delete str; // We allocated it!
 		}
 
-		static mixin SetupStringViewHandler()
+		static mixin SetupStringHandler()
 		{
 			gBonEnv.stringViewHandler = => HandleStringView;
 
-			gBonEnv.instanceHandlers.Remove(typeof(String));
-			BonEnvironment.MakeThing make = => MakeString;
-			BonEnvironment.DestroyThing destroy = => DestroyString;
+			if (!gBonEnv.instanceHandlers.ContainsKey(typeof(String)))
+			{
+				BonEnvironment.MakeThing make = => MakeString;
+				BonEnvironment.DestroyThing destroy = => DestroyString;
 
-			gBonEnv.instanceHandlers.Add(typeof(String), (make, destroy));
-		}
-
-		static void MakeStringFix(Variant val)
-		{
-			var val;
-			*(String*)val.DataPtr = new String();
+				gBonEnv.instanceHandlers.Add(typeof(String), (make, destroy));
+			}
 		}
 
 		static mixin NoStringHandler()
 		{
 			gBonEnv.stringViewHandler = => HandleStringView;
-
-			// TODO This is a fix for not being able to force reflection data on these types currently, see bug at top of file!
-
 			gBonEnv.instanceHandlers.Remove(typeof(String));
-			BonEnvironment.MakeThing make = => MakeStringFix;
-
-			gBonEnv.instanceHandlers.Add(typeof(String), (make, null));
 		}
 
 		[Test]
@@ -322,7 +311,7 @@ namespace Bon.Tests
 		[Test]
 		static void Strings()
 		{
-			SetupStringViewHandler!();
+			SetupStringHandler!();
 
 			{
 				StringView s = "A normal string	";
@@ -419,7 +408,7 @@ namespace Bon.Tests
 
 			using (PushFlags(.Verbose))
 			{
-				SetupStringViewHandler!();
+				SetupStringHandler!();
 
 				StringView[4] s = .("hello", "second String", "another entry", "LAST one");
 				let str = Bon.Serialize(s, .. scope .());
@@ -853,7 +842,7 @@ namespace Bon.Tests
 			}
 
 			{
-				SetupStringViewHandler!();
+				SetupStringHandler!();
 
 				Thing i = .Text(.(50, 50), "Something\"!", 24, 90f);
 				let str = Bon.Serialize(i, .. scope .());
@@ -1127,7 +1116,7 @@ namespace Bon.Tests
 		[Test]
 		static void FileLevel()
 		{
-			SetupStringViewHandler!();
+			SetupStringHandler!();
 
 			{
 				let s = StructB() {
