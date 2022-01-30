@@ -546,7 +546,7 @@ namespace Bon.Integrated
 			return reader.ObjectBlockEnd();
 		}
 
-		static Result<T> ParseInt<T>(BonReader reader, StringView val, bool allowNonDecimal = true) where T : IInteger, var // @report putting just "T" instead of "var" hardcrashes
+		static Result<T> ParseInt<T>(BonReader reader, StringView val, bool allowNonDecimal = true) where T : IInteger, var
 		{
 			var len = val.Length;
 			if (len == 0)
@@ -676,8 +676,6 @@ namespace Bon.Integrated
 		{
 			var char = Try!(reader.Char());
 
-			// @report: just putting "mixin DO" here perma hardcrashes.. stackoverflow?!
-			
 			switch (type)
 			{
 			case typeof(char8): DoChar!<char8, uint8>(reader, ref val, char);

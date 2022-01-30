@@ -19,7 +19,10 @@ namespace Bon.Integrated
 			default:
 				for (var i < size)
 					if (ptr[i] != 0)
+					{
 						isZero = false;
+						break;
+					}	
 			}
 			isZero
 		}

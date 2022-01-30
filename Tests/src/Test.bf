@@ -6,10 +6,19 @@ using System.Collections;
 namespace System
 {
 	[Serializable]
-	extension String
-	{
+	extension String {}
 
-	}
+	[Serializable]
+	extension Array1<T> {}
+
+	[Serializable]
+	extension Array2<T> {}
+
+	[Serializable]
+	extension Array3<T> {}
+
+	[Serializable]
+	extension Array4<T> {}
 }
 
 namespace Bon.Tests
@@ -376,7 +385,7 @@ namespace Bon.Tests
 		}
 
 		[Test]
-		static void Arrays()
+		static void SizedArrays()
 		{
 			{
 				uint8[6] s = .(12, 24, 53, 34,);
@@ -881,7 +890,7 @@ namespace Bon.Tests
 		}
 
 		[Test]
-		public static void Boxed()
+		static void Boxed()
 		{
 			{
 				Object s = scope box SomeData(){
@@ -973,7 +982,7 @@ namespace Bon.Tests
 			public new uint64 something;
 		}
 
-		// TODO: test type marker with <T> ?
+		// TODO: try for something with T
 
 		[Test]
 		static void Classes()
@@ -1104,6 +1113,87 @@ namespace Bon.Tests
 				IThing os = null;
 				Test.Assert((Bon.Deserialize(ref os, str) case .Ok) && os.GetType() == s.GetType() && Bon.Serialize(os, .. scope .()) == str);
 				delete os;
+			}
+		}
+
+		static mixin ArrayEqual<T>(T a, T b) where T : var
+		{
+			bool equal = true;
+			if (a.Count != b.Count)
+				equal = false;
+			else
+			{
+				for (int i < a.Count)
+					if (a[i] != b[i])
+					{
+						equal = false;
+						break;
+					}
+			}
+			equal
+		}
+
+		[Test]
+		static void Arrays()
+		{
+			// TODO: deserialize
+
+			{
+				uint8[] s = scope .(12, 24, 53, 34, 5, 0, 0);
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "<7>[12,24,53,34,5]");
+
+				/*uint8[] so = scope .[7];
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));*/
+			}
+
+			{
+				Object s = scope uint8[](12, 24, 53, 34, 5, 0, 0);
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "(uint8[])<7>[12,24,53,34,5]");
+
+				/*Object so = null;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && s.GetType() == so.GetType());*/
+			}
+
+			{
+				uint8[] s = scope .(12, 24, 53, 34, 5, 0, 0);
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "<7>[12,24,53,34,5]");
+
+				/*uint8[] so = null;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));*/
+			}
+
+			{
+				uint16[,] s = scope .[2,2]((532, 332), (224, 2896));
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "<2,2>[[532,332],[224,2896]]");
+
+				/*uint16[,] so = null;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));*/
+			}
+
+			{
+				uint16[,,] s = scope .[2,5,1](((1), (2), (3), (4), (5)), ((20), (21), (22), (23), (24)));
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "<2,5,1>[[[1],[2],[3],[4],[5]],[[20],[21],[22],[23],[24]]]");
+
+				/*uint16[,,] so = null;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));*/
+			}
+
+			{
+				uint64[,,,] s = scope .[1,2,3,4]();
+				s[0,1,0,3] = 1646;
+				s[0,0,0,0] = 5000;
+				s[0,0,2,1] = 9090;
+
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "<1,2,3,4>[[[[5000],?,[0,9090]],[[0,0,0,1646],?]]]");
+
+				/*uint64[,,,] so = null;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));*/
 			}
 		}
 

@@ -135,6 +135,18 @@ namespace Bon.Integrated
 			outStr.Append('>');	
 		}
 
+		public void MultiSizer<N>(params uint[N] counts) where N : const int
+		{
+			outStr.Append('<');
+			for (let i < N)
+			{
+				counts[i].ToString(outStr);
+				if (i + 1 < N)
+					outStr.Append(',');
+			}
+			outStr.Append('>');	
+		}
+
 		[Inline]
 		public void String(StringView string)
 		{

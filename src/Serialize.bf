@@ -243,53 +243,14 @@ namespace Bon.Integrated
 			{
 				let t = (SizedArrayType)valType;
 				let count = t.ElementCount;
-				if (count > 0)
-				{
-					// Since this is a fixed-size array, this info is not necessary to
-					// deserialize in any case. But it's nice for manual editing to know how
-					// much the array can hold
-					if (env.serializeFlags.HasFlag(.Verbose))
-						writer.Sizer((.)count, true);
-					
-					let arrType = t.UnderlyingType;
-					let doArrayOneLine = DoTypeOneLine!(arrType, env.serializeFlags);
-					using (writer.ArrayBlock(doArrayOneLine))
-					{
-						var includeCount = count;
-						if (!env.serializeFlags.HasFlag(.IncludeDefault)) // DoInclude! would return true on anything anyway
-						{
-							var ptr = (uint8*)val.DataPtr + arrType.Stride * (count - 1);
-							for (var i = count - 1; i >= 0; i--)
-							{
-								var arrVal = Variant.CreateReference(arrType, ptr);
 
-								// If this gets included, we'll have to include everything until here!
-								if (DoInclude!(ref arrVal, env.serializeFlags))
-								{
-									includeCount = i + 1;
-									break;
-								}
+				// Since this is a fixed-size array, this info is not necessary to
+				// deserialize in any case. But it's nice for manual editing to know how
+				// much the array can hold
+				if (env.serializeFlags.HasFlag(.Verbose))
+					writer.Sizer((.)count, true);
 
-								ptr -= arrType.Stride;
-							}
-						}
-
-						var ptr = (uint8*)val.DataPtr;
-						for (let i < includeCount)
-						{
-							var arrVal = Variant.CreateReference(arrType, ptr);
-							if (doArrayOneLine || DoInclude!(ref arrVal, env.serializeFlags))
-								Value(writer, ref arrVal, env, doArrayOneLine);
-							else
-							{
-								// Shorten this... as mentioned in Thing() we don't automatically place default, but ?
-								Irrelevant(writer);
-							}
-
-							ptr += arrType.Stride;
-						}
-					}
-				}
+				Array(writer, t.UnderlyingType, val.DataPtr, count, env);
 			}
 			else if (TypeHoldsObject!(valType))
 			{
@@ -339,9 +300,60 @@ namespace Bon.Integrated
 						let str = val.Get<String>();
 						writer.String(str);
 					}
-					else if (polyType is ArrayType)
+					else if (polyType.IsArray)
 					{
-						Debug.FatalError();
+						Debug.Assert(polyType != typeof(Array) && polyType is ArrayType);
+
+						let t = polyType as ArrayType;
+						
+						Debug.Assert(t.GetField("mFirstElement") case .Ok, "No reflection data forced for array type!\n(for example: [Serializable] extension Array1<T> {} or through build settings)");
+
+						let arrType = t.GetGenericArg(0); // T
+						let classData = *(uint8**)val.DataPtr;
+						var arrPtr = classData + t.GetField("mFirstElement").Get().MemberOffset; // T*
+
+						// @report: *(int_strsize*)(classData + typeof(Array).GetField("mLength").Get().MemberOffset)
+						// doesnt work, seems like the field is never reflected, also doesnt work with t.GetField("mLength")
+						var count = val.Get<Array>().Count;
+						
+						mixin GetLenField(String field)
+						{
+							*(int_strsize*)(classData + t.GetField(field).Get().MemberOffset)
+						}
+
+						if (t.UnspecializedType == typeof(Array1<>))
+						{
+							writer.Sizer((.)count);
+							Array(writer, arrType, arrPtr, count, env);
+						}
+						else if (t.UnspecializedType == typeof(Array2<>))
+						{
+							let count1 = GetLenField!("mLength1");
+							count /= count1;
+							writer.MultiSizer((.)count,(.)count1);
+
+							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1);
+						}
+						else if (t.UnspecializedType == typeof(Array3<>))
+						{
+							let count2 = GetLenField!("mLength2");
+							let count1 = GetLenField!("mLength1");
+							count /= (count1 * count2);
+							writer.MultiSizer((.)count,(.)count1,(.)count2);
+
+							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1, count2);
+						}
+						else if (t.UnspecializedType == typeof(Array4<>))
+						{
+							let count1 = GetLenField!("mLength1");
+							let count2 = GetLenField!("mLength2");
+							let count3 = GetLenField!("mLength3");
+							count /= (count1 * count2 * count3);
+							writer.MultiSizer((.)count,(.)count1,(.)count2,(.)count3);
+
+							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1, count2, count3);
+						}
+						else Debug.FatalError();
 					}
 					// TODO consider using interfaces like ICollection<> and so on and using that? -> should also work for structs i guess? but not now
 					// or just use custom stuff right away
@@ -414,6 +426,119 @@ namespace Bon.Integrated
 					writer.outStr.Append(scope $"/* No reflection data for {structType}. Add [Serializable] or force it */");
 				else if (hasUnnamedMembers)
 					writer.outStr.Append(scope $"/* Type has unnamed members */");
+			}
+		}
+
+		public static void Array(BonWriter writer, Type arrType, void* arrPtr, int count, BonEnvironment env)
+		{
+			let doArrayOneLine = DoTypeOneLine!(arrType, env.serializeFlags);
+			using (writer.ArrayBlock(doArrayOneLine))
+			{
+				if (count > 0)
+				{
+					var includeCount = count;
+					if (!env.serializeFlags.HasFlag(.IncludeDefault)) // DoInclude! would return true on anything anyway
+					{
+						var ptr = (uint8*)arrPtr + arrType.Stride * (count - 1);
+						for (var i = count - 1; i >= 0; i--)
+						{
+							var arrVal = Variant.CreateReference(arrType, ptr);
+
+							// If this gets included, we'll have to include everything until here!
+							if (DoInclude!(ref arrVal, env.serializeFlags))
+							{
+								includeCount = i + 1;
+								break;
+							}
+
+							ptr -= arrType.Stride;
+						}
+					}
+
+					var ptr = (uint8*)arrPtr;
+					for (let i < includeCount)
+					{
+						var arrVal = Variant.CreateReference(arrType, ptr);
+						if (doArrayOneLine || DoInclude!(ref arrVal, env.serializeFlags))
+							Value(writer, ref arrVal, env, doArrayOneLine);
+						else
+						{
+							// Shorten this... as mentioned in Thing() we don't automatically place default, but ?
+							Irrelevant(writer);
+						}
+
+						ptr += arrType.Stride;
+					}
+				}
+			}
+		}
+
+		public static void MultiDimensionalArray(BonWriter writer, Type arrType, void* arrPtr, BonEnvironment env, params int[] counts)
+		{
+			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
+
+			let count = counts[0];
+			var stride = counts[1];
+			if (counts.Count > 2)
+				for (let i < counts.Count - 2)
+					stride *= counts[i + 2];
+			stride *= arrType.Stride;
+
+			using (writer.ArrayBlock())
+			{
+				if (count > 0)
+				{
+					var includeCount = count;
+					if (!env.serializeFlags.HasFlag(.IncludeDefault))
+					{
+						var ptr = (uint8*)arrPtr + stride * (count - 1);
+						DEFCHECK:for (var i = count - 1; i >= 0; i--)
+						{
+							// If this gets included, we'll have to include everything until here!
+							for (var j < stride)
+								if (ptr[j] != 0)
+									break DEFCHECK;
+
+							includeCount = i + 1;
+							ptr -= stride;
+						}
+					}
+
+					var ptr = (uint8*)arrPtr;
+					for (let i < includeCount)
+					{
+						bool isZero = true;
+						for (var j < stride)
+							if (ptr[j] != 0)
+							{
+								isZero = false;
+								break;
+							}
+
+						if (!isZero || env.serializeFlags.HasFlag(.IncludeDefault))
+						{
+							let inner = counts.Count - 1;
+							if (inner > 1)
+							{
+								int[] innerCounts = scope .[inner];
+								for (let j < inner)
+									innerCounts[j] = counts[j + 1];
+
+								MultiDimensionalArray(writer, arrType, ptr, env, params innerCounts);
+							}
+							else Array(writer, arrType, ptr, counts[1], env);
+
+							writer.EntryEnd();
+						}	
+						else
+						{
+							// Shorten this... as mentioned in Thing() we don't automatically place default, but ?
+							Irrelevant(writer);
+						}
+
+						ptr += stride;
+					}
+				}
 			}
 		}
 
