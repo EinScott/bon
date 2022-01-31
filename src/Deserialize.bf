@@ -823,9 +823,10 @@ namespace Bon.Integrated
 		{
 			let isSubfile = reader.IsSubfile();
 			int len = 0;
+			bool isVerbatim = false;
 			if (isSubfile)
 				len = Try!(reader.SubfileStringLength());
-			else len = Try!(reader.StringLength());
+			else (len, isVerbatim) = Try!(reader.StringLength());
 			Debug.Assert(len >= 0);
 
 			if (parsedStr == null)
@@ -833,7 +834,7 @@ namespace Bon.Integrated
 
 			if (isSubfile)
 				Try!(reader.SubfileString(parsedStr, len));
-			else Try!(reader.String(parsedStr, len));
+			else Try!(reader.String(parsedStr, len, isVerbatim));
 		}
 
 		static Result<T> ParseInt<T>(BonReader reader, StringView val, bool allowNonDecimal = true) where T : IInteger, var

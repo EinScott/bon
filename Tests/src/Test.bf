@@ -337,6 +337,13 @@ namespace Bon.Tests
 			}
 
 			{
+				StringView s = @"S:ome\Path\To.file";
+				StringView so = ?;
+				Test.Assert((Bon.Deserialize(ref so, "@\"S:ome\\Path\\To.file\"") case .Ok) && so == s);
+				Test.Assert((Bon.Deserialize(ref so, "\"S:ome\\\\Path\\\\To.file\"") case .Ok) && so == s);
+			}
+
+			{
 				String s = "A normal string";
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "\"A normal string\"");

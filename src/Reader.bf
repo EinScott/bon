@@ -271,8 +271,10 @@ namespace Bon.Integrated
 			return num;
 		}
 
-		public Result<int> StringLength()
+		public Result<(int len , bool isVerbatim)> StringLength()
 		{
+			let isVerbatim = Check('@');
+
 			if (inStr.Length == 0 || !Check('"'))
 				Error!("Expected string");
 
@@ -281,7 +283,8 @@ namespace Bon.Integrated
 			while (strLen < inStr.Length && (isEscaped || inStr[strLen] != '"'))
 			{
 				let char = inStr[strLen];
-				isEscaped = char == '\\' && !isEscaped;
+				isEscaped = char == '\\' && !isEscaped && !isVerbatim;
+
 				if ((char >= (char8)0) && (char <= (char8)0x1F) && char != '\t')
 				{
 					inStr.RemoveFromStart(strLen - 1);
@@ -289,6 +292,7 @@ namespace Bon.Integrated
 						Error!("Newline not allowed in string. Use escape sequence");
 					else Error!("Char not allowed in string. Use escape sequence");
 				}
+
 				strLen++;
 			}
 
@@ -299,18 +303,22 @@ namespace Bon.Integrated
 				Error!("Unterminated string");
 			}
 
-			return .Ok(strLen);
+			return .Ok((strLen, isVerbatim));
 		}
 
-		public Result<void> String(String into, int parsedStrLen)
+		public Result<void> String(String into, int parsedStrLen, bool isVerbatim)
 		{
 			let stringContent = StringView(&inStr[0], parsedStrLen);
 
-			if (String.UnQuoteStringContents(stringContent, into) case .Err(let errPos))
+			if (!isVerbatim)
 			{
-				inStr.RemoveFromStart(errPos);
-				Error!("Invalid escape sequence");
-			}	
+				if (String.UnQuoteStringContents(stringContent, into) case .Err(let errPos))
+				{
+					inStr.RemoveFromStart(errPos);
+					Error!("Invalid escape sequence");
+				}
+			}
+			else into.Append(stringContent);
 
 			inStr.RemoveFromStart(parsedStrLen);
 
