@@ -337,10 +337,10 @@ namespace Bon.Tests
 			}
 
 			{
-				StringView s = @"S:ome\Path\To.file";
+				StringView s = @"S:\ome\Path\To.file";
 				StringView so = ?;
-				Test.Assert((Bon.Deserialize(ref so, "@\"S:ome\\Path\\To.file\"") case .Ok) && so == s);
-				Test.Assert((Bon.Deserialize(ref so, "\"S:ome\\\\Path\\\\To.file\"") case .Ok) && so == s);
+				Test.Assert((Bon.Deserialize(ref so, "@\"S:\\ome\\Path\\To.file\"") case .Ok) && so == s);
+				Test.Assert((Bon.Deserialize(ref so, "\"S:\\\\ome\\\\Path\\\\To.file\"") case .Ok) && so == s);
 			}
 
 			{
