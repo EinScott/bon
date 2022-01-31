@@ -1254,7 +1254,7 @@ namespace Bon.Tests
 				s[0,0,2,1] = 9090;
 
 				let str = Bon.Serialize(s, .. scope .());
-				Test.Assert(str == "<1,2,3,4>[[[[5000],?,[0,9090]],[[0,0,0,1646],?]]]");
+				Test.Assert(str == "<1,2,3,4>[[[[5000],?,[?,9090]],[[?,?,?,1646],?]]]");
 
 				uint64[,,,] so = null;
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
@@ -1359,7 +1359,7 @@ namespace Bon.Tests
 
 			{
 				StructB so = ?;
-				Test.Assert((Bon.Deserialize(ref so, "{name=$[{},{age=325}],age=23,type=1}") case .Ok) && so.name == "{},{age=325}");
+				Test.Assert((Bon.Deserialize(ref so, "{name=$[{},\n{age=325}],age=23,type=1}") case .Ok) && so.name == "{},\n{age=325}");
 			}
 		}
 

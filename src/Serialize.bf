@@ -459,7 +459,7 @@ namespace Bon.Integrated
 					for (let i < includeCount)
 					{
 						var arrVal = Variant.CreateReference(arrType, ptr);
-						if (doArrayOneLine || DoInclude!(ref arrVal, env.serializeFlags))
+						if (DoInclude!(ref arrVal, env.serializeFlags))
 							Value(writer, ref arrVal, env, doArrayOneLine);
 						else
 						{
