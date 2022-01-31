@@ -11,14 +11,6 @@ namespace Bon
 	// near-arbitrary tree acces through helper methods derived from arbitrary parsing?
 	// -> could be done through a lot of re-parsing and BonContext or something like that on wich to call... but no?
 
-	// TODO some meta stuff? { version=1, thing=${} } -> $ sign means "keep this just as a substring... it's a separate bon thing" STILL DO THIS ON IT'S OWN-- entry just counts as str
-	// - BON subfiles
-	// -> everthing after $ until entry end is processed as bon string, outputtet as string into field
-	// -> retain formatting (naturally), but reduce leftover tabs from current tab level (reduce after having countet to the sublevel count, initiallly 0)
-	// -> how does file level array work?
-	//  -> could either have $[] be mandartory, so then the file will be everythin inside the brackets, which will be the file level
-	//  -> or could this be optional, so ${} -> {} works and $[] -> [] too, but $'[{},{}] would be {},{} or something similar?
-
 	// generic templates for custom handlers...
 	// just funtions for array(ptr, len & what else is needed) i guess? that array (of course) call but also something like SizedList<> which we could use as a demo?
 	// support Variant serialize?

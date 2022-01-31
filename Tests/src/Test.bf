@@ -316,7 +316,6 @@ namespace Bon.Tests
 			}
 		}
 
-		// TODO: multiline strings maybe?
 		[Test]
 		static void Strings()
 		{
@@ -1148,6 +1147,7 @@ namespace Bon.Tests
 			}
 
 			{
+				gBonEnv.RegisterPolyType!(typeof(uint8[]));
 				Object s = scope uint8[](12, 24, 53, 34, 5, 0, 0);
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "(uint8[])<7>[12,24,53,34,5]");
@@ -1262,6 +1262,11 @@ namespace Bon.Tests
 
 					Test.Assert((Bon.Deserialize(ref so, con) case .Ok) && so == s);
 				}
+			}
+
+			{
+				StructB so = ?;
+				Test.Assert((Bon.Deserialize(ref so, "{name=$[{},{age=325}],age=23,type=1}") case .Ok) && so.name == "{},{age=325}");
 			}
 		}
 

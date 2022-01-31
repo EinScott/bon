@@ -271,7 +271,7 @@ namespace Bon.Integrated
 			return num;
 		}
 
-		public Result<void> String(String into)
+		public Result<int> StringLength()
 		{
 			if (inStr.Length == 0 || !Check('"'))
 				Error!("Expected string");
@@ -297,9 +297,14 @@ namespace Bon.Integrated
 				if (strLen > 0)
 					inStr.RemoveFromStart(inStr.Length - 1);
 				Error!("Unterminated string");
-			}	
+			}
 
-			let stringContent = StringView(&inStr[0], strLen);
+			return .Ok(strLen);
+		}
+
+		public Result<void> String(String into, int parsedStrLen)
+		{
+			let stringContent = StringView(&inStr[0], parsedStrLen);
 
 			if (String.UnQuoteStringContents(stringContent, into) case .Err(let errPos))
 			{
@@ -307,14 +312,44 @@ namespace Bon.Integrated
 				Error!("Invalid escape sequence");
 			}	
 
-			inStr.RemoveFromStart(strLen);
+			inStr.RemoveFromStart(parsedStrLen);
 
 			if (!Check('\"'))
 				Debug.FatalError(); // Should not happen, since otherwise strLen would go on until the end of the string!
 
-			Try!(ConsumeEmpty());
+			return ConsumeEmpty();
+		}
 
-			return .Ok;
+		public Result<int> SubfileStringLength()
+		{
+			Try!(ConsumeEmpty());
+			Try!(ArrayBlock());
+
+			if (inStr.Length == 0)
+				Error!("Unterminated subfile string");
+
+			int len = 0;
+			int arrayDepth = 0;
+			while (inStr.Length > len && (arrayDepth != 0 || inStr[len] != ']'))
+			{
+				let char = inStr[len];
+				if (char == '[')
+					arrayDepth++;
+				else if (char == ']')
+					arrayDepth--;
+
+				len++;
+			}
+
+			return .Ok(len);
+		}
+
+		public Result<void> SubfileString(String into, int parsedStrLen)
+		{
+			into.Append(StringView(&inStr[0], parsedStrLen)..Trim());
+			inStr.RemoveFromStart(parsedStrLen);
+
+			return ArrayBlockEnd();
 		}
 
 		public Result<char32> Char()
@@ -438,6 +473,12 @@ namespace Bon.Integrated
 			return Check('(');
 		}
 
+		[Inline]
+		public bool IsSubfile()
+		{
+			return Check('$');
+		}
+
 		public Result<StringView> Type()
 		{
 			Try!(ConsumeEmpty());
@@ -553,13 +594,13 @@ namespace Bon.Integrated
 		[Inline]
 		public bool ArrayHasMore()
 		{
-			return !Check(']', false);
+			return !Check(']', false) && inStr.Length > 0;
 		}
 
 		[Inline]
 		public bool ObjectHasMore()
 		{
-			return !Check('}', false);
+			return !Check('}', false) && inStr.Length > 0;
 		}
 
 		public Result<void> EntryEnd()

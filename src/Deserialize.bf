@@ -191,9 +191,13 @@ namespace Bon.Integrated
 			}
 
 			if (reader.IsDefault())
+			{
 				MakeDefault(ref val, env);
+
+				Try!(reader.ConsumeEmpty());
+			}	
 			else if (reader.IsIrrelevantEntry())
-				Error!(reader, "Ignored is only valid in arrays");
+				Error!(reader, "Ignored markers are only valid in arrays");
 			else if (valType.IsPrimitive)
 			{
 				if (valType.IsInteger)
@@ -275,11 +279,13 @@ namespace Bon.Integrated
 					if (reader.IsNull())
 					{
 						*(StringView*)val.DataPtr = default;
+
+						Try!(reader.ConsumeEmpty());
 					}
 					else
 					{
-						String parsedStr = scope .();
-						Try!(reader.String(parsedStr));
+						String parsedStr = null;
+						String!(reader, ref parsedStr, env);
 
 						if (env.stringViewHandler != null)
 						{
@@ -384,6 +390,8 @@ namespace Bon.Integrated
 							// Null unless we leave these alone!
 							if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
 								MakeDefault(ref arrVal, env);
+
+							Try!(reader.ConsumeEmpty());
 						}
 						else Try!(Value(reader, ref arrVal, env));
 
@@ -416,6 +424,8 @@ namespace Bon.Integrated
 				{
 					if (*(void**)val.DataPtr != null)
 						MakeDefault(ref val, env);
+
+					Try!(reader.ConsumeEmpty());
 				}
 				else
 				{
@@ -467,12 +477,10 @@ namespace Bon.Integrated
 
 						if (polyType == typeof(String))
 						{
-							String parsedStr = scope .();
-							Try!(reader.String(parsedStr));
-
 							var str = *(String*)(void**)val.DataPtr;
 
-							str.Set(parsedStr);
+							str.Clear();
+							String!(reader, ref str, env);
 						}
 						else Try!(Class(reader, ref val, env));
 					}
@@ -485,6 +493,23 @@ namespace Bon.Integrated
 			else Debug.FatalError();
 
 			return .Ok;
+		}
+
+		public static mixin String(BonReader reader, ref String parsedStr, BonEnvironment env)
+		{
+			let isSubfile = reader.IsSubfile();
+			int len = 0;
+			if (isSubfile)
+				len = Try!(reader.SubfileStringLength());
+			else len = Try!(reader.StringLength());
+			Debug.Assert(len >= 0);
+
+			if (parsedStr == null)
+				parsedStr = scope:mixin .(len);
+
+			if (isSubfile)
+				Try!(reader.SubfileString(parsedStr, len));
+			else Try!(reader.String(parsedStr, len));
 		}
 
 		public static Result<void> Class(BonReader reader, ref Variant val, BonEnvironment env)
