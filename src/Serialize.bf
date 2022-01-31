@@ -273,7 +273,7 @@ namespace Bon.Integrated
 
 					if (!polyType.IsObject)
 					{
-						// TODO: DO PROPERLY... currently we
+						// @report currently we
 						// hack together a pointer of the payload, as
 						// currently the box doesn't have reflection when
 						// they payload does. If that gets fixed, the box

@@ -987,7 +987,11 @@ namespace Bon.Tests
 			public new uint64 something;
 		}
 
-		// TODO: try for something with T
+		[Serializable,PolySerialize]
+		class LookAThing<T>
+		{
+			public T tThingLook;
+		}
 
 		[Test]
 		static void Classes()
@@ -1063,6 +1067,27 @@ namespace Bon.Tests
 				// I'm still glad it just works. Outermost class' fields first, then down the inheritance tree
 				FinClass co = null;
 				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType() && Bon.Serialize(co, .. scope .()) == "{something=222252222,something=26,Name=\"fin\"}");
+				delete co;
+			}
+
+			{
+				let c = scope LookAThing<int>() { tThingLook = 55 };
+
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "{tThingLook=55}");
+
+				LookAThing<int> co = scope .();
+				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && co.tThingLook == c.tThingLook);
+			}
+
+			{
+				Object c = scope LookAThing<int>() { tThingLook = 55 };
+
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "(Bon.Tests.LookAThing<int>){tThingLook=55}");
+
+				Object co = null;
+				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && Bon.Serialize(co, .. scope .()) == "(Bon.Tests.LookAThing<int>){tThingLook=55}");
 				delete co;
 			}
 		}

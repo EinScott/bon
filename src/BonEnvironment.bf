@@ -67,7 +67,7 @@ namespace Bon
 
 		public mixin RegisterPolyType(Type type)
 		{
-			Debug.Assert(type is TypeInstance, "Type not set up properly! Put [Serializable,PolySerialize] on it or force reflection info & always include.");
+			Debug.Assert(type is TypeInstance, "Type not set up properly! Put [Serializable] on it or force reflection info & always include.");
 			polyTypes.Add(type.GetFullName(.. new .()), type);
 		}
 
