@@ -372,51 +372,7 @@ namespace Bon.Integrated
 				}
 
 				let t = (SizedArrayType)valType;
-				let count = t.ElementCount;
-				
-				Try!(reader.ArrayBlock());
-
-				if (count > 0)
-				{
-					let arrType = t.UnderlyingType;
-					var ptr = (uint8*)val.DataPtr;
-					var i = 0;
-					for (; i < count && reader.ArrayHasMore(); i++)
-					{
-						var arrVal = Variant.CreateReference(arrType, ptr);
-
-						if (reader.IsIrrelevantEntry())
-						{
-							// Null unless we leave these alone!
-							if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
-								MakeDefault(ref arrVal, env);
-
-							Try!(reader.ConsumeEmpty());
-						}
-						else Try!(Value(reader, ref arrVal, env));
-
-						if (reader.ArrayHasMore())
-							Try!(reader.EntryEnd());
-
-						ptr += arrType.Stride;
-					}
-
-					if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
-					{
-						// Default unaffected entries (since they aren't serialized)
-						for (let j < count - i)
-						{
-							var arrVal = Variant.CreateReference(arrType, ptr);
-							MakeDefault(ref arrVal, env);
-
-							ptr += arrType.Stride;
-						}
-					}
-				}
-				if (reader.ArrayHasMore())
-					Error!(reader, "Sized array cannot fit element");
-
-				Try!(reader.ArrayBlockEnd());
+				Try!(Array(reader, t.UnderlyingType, val.DataPtr, t.ElementCount, env));
 			}
 			else if (TypeHoldsObject!(valType))
 			{
@@ -472,7 +428,8 @@ namespace Bon.Integrated
 						}
 						else Debug.Assert(!valType.IsInterface);
 
-						if (*(void**)val.DataPtr == null)
+						if (*(void**)val.DataPtr == null
+							&& !polyType.IsArray) // Arrays handle it differently
 							Try!(MakeInstanceRef(ref val, env));
 
 						if (polyType == typeof(String))
@@ -481,6 +438,65 @@ namespace Bon.Integrated
 
 							str.Clear();
 							String!(reader, ref str, env);
+						}
+						else if (polyType.IsArray) ARRAY:
+						{
+							Debug.Assert(polyType != typeof(Array) && polyType is ArrayType);
+
+							let t = polyType as ArrayType;
+
+							let hasSizer = reader.ArrayHasSizer();
+							var fullCount = 0;
+							int[] counts = null;
+							switch (t.UnspecializedType)
+							{
+							case typeof(Array1<>):
+								if (hasSizer)
+								{
+									let sizer = Try!(reader.ArraySizer(false));
+									fullCount = Try!(ParseInt<int>(reader, sizer)); // We already check it's not negative
+								}
+								else Error!(reader, "Expected array sizer"); // TODO: peek into structure to make sizer optional!
+
+							case typeof(Array2<>): // alloc counts with scope:ARRAY
+							case typeof(Array3<>):
+							case typeof(Array4<>):
+							default:
+								Debug.FatalError();
+							}
+
+							// Deallocate old array if count doesn't match
+							if (*(void**)val.DataPtr != null)
+							{
+								let currCount = val.Get<Array>().Count;
+								if (fullCount != currCount)
+									MakeDefault(ref val, env);
+							}
+
+							if (*(void**)val.DataPtr == null)
+							{
+								// TODO: allocate new array if is null
+								// use ArrayType.CreateObject
+								// then set Length1 or whatever correctly too (only mLength gets set, which is the whole array length)
+							}
+
+							let arrType = t.GetGenericArg(0); // T
+							let classData = *(uint8**)val.DataPtr;
+
+							void* arrPtr = null;
+							if (t.GetField("mFirstElement") case .Ok(let field))
+								arrPtr = classData + t.GetField("mFirstElement").Get().MemberOffset; // T*
+							else Error!(reader, "No reflection data forced for array type!"); // for example: [Serializable] extension Array1<T> {} or through build settings
+
+							switch (t.UnspecializedType)
+							{
+							case typeof(Array1<>): Try!(Array(reader, arrType, arrPtr, fullCount, env));
+							case typeof(Array2<>):
+							case typeof(Array3<>):
+							case typeof(Array4<>):
+							default:
+								Debug.FatalError();
+							}
 						}
 						else Try!(Class(reader, ref val, env));
 					}
@@ -493,23 +509,6 @@ namespace Bon.Integrated
 			else Debug.FatalError();
 
 			return .Ok;
-		}
-
-		public static mixin String(BonReader reader, ref String parsedStr, BonEnvironment env)
-		{
-			let isSubfile = reader.IsSubfile();
-			int len = 0;
-			if (isSubfile)
-				len = Try!(reader.SubfileStringLength());
-			else len = Try!(reader.StringLength());
-			Debug.Assert(len >= 0);
-
-			if (parsedStr == null)
-				parsedStr = scope:mixin .(len);
-
-			if (isSubfile)
-				Try!(reader.SubfileString(parsedStr, len));
-			else Try!(reader.String(parsedStr, len));
 		}
 
 		public static Result<void> Class(BonReader reader, ref Variant val, BonEnvironment env)
@@ -569,6 +568,208 @@ namespace Bon.Integrated
 			}
 
 			return reader.ObjectBlockEnd();
+		}
+
+		public static Result<void> Array(BonReader reader, Type arrType, void* arrPtr, int count, BonEnvironment env)
+		{
+			Try!(reader.ArrayBlock());
+
+			if (count > 0)
+			{
+				var ptr = (uint8*)arrPtr;
+				var i = 0;
+				for (; i < count && reader.ArrayHasMore(); i++)
+				{
+					var arrVal = Variant.CreateReference(arrType, ptr);
+
+					if (reader.IsIrrelevantEntry())
+					{
+						// Null unless we leave these alone!
+						if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+							MakeDefault(ref arrVal, env);
+
+						Try!(reader.ConsumeEmpty());
+					}
+					else Try!(Value(reader, ref arrVal, env));
+
+					if (reader.ArrayHasMore())
+						Try!(reader.EntryEnd());
+
+					ptr += arrType.Stride;
+				}
+
+				if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+				{
+					if (arrType.IsValueType)
+						Internal.MemSet(ptr, 0, arrType.Stride * (count - i)); // MakeDefault would just do the same here
+					else
+					{
+						// Default unaffected entries (since they aren't serialized)
+						for (let j < count - i)
+						{
+							var arrVal = Variant.CreateReference(arrType, ptr);
+							MakeDefault(ref arrVal, env);
+
+							ptr += arrType.Stride;
+						}
+					}
+				}
+			}
+			if (reader.ArrayHasMore())
+				Error!(reader, "Sized array cannot fit element");
+
+			return reader.ArrayBlockEnd();
+		}
+
+		public static Result<void> MultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, BonEnvironment env, params int[] counts)
+		{
+			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
+
+			let count = counts[0];
+			var stride = counts[1];
+			if (counts.Count > 2)
+				for (let i < counts.Count - 2)
+					stride *= counts[i + 2];
+			stride *= arrType.Stride;
+
+			mixin DefaultArray(void* ptr)
+			{
+				let inner = counts.Count - 1;
+				if (inner > 1)
+				{
+					int[] innerCounts = scope .[inner];
+					for (let j < inner)
+						innerCounts[j] = counts[j + 1];
+
+					DefaultMultiDimensionalArray(arrType, ptr, env, params innerCounts);
+				}
+				else DefaultArray(arrType, ptr, counts[1], env);
+			}
+
+			Try!(reader.ArrayBlock());
+
+			if (count > 0)
+			{
+				var ptr = (uint8*)arrPtr;
+				var i = 0;
+				for (; i < count && reader.ArrayHasMore(); i++)
+				{
+					// Since we don't call value in any case, we have to check for this ourselves
+					let isDefault = reader.IsDefault();
+					if (isDefault || reader.IsIrrelevantEntry())
+					{
+						// Null unless we leave these alone!
+						if (isDefault || !env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+						{
+							if (arrType.IsValueType)
+								Internal.MemSet(ptr, 0, stride); // MakeDefault would just do the same here
+							else DefaultArray!(ptr);
+						}
+
+						Try!(reader.ConsumeEmpty());
+					}
+					else
+					{
+						let inner = counts.Count - 1;
+						if (inner > 1)
+						{
+							int[] innerCounts = scope .[inner];
+							for (let j < inner)
+								innerCounts[j] = counts[j + 1];
+
+							MultiDimensionalArray(reader, arrType, ptr, env, params innerCounts);
+						}
+						else Array(reader, arrType, ptr, counts[1], env);
+					}
+
+					if (reader.ArrayHasMore())
+						Try!(reader.EntryEnd());
+
+					ptr += stride;
+				}
+
+				if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+				{
+					if (arrType.IsValueType)
+						Internal.MemSet(ptr, 0, stride * (count - i)); // MakeDefault would just do the same here
+					else
+					{
+						// Default unaffected entries (since they aren't serialized)
+						for (let j < count - i)
+						{
+							DefaultArray!(ptr);
+
+							ptr += stride;
+						}
+					}
+				}
+			}
+			if (reader.ArrayHasMore())
+				Error!(reader, "Sized array cannot fit element");
+
+			return reader.ArrayBlockEnd();
+		}
+
+		public static void DefaultArray(Type arrType, void* arrPtr, int count, BonEnvironment env)
+		{
+			var ptr = (uint8*)arrPtr;
+			for (let j < count)
+			{
+				var arrVal = Variant.CreateReference(arrType, ptr);
+				MakeDefault(ref arrVal, env);
+
+				ptr += arrType.Stride;
+			}
+		}
+
+		public static void DefaultMultiDimensionalArray(Type arrType, void* arrPtr, BonEnvironment env, params int[] counts)
+		{
+			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
+
+			let count = counts[0];
+			var stride = counts[1];
+			if (counts.Count > 2)
+				for (let i < counts.Count - 2)
+					stride *= counts[i + 2];
+			stride *= arrType.Stride;
+
+			if (count > 0)
+			{
+				var ptr = (uint8*)arrPtr;
+				
+				for (let i < count)
+				{
+					let inner = counts.Count - 1;
+					if (inner > 1)
+					{
+						int[] innerCounts = scope .[inner];
+						for (let j < inner)
+							innerCounts[j] = counts[j + 1];
+
+						DefaultMultiDimensionalArray(arrType, ptr, env, params innerCounts);
+					}
+					else DefaultArray(arrType, ptr, counts[1], env);
+
+					ptr += stride;
+				}
+			}
+		}
+
+		public static mixin String(BonReader reader, ref String parsedStr, BonEnvironment env)
+		{
+			let isSubfile = reader.IsSubfile();
+			int len = 0;
+			if (isSubfile)
+				len = Try!(reader.SubfileStringLength());
+			else len = Try!(reader.StringLength());
+			Debug.Assert(len >= 0);
+
+			if (parsedStr == null)
+				parsedStr = scope:mixin .(len);
+
+			if (isSubfile)
+				Try!(reader.SubfileString(parsedStr, len));
+			else Try!(reader.String(parsedStr, len));
 		}
 
 		static Result<T> ParseInt<T>(BonReader reader, StringView val, bool allowNonDecimal = true) where T : IInteger, var

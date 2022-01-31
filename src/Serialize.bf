@@ -321,30 +321,28 @@ namespace Bon.Integrated
 							*(int_strsize*)(classData + t.GetField(field).Get().MemberOffset)
 						}
 
-						if (t.UnspecializedType == typeof(Array1<>))
+						switch (t.UnspecializedType)
 						{
+						case typeof(Array1<>):
 							writer.Sizer((.)count);
 							Array(writer, arrType, arrPtr, count, env);
-						}
-						else if (t.UnspecializedType == typeof(Array2<>))
-						{
+
+						case typeof(Array2<>):
 							let count1 = GetLenField!("mLength1");
 							count /= count1;
 							writer.MultiSizer((.)count,(.)count1);
 
 							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1);
-						}
-						else if (t.UnspecializedType == typeof(Array3<>))
-						{
+
+						case typeof(Array3<>):
 							let count2 = GetLenField!("mLength2");
 							let count1 = GetLenField!("mLength1");
 							count /= (count1 * count2);
 							writer.MultiSizer((.)count,(.)count1,(.)count2);
 
 							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1, count2);
-						}
-						else if (t.UnspecializedType == typeof(Array4<>))
-						{
+
+						case typeof(Array4<>):
 							let count1 = GetLenField!("mLength1");
 							let count2 = GetLenField!("mLength2");
 							let count3 = GetLenField!("mLength3");
@@ -352,8 +350,10 @@ namespace Bon.Integrated
 							writer.MultiSizer((.)count,(.)count1,(.)count2,(.)count3);
 
 							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1, count2, count3);
+
+						default:
+							Debug.FatalError();
 						}
-						else Debug.FatalError();
 					}
 					// TODO consider using interfaces like ICollection<> and so on and using that? -> should also work for structs i guess? but not now
 					// or just use custom stuff right away
