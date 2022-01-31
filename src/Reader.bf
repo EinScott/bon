@@ -202,13 +202,13 @@ namespace Bon.Integrated
 			else return false;
 		}
 
-		StringView ParseName(bool allowDot = false)
+		StringView ParseName()
 		{
 			var nameLen = 0;
 			for (; nameLen < inStr.Length; nameLen++)
 			{
 				let char = inStr[nameLen];
-				if (!char.IsLetterOrDigit && char != '_' && (!allowDot || char != '.'))
+				if (!char.IsLetterOrDigit && char != '_')
 					break;
 			}
 
@@ -468,33 +468,104 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
-		public bool IsTyped()
-		{
-			return Check('(');
-		}
-
-		[Inline]
 		public bool IsSubfile()
 		{
 			return Check('$');
 		}
 
+		[Inline]
+		public bool IsTyped()
+		{
+			return Check('(', false);
+		}
+
 		public Result<StringView> Type()
 		{
+			if (!Check('('))
+				Error!("Expected type marker");
 			Try!(ConsumeEmpty());
 
-			let name = ParseName(true);
+			var nameLen = 0;
+			var bracketDepth = 0;
+			for (; nameLen < inStr.Length; nameLen++)
+			{
+				let char = inStr[nameLen];
+
+				if (char.IsWhiteSpace || (char == ')' && bracketDepth == 0))
+					break;
+				else
+				{
+					if (char == '(')
+						bracketDepth++;
+					else if (char == ')')
+						bracketDepth--;
+				}
+			}
+			Debug.Assert(bracketDepth == 0);
+
+			let name = inStr.Substring(0, nameLen);
+			inStr.RemoveFromStart(nameLen);
+
 			if (name.Length == 0)
 				Error!("Epected type name");
 
 			Try!(ConsumeEmpty());
 
 			if (!Check(')'))
-				Error!("Unterminated type mark");
+				Error!("Unterminated type marker");
 
 			Try!(ConsumeEmpty());
 
 			return name;
+		}
+
+		public Result<int_arsize> ArrayPeekCount()
+		{
+			// This is only an estimate, but will be correct
+			// if the later functions decide the array is valid
+			// in the first place
+
+			int_arsize count = 1;
+			int i = 0;
+			let len = inStr.Length;
+
+			// Advance until opening [
+			while (i < len && inStr[i] != '[')
+				i++;
+
+			if (inStr[i] != '[')
+				Error!("Expected array");
+
+			bool wasEmpty = true;
+			int arrDepth = -1; // We're still pointing at the opening bracket currently...
+			while (arrDepth != 0 || inStr[i] != ']')
+			{
+				let char = inStr[i];
+				switch (char)
+				{
+				case '[':
+					arrDepth++;
+				case ']':
+					arrDepth--;
+				case ',':
+					if (arrDepth == 0)
+						count++;
+				default:
+					if (!char.IsWhiteSpace)
+						wasEmpty = false;
+				}
+
+				i++;
+
+				if (i >= len)
+					Error!("Unterminated array");
+			}
+			Debug.Assert(arrDepth == 0);
+
+			if (wasEmpty && count == 1)
+				count = 0;
+
+			return count;
 		}
 
 		[Inline]
@@ -533,10 +604,12 @@ namespace Bon.Integrated
 			return Check('<', false);
 		}
 
-		public Result<StringView> ArraySizer(bool constValid)
+		public Result<StringView[N]> ArraySizer<N>(bool constValid) where N : const int
 		{
 			if (!Check('<'))
 				Error!("Expected array sizer");
+
+			Try!(ConsumeEmpty());
 
 			if (inStr.StartsWith("const"))
 			{
@@ -547,16 +620,29 @@ namespace Bon.Integrated
 				Try!(ConsumeEmpty());
 			}
 
-			let int = Try!(Integer());
-			if (int.StartsWith('-'))
-				Error!("Expected positive integer");
+			StringView[N] ints = default;
+			for (let i < N)
+			{
+				let int = Try!(Integer());
+				if (int.StartsWith('-'))
+					Error!("Expected positive integer");
+
+				ints[i] = int;
+
+				if (i + 1 < N)
+				{
+					if (!Check(','))
+						Error!("Incomplete array sizer");
+					Try!(ConsumeEmpty());
+				}
+			}	 
 
 			if (!Check('>'))
 				Error!("Unterminated array sizer");
 
 			Try!(ConsumeEmpty());
 
-			return int;
+			return ints;
 		}
 
 		public Result<void> ArrayBlock()

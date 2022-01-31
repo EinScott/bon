@@ -5,6 +5,12 @@ using System.Collections;
 
 namespace System
 {
+	// TODO: do we move these direclty into bon
+	// or just put them here somewhere as a suggestion
+	// for a 'default' config? Either way, we should do
+	// the same thing with the standard box primitives,
+	// which we currently have in bon!
+
 	[Serializable]
 	extension String {}
 
@@ -1059,16 +1065,6 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType() && Bon.Serialize(co, .. scope .()) == "{something=222252222,something=26,Name=\"fin\"}");
 				delete co;
 			}
-
-			{
-				// do also with alloc arrays
-
-				/*let a = Object[4](
-					scope AClass(),
-					scope box 10,
-					scope String("look, a string!"),
-					scope Object());*/
-			}
 		}
 
 		[Test]
@@ -1113,6 +1109,11 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref os, str) case .Ok) && os.GetType() == s.GetType() && Bon.Serialize(os, .. scope .()) == str);
 				delete os;
 			}
+
+			{
+				IThing os = null;
+				Test.Assert(Bon.Deserialize(ref os, "{time=65.5,value=11917585743392890597}") case .Err);
+			}
 		}
 
 		static mixin ArrayEqual<T>(T a, T b) where T : var
@@ -1135,25 +1136,53 @@ namespace Bon.Tests
 		[Test]
 		static void Arrays()
 		{
-			// TODO: deserialize
+			{
+				uint8[] s = scope .();
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "<0>[]");
+
+				uint8[] so = scope .[0];
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
+			}
+
+			{
+				// Infer size to be 0
+
+				uint8[] so = null;
+				Test.Assert((Bon.Deserialize(ref so, "[ ]") case .Ok) && so.Count == 0);
+				delete so;
+			}
 
 			{
 				uint8[] s = scope .(12, 24, 53, 34, 5, 0, 0);
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "<7>[12,24,53,34,5]");
 
-				/*uint8[] so = scope .[7];
-				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));*/
+				uint8[] so = scope .[7];
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
 			}
 
 			{
+				// Infer size to be 5
+
+				uint8[] s = scope .(12, 24, 53, 34, 5);
+
+				uint8[] so = null;
+				Test.Assert((Bon.Deserialize(ref so, "[12,24,53,34,5]") case .Ok) && ArrayEqual!(s, so));
+				delete so;
+			}
+
+			{
+				// Add array type to lookup for the deserialize call to find
 				gBonEnv.RegisterPolyType!(typeof(uint8[]));
+
 				Object s = scope uint8[](12, 24, 53, 34, 5, 0, 0);
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "(uint8[])<7>[12,24,53,34,5]");
 
-				/*Object so = null;
-				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && s.GetType() == so.GetType());*/
+				Object so = null;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && s.GetType() == so.GetType());
+				delete so;
 			}
 
 			{
@@ -1161,8 +1190,9 @@ namespace Bon.Tests
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "<7>[12,24,53,34,5]");
 
-				/*uint8[] so = null;
-				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));*/
+				uint8[] so = null;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
+				delete so;
 			}
 
 			{
@@ -1170,8 +1200,9 @@ namespace Bon.Tests
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "<2,2>[[532,332],[224,2896]]");
 
-				/*uint16[,] so = null;
-				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));*/
+				uint16[,] so = null;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
+				delete so;
 			}
 
 			{
@@ -1179,8 +1210,9 @@ namespace Bon.Tests
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "<2,5,1>[[[1],[2],[3],[4],[5]],[[20],[21],[22],[23],[24]]]");
 
-				/*uint16[,,] so = null;
-				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));*/
+				uint16[,,] so = null;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
+				delete so;
 			}
 
 			{
@@ -1192,8 +1224,37 @@ namespace Bon.Tests
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "<1,2,3,4>[[[[5000],?,[0,9090]],[[0,0,0,1646],?]]]");
 
-				/*uint64[,,,] so = null;
-				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));*/
+				uint64[,,,] so = null;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
+				delete so;
+			}
+
+			{
+				uint16[,,] so = null;
+				Test.Assert(Bon.Deserialize(ref so, "<2,5,1>[[[1],[2],[3],[4],[5]],[[20],[21],[22],[23],[24],[]]]") case .Err);
+				delete so;
+			}
+
+			{
+				uint16[,,] so = null;
+				Test.Assert(Bon.Deserialize(ref so, "<2,5>") case .Err);
+				delete so;
+			}
+
+			{
+				uint16[,,] so = null;
+				Test.Assert(Bon.Deserialize(ref so, " < 2,5 , 1 > [[[1],[2],[ 3 ] ,  [ 4 ] ] ] ") case .Ok);
+				delete so;
+			}
+
+			{
+				uint16[,,] so = null;
+				Test.Assert(Bon.Deserialize(ref so, "<2,5,") case .Err);
+			}
+
+			{
+				uint16[,,] so = null;
+				Test.Assert(Bon.Deserialize(ref so, "<const 2,5>") case .Err);
 			}
 		}
 
@@ -1340,12 +1401,6 @@ namespace Bon.Tests
 			Test.Assert(Bon.Deserialize(ref a, "<const12>[]\n\n") case .Ok); // There is no reason for this to work, but also none for it to not work
 			Test.Assert(Bon.Deserialize(ref a, "<1>[]") case .Ok);
 			Test.Assert(Bon.Deserialize(ref a, "[?, ?],blahblah") case .Ok); // Only checks current entry...
-		}
-
-		[Test]
-		static void Bench()
-		{
-			// TODO
 		}
 	}
 }

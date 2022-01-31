@@ -318,7 +318,7 @@ namespace Bon.Integrated
 						
 						mixin GetLenField(String field)
 						{
-							*(int_strsize*)(classData + t.GetField(field).Get().MemberOffset)
+							*(int_arsize*)(classData + t.GetField(field).Get().MemberOffset)
 						}
 
 						switch (t.UnspecializedType)

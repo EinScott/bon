@@ -126,7 +126,7 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
-		public void Sizer(uint count, bool markConst = false)
+		public void Sizer(uint64 count, bool markConst = false)
 		{
 			outStr.Append('<');
 			if (markConst)
@@ -135,7 +135,7 @@ namespace Bon.Integrated
 			outStr.Append('>');	
 		}
 
-		public void MultiSizer<N>(params uint[N] counts) where N : const int
+		public void MultiSizer<N>(params uint64[N] counts) where N : const int
 		{
 			outStr.Append('<');
 			for (let i < N)

@@ -90,7 +90,7 @@ namespace Bon.Integrated
 		public static Result<void> MakeInstanceRef(ref Variant val, BonEnvironment env)
 		{
 			let valType = val.VariantType;
-			Debug.Assert(valType.IsObject || valType.IsPointer);
+			Debug.Assert(!valType.IsArray && (valType.IsObject || valType.IsPointer));
 
 			if (env.instanceHandlers.TryGetValue(val.VariantType, let funcs)
 				&& funcs.make != null)
@@ -125,6 +125,24 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
+		public static Result<void> MakeArrayInstanceRef(ref Variant val, int32 count)
+		{
+			Debug.Assert(val.VariantType.IsArray);
+			let valType = (ArrayType)val.VariantType;
+
+			// No way to do this in a custom way currently, since we'd have to pass count there
+			// too. Technically possible, but not for now.
+
+			void* objRef;
+			if (valType.CreateObject(count) case .Ok(let createdObj))
+				objRef = Internal.UnsafeCastToPtr(createdObj);
+			else Error!(val.VariantType, "Failed to create array");
+
+			*((void**)val.DataPtr) = objRef;
+
+			return .Ok;
+		}
+
 		public static Result<BonContext> Thing(BonReader reader, ref Variant val, BonEnvironment env)
 		{
 			Try!(reader.ConsumeEmpty());
@@ -143,7 +161,7 @@ namespace Bon.Integrated
 				else Try!(Value(reader, ref val, env));
 
 				if (!reader.ReachedEnd() && !reader.FileHasMore(false))
-					Error!(reader, "Expected entry end");
+					Error!(reader, "Expected end of entry");
 			}
 
 			// Remove ',' between this and possibly the next entry
@@ -164,11 +182,11 @@ namespace Bon.Integrated
 			let valType = val.VariantType;
 			var polyType = valType;
 
-			if (reader.IsTyped())
+			if (reader.IsTyped() || valType.IsInterface)
 			{
 				if (TypeHoldsObject!(valType))
 				{
-					let typeName = reader.Type();
+					let typeName = Try!(reader.Type());
 
 					if (env.polyTypes.TryGetValue(scope .(typeName), let type))
 					{
@@ -187,7 +205,7 @@ namespace Bon.Integrated
 					else if (typeName != (StringView)valType.GetFullName(.. scope .())) // It's the base type itself, and we got that!
 						Error!(reader, "Specified type not found in bonEnvironment.polyTypes");
 				}
-				else Error!(reader, "Type markers are only valid on reference types");
+				else Error!(reader, "Type markers are only valid on reference types and interfaces");
 			}
 
 			if (reader.IsDefault())
@@ -365,7 +383,7 @@ namespace Bon.Integrated
 			{
 				if (reader.ArrayHasSizer())
 				{
-					Try!(reader.ArraySizer(true));
+					Try!(reader.ArraySizer<const 1>(true));
 
 					// Ignore sizer content..
 					// we could do some checking, but erroring would be a bit harsh?
@@ -445,22 +463,53 @@ namespace Bon.Integrated
 
 							let t = polyType as ArrayType;
 
-							let hasSizer = reader.ArrayHasSizer();
-							var fullCount = 0;
-							int[] counts = null;
+							int_arsize fullCount = 0;
+							int_arsize[] counts = null;
 							switch (t.UnspecializedType)
 							{
 							case typeof(Array1<>):
-								if (hasSizer)
+								if (reader.ArrayHasSizer())
 								{
-									let sizer = Try!(reader.ArraySizer(false));
-									fullCount = Try!(ParseInt<int>(reader, sizer)); // We already check it's not negative
+									let sizer = Try!(reader.ArraySizer<const 1>(false));
+									fullCount = Try!(ParseInt<int_arsize>(reader, sizer[0])); // We already check it's not negative
 								}
-								else Error!(reader, "Expected array sizer"); // TODO: peek into structure to make sizer optional!
+								else
+								{
+									// We could do this in a more complicated manner for multi-dim arrays, just
+									// getting the max for each dimension, but why not just use an array of other
+									// arrays in that case? It's probably sensible for multi-dim arrays to state
+									// their size upfront!
 
-							case typeof(Array2<>): // alloc counts with scope:ARRAY
+									fullCount = Try!(reader.ArrayPeekCount());
+								}
+
+							case typeof(Array2<>):
+								let sizer = Try!(reader.ArraySizer<const 2>(false));
+								counts = scope:ARRAY .[2];
+								counts[0] = Try!(ParseInt<int_arsize>(reader, sizer[0]));
+								counts[1] = Try!(ParseInt<int_arsize>(reader, sizer[1]));
+
+								fullCount = counts[0] * counts[1];
+
 							case typeof(Array3<>):
+								let sizer = Try!(reader.ArraySizer<const 3>(false));
+								counts = scope:ARRAY .[3];
+								counts[0] = Try!(ParseInt<int_arsize>(reader, sizer[0]));
+								counts[1] = Try!(ParseInt<int_arsize>(reader, sizer[1]));
+								counts[2] = Try!(ParseInt<int_arsize>(reader, sizer[2]));
+
+								fullCount = counts[0] * counts[1] * counts[2];
+
 							case typeof(Array4<>):
+								let sizer = Try!(reader.ArraySizer<const 4>(false));
+								counts = scope:ARRAY .[4];
+								counts[0] = Try!(ParseInt<int_arsize>(reader, sizer[0]));
+								counts[1] = Try!(ParseInt<int_arsize>(reader, sizer[1]));
+								counts[2] = Try!(ParseInt<int_arsize>(reader, sizer[2]));
+								counts[3] = Try!(ParseInt<int_arsize>(reader, sizer[3]));
+
+								fullCount = counts[0] * counts[1] * counts[2] * counts[3];
+
 							default:
 								Debug.FatalError();
 							}
@@ -475,10 +524,10 @@ namespace Bon.Integrated
 
 							if (*(void**)val.DataPtr == null)
 							{
-								// TODO: allocate new array if is null
-								// use ArrayType.CreateObject
-								// then set Length1 or whatever correctly too (only mLength gets set, which is the whole array length)
+								// We're screwed on big collections, but who uses that...? hah
+								Try!(MakeArrayInstanceRef(ref val, (int32)fullCount));
 							}
+							Debug.Assert(val.Get<Array>().Count == fullCount);
 
 							let arrType = t.GetGenericArg(0); // T
 							let classData = *(uint8**)val.DataPtr;
@@ -488,12 +537,27 @@ namespace Bon.Integrated
 								arrPtr = classData + t.GetField("mFirstElement").Get().MemberOffset; // T*
 							else Error!(reader, "No reflection data forced for array type!"); // for example: [Serializable] extension Array1<T> {} or through build settings
 
+							mixin SetLenField(String field, int_arsize count)
+							{
+								*(int_arsize*)(classData + t.GetField(field).Get().MemberOffset) = count;
+							}
+
 							switch (t.UnspecializedType)
 							{
-							case typeof(Array1<>): Try!(Array(reader, arrType, arrPtr, fullCount, env));
-							case typeof(Array2<>):
-							case typeof(Array3<>):
 							case typeof(Array4<>):
+								SetLenField!("mLength3", counts[3]);
+								fallthrough;
+							case typeof(Array3<>):
+								SetLenField!("mLength2", counts[2]);
+								fallthrough;
+							case typeof(Array2<>):
+								SetLenField!("mLength1", counts[1]);
+
+								Try!(MultiDimensionalArray(reader, arrType, arrPtr, env, params counts));
+
+							case typeof(Array1<>):
+								Try!(Array(reader, arrType, arrPtr, fullCount, env));
+
 							default:
 								Debug.FatalError();
 							}
@@ -570,7 +634,7 @@ namespace Bon.Integrated
 			return reader.ObjectBlockEnd();
 		}
 
-		public static Result<void> Array(BonReader reader, Type arrType, void* arrPtr, int count, BonEnvironment env)
+		public static Result<void> Array(BonReader reader, Type arrType, void* arrPtr, int64 count, BonEnvironment env)
 		{
 			Try!(reader.ArrayBlock());
 
@@ -616,12 +680,12 @@ namespace Bon.Integrated
 				}
 			}
 			if (reader.ArrayHasMore())
-				Error!(reader, "Sized array cannot fit element");
+				Error!(reader, "Array cannot fit element");
 
 			return reader.ArrayBlockEnd();
 		}
 
-		public static Result<void> MultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, BonEnvironment env, params int[] counts)
+		public static Result<void> MultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, BonEnvironment env, params int_arsize[] counts)
 		{
 			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
 
@@ -637,7 +701,7 @@ namespace Bon.Integrated
 				let inner = counts.Count - 1;
 				if (inner > 1)
 				{
-					int[] innerCounts = scope .[inner];
+					int_arsize[] innerCounts = scope .[inner];
 					for (let j < inner)
 						innerCounts[j] = counts[j + 1];
 
@@ -673,13 +737,13 @@ namespace Bon.Integrated
 						let inner = counts.Count - 1;
 						if (inner > 1)
 						{
-							int[] innerCounts = scope .[inner];
+							int_arsize[] innerCounts = scope .[inner];
 							for (let j < inner)
 								innerCounts[j] = counts[j + 1];
 
-							MultiDimensionalArray(reader, arrType, ptr, env, params innerCounts);
+							Try!(MultiDimensionalArray(reader, arrType, ptr, env, params innerCounts));
 						}
-						else Array(reader, arrType, ptr, counts[1], env);
+						else Try!(Array(reader, arrType, ptr, counts[1], env));
 					}
 
 					if (reader.ArrayHasMore())
@@ -705,12 +769,12 @@ namespace Bon.Integrated
 				}
 			}
 			if (reader.ArrayHasMore())
-				Error!(reader, "Sized array cannot fit element");
+				Error!(reader, "Array cannot fit element");
 
 			return reader.ArrayBlockEnd();
 		}
 
-		public static void DefaultArray(Type arrType, void* arrPtr, int count, BonEnvironment env)
+		public static void DefaultArray(Type arrType, void* arrPtr, int_arsize count, BonEnvironment env)
 		{
 			var ptr = (uint8*)arrPtr;
 			for (let j < count)
@@ -722,7 +786,7 @@ namespace Bon.Integrated
 			}
 		}
 
-		public static void DefaultMultiDimensionalArray(Type arrType, void* arrPtr, BonEnvironment env, params int[] counts)
+		public static void DefaultMultiDimensionalArray(Type arrType, void* arrPtr, BonEnvironment env, params int_arsize[] counts)
 		{
 			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
 
@@ -742,7 +806,7 @@ namespace Bon.Integrated
 					let inner = counts.Count - 1;
 					if (inner > 1)
 					{
-						int[] innerCounts = scope .[inner];
+						int_arsize[] innerCounts = scope .[inner];
 						for (let j < inner)
 							innerCounts[j] = counts[j + 1];
 

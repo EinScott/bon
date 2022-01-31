@@ -26,10 +26,6 @@ namespace Bon
 	// REFERENCES "&somethingName" are a way to make the deserializer call a function with this string as the key (also member type, type member is on), which then is expected to provide a variant to put there!
 	// this could be a templated handler that calls a function? i guess... would do the parsing & being called in the first place part automatically then?
 
-	// TODO: rethink syntax & tokens!
-
-	// TODO: directly from & to files & streams?
-
 	static class Bon
 	{
 		public static void Serialize<T>(T value, String into, BonEnvironment env = gBonEnv)
@@ -48,6 +44,20 @@ namespace Bon
 			var variant = Variant.CreateReference(typeof(T), &value);
 
 			return Deserialize.Thing(reader, ref variant, env);
+		}
+
+		public static Result<void> SerializeIntoFile<T>(T value, StringView path, BonEnvironment env = gBonEnv)
+		{
+			let str = Serialize(value, .. scope .(1024), env);
+			return File.WriteAllText(path, str);
+		}
+
+		public static Result<void> DeserializeFromFile<T>(ref T value, StringView path, BonEnvironment env = gBonEnv)
+		{
+			let str = scope String(1024);
+			Try!(File.ReadAllText(path, str, true));
+			Try!(Deserialize(ref value, str, env));
+			return .Ok;
 		}
 	}
 }
