@@ -660,7 +660,7 @@ namespace Bon.Integrated
 				if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
 				{
 					if (arrType.IsValueType)
-						Internal.MemSet(ptr, 0, arrType.Stride * (count - i)); // MakeDefault would just do the same here
+						Internal.MemSet(ptr, 0, arrType.Stride * ((int)count - i)); // MakeDefault would just do the same here
 					else
 					{
 						// Default unaffected entries (since they aren't serialized)
