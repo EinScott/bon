@@ -160,21 +160,16 @@ namespace Bon.Integrated
 				}
 				else Try!(Value(reader, ref val, env));
 
-				if (!reader.ReachedEnd() && !reader.FileHasMore(false))
-					Error!(reader, "Expected end of entry");
+				if (!reader.ReachedEnd())
+				{
+					// Remove ',' between this and possibly the next entry
+					// Checks are restricted to this file entry, everything after the comma is not our business.
+					Try!(reader.FileEntryEnd());
+				}
 			}
 
-			// Remove ',' between this and possibly the next entry
-			let hasMore = reader.FileHasMore();
-
 			// Pass state on
-			let context = BonContext{
-				strLeft = reader.inStr,
-				origStr = reader.origStr,
-				hasMore = hasMore
-			};
-
-			return .Ok(context);
+			return .Ok(.(reader.origStr, reader.inStr));
 		}
 
 		public static Result<void> Value(BonReader reader, ref Variant val, BonEnvironment env)

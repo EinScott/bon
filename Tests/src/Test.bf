@@ -1361,6 +1361,16 @@ namespace Bon.Tests
 				StructB so = ?;
 				Test.Assert((Bon.Deserialize(ref so, "{name=$[{},\n{age=325}],age=23,type=1}") case .Ok) && so.name == "{},\n{age=325}");
 			}
+
+			{
+				StructB so = ?;
+
+				let c = BonContext("[14,362,12],{lalala},{name=$[{},\n{age=325}],age=23,type=1}");
+				Test.Assert(c.GetEntryCount() == 3);
+				Test.Assert(c.SkipEntry(2) case .Ok(let skipped));
+				Test.Assert((Bon.Deserialize(ref so, skipped) case .Ok(let empty)) && so.name == "{},\n{age=325}");
+				Test.Assert(empty.Rewind() == c);
+			}
 		}
 
 		// TODO: tests for .IgnoreUnmentionedValues

@@ -1,4 +1,7 @@
 using System;
+using Bon.Integrated;
+
+using internal Bon;
 
 namespace Bon
 {
@@ -8,14 +11,38 @@ namespace Bon
 		internal StringView origStr;
 		internal bool hasMore;
 
-		// TODO maybe provide options to index the file level or skip stuff?
-		// maybe this is easily doable with stuff from above, otherwise nah?
+		public int64 GetEntryCount(bool countLeft = true)
+		{
+			let reader = scope BonReader();
+			if (reader.Setup(.(origStr, countLeft ? strLeft : origStr)) case .Err)
+				return 0;
+			return reader.FileEntryPeekCount();
+		}
+
+		public Result<BonContext> SkipEntry(int entryCount = 1)
+		{
+			let reader = scope BonReader();
+			Try!(reader.Setup(this));
+			Try!(reader.FileEntrySkip(entryCount));
+			return .Ok(.(origStr, reader.inStr));
+		}
+
+		[Inline]
+		public BonContext Rewind() => .(origStr);
 
 		[Inline]
 		public this(StringView bonString)
 		{
 			strLeft = origStr = bonString;
 			hasMore = bonString.Length > 0;
+		}
+
+		[Inline]
+		internal this(StringView origStr, StringView strLeft)
+		{
+			this.origStr = origStr;
+			this.strLeft = strLeft;
+			hasMore = strLeft.Length > 0;
 		}
 
 		[Inline]

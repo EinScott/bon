@@ -528,55 +528,6 @@ namespace Bon.Integrated
 			return name;
 		}
 
-		public Result<int_arsize> ArrayPeekCount()
-		{
-			// This is only an estimate, but will be correct
-			// if the later functions decide the array is valid
-			// in the first place
-
-			int_arsize count = 1;
-			int i = 0;
-			let len = inStr.Length;
-
-			// Advance until opening [
-			while (i < len && inStr[i] != '[')
-				i++;
-
-			if (inStr[i] != '[')
-				Error!("Expected array");
-
-			bool wasEmpty = true;
-			int arrDepth = -1; // We're still pointing at the opening bracket currently...
-			while (arrDepth != 0 || inStr[i] != ']')
-			{
-				let char = inStr[i];
-				switch (char)
-				{
-				case '[':
-					arrDepth++;
-				case ']':
-					arrDepth--;
-				case ',':
-					if (arrDepth == 0)
-						count++;
-				default:
-					if (!char.IsWhiteSpace)
-						wasEmpty = false;
-				}
-
-				i++;
-
-				if (i >= len)
-					Error!("Unterminated array");
-			}
-			Debug.Assert(arrDepth == 0);
-
-			if (wasEmpty && count == 1)
-				count = 0;
-
-			return count;
-		}
-
 		[Inline]
 		public bool EnumHasNamed()
 		{
@@ -698,6 +649,99 @@ namespace Bon.Integrated
 			return !Check('}', false) && inStr.Length > 0;
 		}
 
+		mixin PeekCount(out bool unterminated, int initialIndex = 0, int initialBracketDepth = 0, char8 terminator = '\0')
+		{
+			
+
+			uint64 count = 1;
+			var i = initialIndex;
+			let len = inStr.Length;
+			
+			unterminated = false;
+			bool wasEmpty = true;
+			int bracketDepth = initialBracketDepth;
+			while (bracketDepth != 0 || (inStr[i] != terminator && terminator != '\0'))
+			{
+				let char = inStr[i];
+				switch (char)
+				{
+				case '[', '{':
+					bracketDepth++;
+				case ']', '}':
+					bracketDepth--;
+				case ',':
+					if (bracketDepth == 0)
+						count++;
+				default:
+					if (!char.IsWhiteSpace)
+						wasEmpty = false;
+				}
+
+				i++;
+
+				if (i >= len)
+				{
+					unterminated = true;
+					break;
+				}
+			}
+			Debug.Assert(bracketDepth == 0);
+
+			if (wasEmpty && count == 1)
+				count = 0;
+
+			count
+		}
+
+		public Result<int_arsize> ArrayPeekCount()
+		{
+			// This is only an estimate, but will be correct
+			// if the later functions decide the array is valid
+			// in the first place
+
+			int i = 0;
+			int_arsize count = 1;
+			let len = inStr.Length;
+
+			// Advance until opening [
+			while (i < len && inStr[i] != '[')
+				i++;
+
+			if (inStr[i] != '[')
+				Error!("Expected array");
+
+			bool wasEmpty = true;
+			int bracketDepth = -1; // We're currently pointing at the array opening bracket, which we don't count
+			while (bracketDepth != 0 || inStr[i] != ']')
+			{
+				let char = inStr[i];
+				switch (char)
+				{
+				case '[', '{':
+					bracketDepth++;
+				case ']', '}':
+					bracketDepth--;
+				case ',':
+					if (bracketDepth == 0)
+						count++;
+				default:
+					if (!char.IsWhiteSpace)
+						wasEmpty = false;
+				}
+
+				i++;
+
+				if (i >= len)
+					Error!("Unterminated array");
+			}
+			Debug.Assert(bracketDepth == 0);
+
+			if (wasEmpty && count == 1)
+				count = 0;
+
+			return count;
+		}
+
 		public Result<void> EntryEnd()
 		{
 			if (!Check(','))
@@ -706,14 +750,95 @@ namespace Bon.Integrated
 			return ConsumeEmpty();
 		}
 
-		public bool FileHasMore(bool consume = true)
+		public Result<int64> FileEntryPeekCount()
 		{
-			let res = Check(',', consume);
+			int64 count = 1;
+			bool wasEmpty = true;
+			int bracketDepth = 0;
+
+			let len = inStr.Length;
+			for (var i = 0; i < len; i++)
+			{
+				let char = inStr[i];
+				switch (char)
+				{
+				case '[', '{':
+					bracketDepth++;
+				case ']', '}':
+					bracketDepth--;
+				case ',':
+					if (bracketDepth == 0)
+						count++;
+				default:
+					if (!char.IsWhiteSpace)
+						wasEmpty = false;
+				}
+			}
+			if (bracketDepth != 0)
+				Error!("Unbalanced brackets");
+
+			if (wasEmpty && count == 1)
+				count = 0;
+
+			return count;
+		}
+
+		public Result<void> FileEntrySkip(int skipCount)
+		{
+			Debug.Assert(skipCount >= 0);
+
+			if (skipCount == 0)
+				return .Ok;
+
+			int64 count = 1;
+			bool wasEmpty = true;
+			int bracketDepth = 0;
+
+			var i = 0;
+			let len = inStr.Length;
+			for (; i < len; i++)
+			{
+				let char = inStr[i];
+				switch (char)
+				{
+				case '[', '{':
+					bracketDepth++;
+				case ']', '}':
+					bracketDepth--;
+				case ',':
+					if (bracketDepth == 0)
+					{
+						if (count == skipCount)
+						{
+							inStr.RemoveFromStart(i + 1);
+							return .Ok;
+						}
+						count++;
+					}
+				default:
+					if (!char.IsWhiteSpace)
+						wasEmpty = false;
+				}
+			}
+
+			if (!wasEmpty && count == 1 && bracketDepth == 0)
+			{
+				// This will be the end...
+				inStr.RemoveFromStart(i);
+				return .Ok;
+			}
+			Error!("Not enough entries found to skip");
+		}
+
+		public Result<void> FileEntryEnd()
+		{
+			if (!Check(','))
+				Error!("Expected comma");
 
 			if (objDepth != 0 || arrDepth != 0)
-				return false;
+				Error!("Unbalanced brackets");
 
-			return res;
+			return .Ok;
 		}
 	}
 }
