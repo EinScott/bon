@@ -416,11 +416,9 @@ namespace Bon.Integrated
 							if (*(void**)val.DataPtr == null)
 								Try!(MakeInstanceRef(ref val, env));
 
-							let boxedPtr = (uint8*)*(void**)val.DataPtr + sizeof(int) // mClassVData
-#if BF_DEBUG_ALLOC
-								+ sizeof(int) // mDebugAllocInfo
-#endif
-								;
+							// Throw together the pointer to the box payload
+							// in the corlib approved way. (See Variant.CreateFromBoxed)
+							let boxedPtr = (uint8*)*(void**)val.DataPtr + boxType.[Friend]mMemberDataOffset;
 
 							var boxedData = Variant.CreateReference(polyType, boxedPtr);
 							Try!(Value(reader, ref boxedData, env));

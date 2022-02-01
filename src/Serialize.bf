@@ -273,17 +273,10 @@ namespace Bon.Integrated
 
 					if (!polyType.IsObject)
 					{
-						// @report currently we
-						// hack together a pointer of the payload, as
-						// currently the box doesn't have reflection when
-						// they payload does. If that gets fixed, the box
-						// has a "val" field which we would get the offset of
-						// -> we do the same thing in Deserialize.bf
-						let boxedPtr = (uint8*)*(void**)val.DataPtr + sizeof(int) // mClassVData
-#if BF_DEBUG_ALLOC
-							+ sizeof(int) // mDebugAllocInfo
-#endif
-							;
+						// Throw together the pointer to the box payload
+						// in the corlib approved way. (See Variant.CreateFromBoxed)
+						let boxType = (*(Object*)val.DataPtr).[Friend]RawGetType();
+						let boxedPtr = (uint8*)*(void**)val.DataPtr + boxType.[Friend]mMemberDataOffset;
 
 						Debug.Assert(!polyType.IsObject);
 
