@@ -236,7 +236,8 @@ namespace Bon.Integrated
 			}
 
 			while (inStr.Length > numLen && (inStr[numLen].[Inline]IsNumber
-				|| hasHex && { let c = inStr[numLen]; ((((c >= 'A') && (c <= 'F')) || ((c >= 'a') && (c <= 'f')))) }))
+				|| hasHex && { let c = inStr[numLen]; ((c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')) }
+				|| numLen > 0 && inStr[numLen] == '\''))
 				numLen++;
 
 			if (numLen == 0)

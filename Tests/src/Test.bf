@@ -216,7 +216,7 @@ namespace Bon.Tests
 
 			{
 				int8 i = ?;
-				Test.Assert((Bon.Deserialize(ref i, "0b101") case .Ok) && i == 5);
+				Test.Assert((Bon.Deserialize(ref i, "0b1'0'1") case .Ok) && i == 5);
 			}
 
 			{
