@@ -211,7 +211,7 @@ namespace Bon.Tests
 
 			{
 				int i = ?;
-				Test.Assert((Bon.Deserialize(ref i, "0xF5a") case .Ok) && i == 3930);
+				Test.Assert((Bon.Deserialize(ref i, "0xF5aL") case .Ok) && i == 3930);
 			}
 
 			{
@@ -220,8 +220,8 @@ namespace Bon.Tests
 			}
 
 			{
-				int8 i = ?;
-				Test.Assert((Bon.Deserialize(ref i, "0o75") case .Ok) && i == 61);
+				uint8 i = ?;
+				Test.Assert((Bon.Deserialize(ref i, "0o75UL") case .Ok) && i == 61);
 			}
 
 			{
@@ -249,6 +249,11 @@ namespace Bon.Tests
 			{
 				int8 oi = ?;
 				Test.Assert(Bon.Deserialize(ref oi, "299") case .Err);
+			}
+
+			{
+				int8 oi = ?;
+				Test.Assert(Bon.Deserialize(ref oi, "-25u") case .Err);
 			}
 
 			{

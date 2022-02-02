@@ -220,9 +220,12 @@ namespace Bon.Integrated
 		public Result<StringView> Integer()
 		{
 			var numLen = 0;
-			bool hasHex = false;
+			bool hasHex = false, isNegative = false;
 			if (inStr.Length > 0 && inStr[0] == '-')
+			{
 				numLen++;
+				isNegative = true;
+			}	
 			if (inStr.Length > numLen + 1 && inStr[numLen] == '0')
 			{
 				let c = inStr[numLen + 1];
@@ -240,10 +243,33 @@ namespace Bon.Integrated
 				|| numLen > 0 && inStr[numLen] == '\''))
 				numLen++;
 
+			// Take care of suffix. The number parser
+			// doesnt actually need to know about this
+			int suffLen = 0;
+			bool l = false, u = false;
+			while (inStr.Length > numLen + suffLen)
+			{
+				let c = inStr[numLen + suffLen].ToLower;
+				if (c == 'u' && !u)
+				{
+					if (isNegative)
+					{
+						inStr.RemoveFromStart(numLen + suffLen);
+						Error!("Negative integer cannot be unsigned");
+					}
+					u = true;
+				}
+				else if (c == 'l' && !l)
+					l = true;
+				else break;
+
+				suffLen++;
+			}
+
 			if (numLen == 0)
 				Error!("Expected integer");
 			let num = inStr.Substring(0, numLen);
-			inStr.RemoveFromStart(numLen);
+			inStr.RemoveFromStart(numLen + suffLen);
 
 			Try!(ConsumeEmpty());
 
