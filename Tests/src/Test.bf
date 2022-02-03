@@ -3,30 +3,6 @@ using Bon;
 using System.Diagnostics;
 using System.Collections;
 
-namespace System
-{
-	// TODO: do we move these direclty into bon
-	// or just put them here somewhere as a suggestion
-	// for a 'default' config? Either way, we should do
-	// the same thing with the standard box primitives,
-	// which we currently have in bon!
-
-	[Serializable]
-	extension String {}
-
-	[Serializable]
-	extension Array1<T> {}
-
-	[Serializable]
-	extension Array2<T> {}
-
-	[Serializable]
-	extension Array3<T> {}
-
-	[Serializable]
-	extension Array4<T> {}
-}
-
 namespace Bon.Tests
 {
 	static
@@ -64,13 +40,13 @@ namespace Bon.Tests
 			var val;
 			var str = strings.Add(.. new .());
 
-			*(String*)val.DataPtr = str;
+			BonAssignVariant!(val, str);
 		}
 
 		static void DestroyString(Variant val)
 		{
 			var val;
-			var str = *((String*)val.DataPtr);
+			var str = val.Get<String>();
 
 			if (strings.Remove(str))
 				delete str; // We allocated it!
@@ -81,12 +57,7 @@ namespace Bon.Tests
 			gBonEnv.stringViewHandler = => HandleStringView;
 
 			if (!gBonEnv.instanceHandlers.ContainsKey(typeof(String)))
-			{
-				BonEnvironment.MakeThing make = => MakeString;
-				BonEnvironment.DestroyThing destroy = => DestroyString;
-
-				gBonEnv.instanceHandlers.Add(typeof(String), (make, destroy));
-			}
+				gBonEnv.instanceHandlers.Add(typeof(String), ((.)new => MakeString, (.)new => DestroyString));
 		}
 
 		static mixin NoStringHandler()
@@ -1210,7 +1181,7 @@ namespace Bon.Tests
 			}
 
 			{
-				// Add array type to lookup for the deserialize call to find
+				// Add array type to lookup for the deserialize call to find it
 				gBonEnv.RegisterPolyType!(typeof(uint8[]));
 
 				Object s = scope uint8[](12, 24, 53, 34, 5, 0, 0);
@@ -1292,6 +1263,20 @@ namespace Bon.Tests
 			{
 				uint16[,,] so = null;
 				Test.Assert(Bon.Deserialize(ref so, "<const 2,5>") case .Err);
+			}
+		}
+
+		[Test]
+		static void Collections()
+		{
+			{
+				let l = scope List<AClass>();
+				let str = Bon.Serialize(l, .. scope .());
+				Test.Assert(str == "<0>[]");
+
+				List<AClass> lo = null;
+				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && ArrayEqual!(l, lo));
+				delete lo;
 			}
 		}
 

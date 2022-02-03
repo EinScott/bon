@@ -6,6 +6,9 @@ namespace Bon.Integrated
 {
 	static class Serialize
 	{
+		[Comptime]
+		public static String CompNoReflectionError(String type, String example) => scope $"No reflection data forced for {type}!\n(for example: [Serializable] extension {example} {{}} or through build settings)";
+
 		static mixin DoInclude(ref Variant val, BonSerializeFlags flags)
 		{
 			(flags.HasFlag(.IncludeDefault) || !VariantDataIsZero!(val))
@@ -237,6 +240,8 @@ namespace Bon.Integrated
 
 					Debug.Assert(didWrite);
 				}
+				else if (GetCustomHandler(valType, env, let func))
+					func(writer, ref val, env);
 				else Struct(writer, ref val, env);
 			}
 			else if (valType is SizedArrayType)
@@ -299,21 +304,16 @@ namespace Bon.Integrated
 
 						let t = polyType as ArrayType;
 						
-						Debug.Assert(t.GetField("mFirstElement") case .Ok, "No reflection data forced for array type!\n(for example: [Serializable] extension Array1<T> {} or through build settings)");
+						Debug.Assert(t.GetField("mFirstElement") case .Ok, CompNoReflectionError("array type", "Array1<T>"));
 
 						let arrType = t.GetGenericArg(0); // T
 						let classData = *(uint8**)val.DataPtr;
-						var arrPtr = classData + t.GetField("mFirstElement").Get().MemberOffset; // T*
+						var arrPtr = GetValFieldPtr!(classData, t, "mFirstElement"); // T*
 
 						// @report: *(int_strsize*)(classData + typeof(Array).GetField("mLength").Get().MemberOffset)
 						// doesnt work, seems like the field is never reflected, also doesnt work with t.GetField("mLength")
 						var count = val.Get<Array>().Count;
 						
-						mixin GetLenField(String field)
-						{
-							*(int_arsize*)(classData + t.GetField(field).Get().MemberOffset)
-						}
-
 						switch (t.UnspecializedType)
 						{
 						case typeof(Array1<>):
@@ -321,24 +321,24 @@ namespace Bon.Integrated
 							Array(writer, arrType, arrPtr, count, env);
 
 						case typeof(Array2<>):
-							let count1 = GetLenField!("mLength1");
+							let count1 = GetValField!<int_cosize>(classData, t, "mLength1");
 							count /= count1;
 							writer.MultiSizer((.)count,(.)count1);
 
 							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1);
 
 						case typeof(Array3<>):
-							let count2 = GetLenField!("mLength2");
-							let count1 = GetLenField!("mLength1");
+							let count2 = GetValField!<int_cosize>(classData, t, "mLength2");
+							let count1 = GetValField!<int_cosize>(classData, t, "mLength1");
 							count /= (count1 * count2);
 							writer.MultiSizer((.)count,(.)count1,(.)count2);
 
 							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1, count2);
 
 						case typeof(Array4<>):
-							let count1 = GetLenField!("mLength1");
-							let count2 = GetLenField!("mLength2");
-							let count3 = GetLenField!("mLength3");
+							let count1 = GetValField!<int_cosize>(classData, t, "mLength1");
+							let count2 = GetValField!<int_cosize>(classData, t, "mLength2");
+							let count3 = GetValField!<int_cosize>(classData, t, "mLength3");
 							count /= (count1 * count2 * count3);
 							writer.MultiSizer((.)count,(.)count1,(.)count2,(.)count3);
 
@@ -348,12 +348,8 @@ namespace Bon.Integrated
 							Debug.FatalError();
 						}
 					}
-					// TODO consider using interfaces like ICollection<> and so on and using that? -> should also work for structs i guess? but not now
-					// or just use custom stuff right away
-					/*else if (let t = valType as SpecializedGenericType && t == typeof(List<>))
-					{
-						Debug.FatalError(); // List<>, HashSet<>, Dictionary<,>
-					}*/
+					else if (GetCustomHandler(polyType, env, let func))
+						func(writer, ref val, env);
 					else Class(writer, ref val, env);
 				}
 			}
@@ -369,6 +365,23 @@ namespace Bon.Integrated
 			else Debug.FatalError();
 
 			writer.EntryEnd(doOneLine);
+		}
+
+		static bool GetCustomHandler(Type type, BonEnvironment env, out HandleSerializeFunc func)
+		{
+			if (env.serializeHandlers.TryGetValue(type, let val) && val.serialize != null)
+			{
+				func = val.serialize;
+				return true;
+			}
+			else if (type is SpecializedGenericType && env.serializeHandlers.TryGetValue(((SpecializedGenericType)type).UnspecializedType, let gVal)
+				&& gVal.serialize != null)
+			{
+				func = gVal.serialize;
+				return true;
+			}
+			func = null;
+			return false;
 		}
 
 		public static void Class(BonWriter writer, ref Variant classVal, BonEnvironment env)

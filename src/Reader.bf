@@ -719,14 +719,14 @@ namespace Bon.Integrated
 			count
 		}
 
-		public Result<int_arsize> ArrayPeekCount()
+		public Result<int64> ArrayPeekCount()
 		{
 			// This is only an estimate, but will be correct
 			// if the later functions decide the array is valid
 			// in the first place
 
 			int i = 0;
-			int_arsize count = 1;
+			int64 count = 1;
 			let len = inStr.Length;
 
 			// Advance until opening [

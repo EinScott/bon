@@ -6,25 +6,18 @@ using Bon.Integrated;
 
 namespace Bon
 {
-	// integrated serialize / deserialize
-
-	// near-arbitrary tree acces through helper methods derived from arbitrary parsing?
-	// -> could be done through a lot of re-parsing and BonContext or something like that on wich to call... but no?
-
-	// generic templates for custom handlers...
-	// just funtions for array(ptr, len & what else is needed) i guess? that array (of course) call but also something like SizedList<> which we could use as a demo?
-	// support Variant serialize?
-
 	// GUIDES ON:
+	// examples / basic out of the box usage
 	// how to set up structures (what the lib expects, esp for allocation, ownership)
-	// -> thing has to manage itself, do "if(_!=null)delete _;" if you really need to. Lists need to expect to delete their contents dynamically depending on use case, bon just allocates, you have to bother
-	// how to force reflection data in the IDE (for example when the need for corlib types, such as Hash arises)
-	// -> actually maybe special case the hashes, but still; do we make speical cases out of all non-prims? HOW DO WE EVEN HANDLE THESE, THEY SHOULDN'T BE GLOBAL? THEY ARE.. BUT
-	// 		-> BONENVIRONMENT OBJECT -> has seperate list of handlers, takes static defaults, but ones can be added individually! YUP
-	//		-> also put things like custom allocator and "oh a reference to this is wanted here" in there!
+	// -> all common errors or things that go wrong in usage "why it says reflection missing" "how to use polyTypes" "custom handlers?" "manage memory?"
+	//  -> thing has to manage itself, do "if(_!=null)delete _;" if you really need to. Lists need to expect to delete their contents dynamically depending on use case, bon just allocates, you have to bother
+	//  ->how to force reflection data in the IDE
+	// integrated serialize / deserialize
+	// - demo with scene stuff?
 
-	// REFERENCES "&somethingName" are a way to make the deserializer call a function with this string as the key (also member type, type member is on), which then is expected to provide a variant to put there!
-	// this could be a templated handler that calls a function? i guess... would do the parsing & being called in the first place part automatically then?
+	// TODO: & as a general token for retrieving references... maybe must be enabled with flag YAH- would be a serialize AND deserialize flag though
+	// - serial: see ptr comment (we'd need a lookup for that though)
+	// - deserial: put into list (current path + given relative ?), resolve path and handle at end
 
 	static class Bon
 	{

@@ -99,11 +99,6 @@ namespace Bon.Integrated
 			}
 			else
 			{
-				// TODO: some way to generally change memory allocation method?
-				// something in bonEnv... also copy & edit CreateObject to use that
-				// -> maybe go the string/list route and just make overridable
-				// alloc / delete methods on BonEnv?
-
 				if (val.VariantType.IsPointer)
 				{
 					Debug.FatalError();
@@ -372,6 +367,8 @@ namespace Bon.Integrated
 
 					Try!(Struct(reader, ref unionPayload, env));
 				}
+				else if (GetCustomHandler(valType, env, let func))
+					Try!(func(reader, ref val, env));
 				else Try!(Struct(reader, ref val, env));
 			}
 			else if (valType is SizedArrayType)
@@ -473,7 +470,7 @@ namespace Bon.Integrated
 									// arrays in that case? It's probably sensible for multi-dim arrays to state
 									// their size upfront!
 
-									fullCount = Try!(reader.ArrayPeekCount());
+									fullCount = (.)Try!(reader.ArrayPeekCount());
 								}
 
 							case typeof(Array2<>):
@@ -527,24 +524,19 @@ namespace Bon.Integrated
 
 							void* arrPtr = null;
 							if (t.GetField("mFirstElement") case .Ok(let field))
-								arrPtr = classData + t.GetField("mFirstElement").Get().MemberOffset; // T*
-							else Error!(reader, "No reflection data forced for array type!"); // for example: [Serializable] extension Array1<T> {} or through build settings
-
-							mixin SetLenField(String field, int_arsize count)
-							{
-								*(int_arsize*)(classData + t.GetField(field).Get().MemberOffset) = count;
-							}
+								arrPtr = classData + field.MemberOffset; // T*
+							else Error!(t, "No reflection data forced for array type!"); // for example: [Serializable] extension Array1<T> {} or through build settings
 
 							switch (t.UnspecializedType)
 							{
 							case typeof(Array4<>):
-								SetLenField!("mLength3", counts[3]);
+								SetValField!(classData, t, "mLength3", counts[3]);
 								fallthrough;
 							case typeof(Array3<>):
-								SetLenField!("mLength2", counts[2]);
+								SetValField!(classData, t, "mLength2", counts[2]);
 								fallthrough;
 							case typeof(Array2<>):
-								SetLenField!("mLength1", counts[1]);
+								SetValField!(classData, t, "mLength1", counts[1]);
 
 								Try!(MultiDimensionalArray(reader, arrType, arrPtr, env, params counts));
 
@@ -555,6 +547,8 @@ namespace Bon.Integrated
 								Debug.FatalError();
 							}
 						}
+						else if (GetCustomHandler(polyType, env, let func))
+							Try!(func(reader, ref val, env));
 						else Try!(Class(reader, ref val, env));
 					}
 				}
@@ -566,6 +560,23 @@ namespace Bon.Integrated
 			else Debug.FatalError();
 
 			return .Ok;
+		}
+
+		static bool GetCustomHandler(Type type, BonEnvironment env, out HandleDeserializeFunc func)
+		{
+			if (env.serializeHandlers.TryGetValue(type, let val) && val.deserialize != null)
+			{
+				func = val.deserialize;
+				return true;
+			}
+			else if (type is SpecializedGenericType && env.serializeHandlers.TryGetValue(((SpecializedGenericType)type).UnspecializedType, let gVal)
+				&& gVal.deserialize != null)
+			{
+				func = gVal.deserialize;
+				return true;
+			}
+			func = null;
+			return false;
 		}
 
 		public static Result<void> Class(BonReader reader, ref Variant val, BonEnvironment env)
@@ -830,7 +841,7 @@ namespace Bon.Integrated
 			else Try!(reader.String(parsedStr, len, isVerbatim));
 		}
 
-		static Result<T> ParseInt<T>(BonReader reader, StringView val, bool allowNonDecimal = true) where T : IInteger, var
+		public static Result<T> ParseInt<T>(BonReader reader, StringView val, bool allowNonDecimal = true) where T : IInteger, var
 		{
 			var len = val.Length;
 			if (len == 0)

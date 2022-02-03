@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
+using System.Diagnostics;
 using System.Reflection;
 using Bon.Integrated;
-using System.Diagnostics;
 
 namespace Bon
 {
@@ -33,6 +33,12 @@ namespace Bon
 		/// instead of being nulled (and possibly deleted).
 		case IgnoreUnmentionedValues = 1;
 	}
+	
+	public delegate void MakeThingFunc(Variant refIntoVal);
+	public delegate void DestroyThingFunc(Variant valRef);
+
+	public static function void HandleSerializeFunc(BonWriter writer, ref Variant val, BonEnvironment env);
+	public static function Result<void> HandleDeserializeFunc(BonReader reader, ref Variant val, BonEnvironment env);
 
 	/// Defines the behavior of bon. May be modified globally (gBonEnv)
 	/// or for some calls only be creating a BonEnvironment to modify
@@ -42,20 +48,23 @@ namespace Bon
 		public BonSerializeFlags serializeFlags;
 		public BonDeserializeFlags deserializeFlags;
 
-		// TODO: put these into practise, iterate a bit, maybe write helper methods / mixins!
-		public function void MakeThing(Variant refIntoVal);
-		public function void DestroyThing(Variant valRef);
-
-		// TODO For custom handler registration
-		// -> handler for custom serialize & deserialize
-		// -> question then is, how much do we just convert to that format then?
+		/// When bon serializes or deserializes an unknown type, it checks this to see if there are custom
+		/// functions to handle this type. Functions can be registered by type or by unspecialized generic
+		/// type, like List<>. For examples, see SerializeHandlers.bf
+		public Dictionary<Type, (HandleSerializeFunc serialize, HandleDeserializeFunc deserialize)> serializeHandlers = new .() ~ delete _;
 
 		/// When bon needs to allocate or deallocate a reference type, a handler is called for it when possible
 		/// instead of allocating with new or deleting. This can be used to gain more control over the allocation
 		/// or specific types, for example to reference existing ones or register allocated instances elsewhere
 		/// as well.
-		/// BON WILL CALL THESE INSTEAD OF ALLOCATING/DEALLOCATING AND TRUSTS THE USER TO MANAGE IT.
-		public Dictionary<Type, (MakeThing make, DestroyThing destroy)> instanceHandlers = new .() ~ delete _;
+		public Dictionary<Type, (MakeThingFunc make, DestroyThingFunc destroy)> instanceHandlers = new .() ~ {
+			for (let p in _.Values)
+			{
+				if (p.make != null) delete p.make;
+				if (p.destroy != null) delete p.destroy;
+			}
+			delete _;
+		};
 
 		/// Will be called for every deserialized StringView string. Must return a valid string view
 		/// of the passed-in string.
@@ -68,45 +77,36 @@ namespace Bon
 		public mixin RegisterPolyType(Type type)
 		{
 			Debug.Assert(type is TypeInstance, "Type not set up properly! Put [Serializable] on it or force reflection info & always include.");
-			polyTypes.Add(type.GetFullName(.. new .()), type);
+			let str = type.GetFullName(.. new .());
+			if (!polyTypes.ContainsKey(str))
+				polyTypes.Add(str, type);
+			else delete str;
 		}
 
 		public this()
 		{
-			if (gBonEnv != null)
+			if (gBonEnv == null)
+				return;
+
+			serializeFlags = gBonEnv.serializeFlags;
+			deserializeFlags = gBonEnv.deserializeFlags;
+			
+			for (let pair in gBonEnv.serializeHandlers)
+				serializeHandlers.Add(pair);
+
+			mixin CloneDelegate(var del)
 			{
-				serializeFlags = gBonEnv.serializeFlags;
-				deserializeFlags = gBonEnv.deserializeFlags;
-				for (let pair in gBonEnv.instanceHandlers)
-					instanceHandlers.Add(pair);
+				new Delegate()..SetFuncPtr(del.[Friend]mFuncPtr, del.[Friend]mTarget)
 			}
-		}
-	}
 
-	static
-	{
-		public static BonEnvironment gBonEnv =
+			for (let pair in gBonEnv.instanceHandlers)
 			{
-				let env = new BonEnvironment();
+				Delegate make = pair.value.make == null ? null : CloneDelegate!(pair.value.make);
+				Delegate destroy = pair.value.destroy == null ? null : CloneDelegate!(pair.value.destroy);
+				instanceHandlers.Add(pair.key, ((.)make, (.)destroy));
+			}
 
-				env.RegisterPolyType!(typeof(Boolean));
-				env.RegisterPolyType!(typeof(Int));
-				env.RegisterPolyType!(typeof(Int64));
-				env.RegisterPolyType!(typeof(Int32));
-				env.RegisterPolyType!(typeof(Int16));
-				env.RegisterPolyType!(typeof(Int8));
-				env.RegisterPolyType!(typeof(UInt));
-				env.RegisterPolyType!(typeof(UInt64));
-				env.RegisterPolyType!(typeof(UInt32));
-				env.RegisterPolyType!(typeof(UInt16));
-				env.RegisterPolyType!(typeof(UInt8));
-				env.RegisterPolyType!(typeof(Char8));
-				env.RegisterPolyType!(typeof(Char16));
-				env.RegisterPolyType!(typeof(Char32));
-				env.RegisterPolyType!(typeof(Float));
-				env.RegisterPolyType!(typeof(Double));
-
-				env
-			} ~ delete _;
+			stringViewHandler = gBonEnv.stringViewHandler;
+		}
 	}
 }
