@@ -1171,6 +1171,16 @@ namespace Bon.Tests
 			}
 
 			{
+				uint8[] s = scope .(12, 24, 53, 34, 5, 0, 0);
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "<7>[12,24,53,34,5]");
+
+				uint8[] so = new .[17]; // oops, wrong size
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
+				delete so;
+			}
+
+			{
 				// Infer size to be 5
 
 				uint8[] s = scope .(12, 24, 53, 34, 5);
@@ -1275,8 +1285,41 @@ namespace Bon.Tests
 				Test.Assert(str == "<0>[]");
 
 				List<AClass> lo = null;
-				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && ArrayEqual!(l, lo));
+				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && l.Count == lo.Count);
 				delete lo;
+			}
+
+			{
+				let l = scope List<AClass>();
+				l.Add(scope AClass() { aStringThing = new $"uhh", thing = 255, data = .{ time=1, value=10 } });
+				l.Add(scope AClass() { aStringThing = new $"Hi, na?", thing = 42 });
+				let str = Bon.Serialize(l, .. scope .());
+				Test.Assert(str == "<2>[{aStringThing=\"uhh\",thing=255,data={time=1,value=10}},{aStringThing=\"Hi, na?\",thing=42}]");
+
+				List<AClass> lo = null;
+				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && l.Count == lo.Count && l[0].aStringThing == lo[0].aStringThing);
+				DeleteContainerAndItems!(lo);
+			}
+
+			{
+				List<AClass> lo = null;
+				Test.Assert((Bon.Deserialize(ref lo, "[{aStringThing=\"uhh\",thing=255,data={time=1,value=10}},{aStringThing=\"Hi, na?\",thing=42}]") case .Ok) && lo.Count == 2);
+				DeleteContainerAndItems!(lo);
+			}
+
+			{
+				let l = scope List<int32>()
+					{
+						1, 2, 3, 8, 9, 10, 100, 1000, 10000, 0, 0
+					};
+				let str = Bon.Serialize(l, .. scope .());
+				Test.Assert(str == "<11>[1,2,3,8,9,10,100,1000,10000]");
+
+				List<int32> lo = scope List<int32>()
+					{
+						2, 3, 4, 5, 6, 100, 200, 300, 400, 500, 1000, 2500, 8000, 10000 // oops, already in use
+					};
+				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && ArrayEqual!(l, lo));
 			}
 		}
 
@@ -1364,6 +1407,8 @@ namespace Bon.Tests
 		}
 
 		// TODO: tests for .IgnoreUnmentionedValues
+		// TODO: test arrays & collections for [Align()]
+		// TODO: pointer tests (mainly test-- unsupportedness right now)
 
 		[Test]
 		static void Trash()

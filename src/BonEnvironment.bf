@@ -31,7 +31,11 @@ namespace Bon
 
 		/// Values not mentioned in the given string will be left as they are
 		/// instead of being nulled (and possibly deleted).
-		case IgnoreUnmentionedValues = 1;
+		case IgnoreUnmentionedValues = 1 | IgnorePointers;
+
+		/// Ignore pointers when encountering them instead of erroring. Bon
+		/// does not manipulate pointers.
+		case IgnorePointers = 1 << 1;
 	}
 	
 	public delegate void MakeThingFunc(Variant refIntoVal);
@@ -57,6 +61,9 @@ namespace Bon
 		/// instead of allocating with new or deleting. This can be used to gain more control over the allocation
 		/// or specific types, for example to reference existing ones or register allocated instances elsewhere
 		/// as well.
+		/// Functions can be registered by type or by unspecialized generic type, like List<> but keep in mind
+		/// that you need to deal with any specialized type indicated by the Variant. So you will probably still
+		/// have to use CreateObjet, but you can manage the reference at least
 		public Dictionary<Type, (MakeThingFunc make, DestroyThingFunc destroy)> instanceHandlers = new .() ~ {
 			for (let p in _.Values)
 			{

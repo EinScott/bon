@@ -16,8 +16,20 @@ namespace Bon
 	// - demo with scene stuff?
 
 	// TODO: & as a general token for retrieving references... maybe must be enabled with flag YAH- would be a serialize AND deserialize flag though
-	// - serial: see ptr comment (we'd need a lookup for that though)
-	// - deserial: put into list (current path + given relative ?), resolve path and handle at end
+	// - serial: keep track of pointers to objects we've serialized along with a string for where that was
+	//           serialize first encounter normally, all following reference that first one
+	// - deserial: put refs into list (current path + given relative ? + target variant), resolve path and handle at end
+
+	// TODO: there are cases where we don't default stuff correctly
+	// like... nested arrays... we would need Default to check types
+	// and call some funcs, even extendable to custom handlers...
+	// -> this also means we don't need the array special case for default?
+
+	// limits:
+	// should be able to print everything, pretty much
+	// for deserializing there is some more setup (poly types)
+	// and things need to be relatively independent, since bon might just delete them,
+	// only limited and general control through instanceHandlers
 
 	static class Bon
 	{

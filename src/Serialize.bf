@@ -309,10 +309,7 @@ namespace Bon.Integrated
 						let arrType = t.GetGenericArg(0); // T
 						let classData = *(uint8**)val.DataPtr;
 						var arrPtr = GetValFieldPtr!(classData, t, "mFirstElement"); // T*
-
-						// @report: *(int_strsize*)(classData + typeof(Array).GetField("mLength").Get().MemberOffset)
-						// doesnt work, seems like the field is never reflected, also doesnt work with t.GetField("mLength")
-						var count = val.Get<Array>().Count;
+						var count = GetValField!<int_arsize>(val, "mLength");
 						
 						switch (t.UnspecializedType)
 						{
@@ -355,14 +352,29 @@ namespace Bon.Integrated
 			}
 			else if (valType.IsPointer)
 			{
-				// also handle references to ourselves
-				// however we detect that. -> of base structure if struct put mem ptr + size as range or on reftype put instance ptr + size as bounds for checking
-				// put & and field path in there?
-				// also do this... for classes? -- hash pointers+size (as range test) we've included with some info or something??
+				// 1) underlying pointer value could be serialized if not void
+				//    - but allocating on de-serialize is weird
+				//    - especially nulling/dealloc of ptrs is weird since they may not be
+				//      heap pointers at all or point to something else in this struct
+				// 2) we could de-serialize ptr references
+				//    - but cant serialize references...
+				// I guess we could, if configured to do so, collect a mem span of where every Value() call went to
+				// and then look that up to see if we know the pointer and could serialize a reference to the other
+				// element... but that just sounds like lots and lots of data to track.
 
-				Debug.FatalError(); // TODO
+				// TODO: maybe limited ptr support: serialize underlying value if its a value type
+				//       deserialize into already pointed to value type...
+				
+				writer.IrrelevantEntry();
+				if (env.serializeFlags.HasFlag(.Verbose))
+					writer.outStr.Append("/* Cannot handle pointer values. Put [NoSerialize] on this field */");
 			}
-			else Debug.FatalError();
+			else
+			{
+				writer.IrrelevantEntry();
+				writer.outStr.Append("/* Unhandled. Please report this! */");
+				Debug.FatalError();
+			}
 
 			writer.EntryEnd(doOneLine);
 		}
@@ -431,7 +443,7 @@ namespace Bon.Integrated
 				if (!structType is TypeInstance)
 					writer.outStr.Append(scope $"/* No reflection data for {structType}. Add [Serializable] or force it */");
 				else if (hasUnnamedMembers)
-					writer.outStr.Append(scope $"/* Type has unnamed members */");
+					writer.outStr.Append("/* Type has unnamed members */");
 			}
 		}
 

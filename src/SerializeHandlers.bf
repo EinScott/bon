@@ -15,7 +15,7 @@ namespace Bon.Integrated
 			Debug.Assert(t.GetField("mSize") case .Ok, Serialize.CompNoReflectionError("List<>", "List<T>"));
 
 			let arrType = t.GetGenericArg(0);
-			var arrPtr = GetValFieldPtr!(val, "mItems"); // T*
+			var arrPtr = *(void**)GetValFieldPtr!(val, "mItems"); // *(T**)
 			let count = GetValField!<int_cosize>(val, "mSize");
 
 			// TODO: sizer only if last element is default
@@ -41,25 +41,32 @@ namespace Bon.Integrated
 				Deserialize.Error!(t, "No reflection data forced for type!");
 			let currCount = GetValField!<int_cosize>(val, "mSize");
 			
+			let arrType = t.GetGenericArg(0);
+			let itemsFieldPtr = GetValFieldPtr!(val, "mItems");
+
 			if (currCount > count)
 			{
-				SetValField!<int_cosize>(val, "mSize", count);
+				// TODO: call defaultArray on the vals we exclude here!
 			}
 			else if (currCount < count)
 			{
 				if (((t.GetMethod("EnsureCapacity", .NonPublic|.Instance) case .Ok(let method))
-					&& method.Invoke(*(Object*)val.DataPtr, (int)count, true) case .Ok))
-				{
 					// Keep in mind, strictly speaking val.DataPtr is pointing to the field which references this list!
-					if (method.Invoke(*(Object*)val.DataPtr, (int)count, true) case .Err)
-						Deserialize.Error!(t, "Failed to");
+					&& method.Invoke(*(Object*)val.DataPtr, (int)count, true) case .Ok)) // returns T*, which is sizeof(int), so Variant doesnt alloc
+				{
+					if (arrType.IsObject)
+					{
+						// Null the new chunk, else we think this random data are valid pointers
+						Internal.MemSet(*(uint8**)itemsFieldPtr + currCount * arrType.Stride, 0, (count - currCount) * arrType.Stride, arrType.Align);
+					}
 				}
 				else Deserialize.Error!(t, "Method reflection data needed to enlargen List<> size"); // include with [Reflect(.Methods)] extension List<T> {} or in build settings
 			}
+			
+			SetValField!<int_cosize>(val, "mSize", count);
 
 			// Since mItems is a pointer...
-			let arrPtr = *(void**)GetValFieldPtr!(val, "mItems");
-			let arrType = t.GetGenericArg(0);
+			let arrPtr = *(void**)itemsFieldPtr;
 
 			Try!(Deserialize.Array(reader, arrType, arrPtr, count, env));
 

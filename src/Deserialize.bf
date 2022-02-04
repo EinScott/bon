@@ -52,25 +52,33 @@ namespace Bon.Integrated
 #endif
 		}
 
-		static void MakeDefault(ref Variant val, BonEnvironment env)
+		static Result<void> MakeDefault(ref Variant val, BonEnvironment env)
 		{
 			if (VariantDataIsZero!(val))
-				return;
+				return .Ok;
 
 			let valType = val.VariantType;
-			if (valType.IsObject || valType.IsPointer)
+			if (valType.IsObject)
 			{
-				if (env.instanceHandlers.TryGetValue(val.VariantType, let funcs)
+				DestroyThingFunc destroy = null;
+				if (env.instanceHandlers.TryGetValue(valType, let funcs)
 					&& funcs.destroy != null)
-				{
-					funcs.destroy(val);
-				}
-				else
-				{
-					if (valType.IsPointer)
-						delete *(void**)val.DataPtr;
-					else delete Internal.UnsafeCastToObject(*(void**)val.DataPtr);
-				}
+					destroy = funcs.destroy;
+				else if (valType is SpecializedGenericType && env.instanceHandlers.TryGetValue(((SpecializedGenericType)valType).UnspecializedType, let gFuncs)
+					&& gFuncs.destroy != null)
+					destroy = gFuncs.destroy;
+
+				if (destroy != null)
+					destroy(val);
+				else delete Internal.UnsafeCastToObject(*(void**)val.DataPtr);
+			}
+			else if (valType.IsPointer)
+			{
+				// We set an object to be exactly what is specified in the
+				// bon string. Since we cannot do this with pointers in the mix,
+				// we error by default to explicitly inform the user about this.
+				if (!env.deserializeFlags.HasFlag(.IgnorePointers))
+					Error!(valType, "Cannot handle pointer values. Set .IgnorePointers or .IgnoreUnmentionedValues if you manage those yourself.");
 			}
 
 			let ptr = val.DataPtr;
@@ -85,36 +93,33 @@ namespace Bon.Integrated
 			default:
 				Internal.MemSet(ptr, 0, size);
 			}
+
+			return .Ok;
 		}
 
 		public static Result<void> MakeInstanceRef(ref Variant val, BonEnvironment env)
 		{
 			let valType = val.VariantType;
-			Debug.Assert(!valType.IsArray && (valType.IsObject || valType.IsPointer));
+			Debug.Assert(!valType.IsArray && (valType.IsObject));
 
-			if (env.instanceHandlers.TryGetValue(val.VariantType, let funcs)
+			MakeThingFunc make = null;
+			if (env.instanceHandlers.TryGetValue(valType, let funcs)
 				&& funcs.make != null)
-			{
-				funcs.make(val);
-			}
+				make = funcs.make;
+			else if (valType is SpecializedGenericType && env.instanceHandlers.TryGetValue(((SpecializedGenericType)valType).UnspecializedType, let gFuncs)
+				&& gFuncs.make != null)
+				make = gFuncs.make;
+
+			if (make != null)
+				make(val);
 			else
 			{
-				if (val.VariantType.IsPointer)
-				{
-					Debug.FatalError();
-					// TODO: allocate uint8[Size]
-					// but check how to get the actual size from the pointer type
-					// is it UnderlyingType? is it InstanceSize?
-				}
-				else
-				{
-					void* objRef;
-					if (val.VariantType.CreateObject() case .Ok(let createdObj))
-						objRef = Internal.UnsafeCastToPtr(createdObj);
-					else Error!(val.VariantType, "Failed to create object");
+				void* objRef;
+				if (val.VariantType.CreateObject() case .Ok(let createdObj))
+					objRef = Internal.UnsafeCastToPtr(createdObj);
+				else Error!(val.VariantType, "Failed to create object");
 
-					*((void**)val.DataPtr) = objRef;
-				}
+				*((void**)val.DataPtr) = objRef;
 			}
 
 			return .Ok;
@@ -149,7 +154,7 @@ namespace Bon.Integrated
 				if (reader.IsIrrelevantEntry())
 				{
 					if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
-						MakeDefault(ref val, env);
+						Try!(MakeDefault(ref val, env));
 
 					Try!(reader.ConsumeEmpty());
 				}
@@ -200,7 +205,7 @@ namespace Bon.Integrated
 
 			if (reader.IsDefault())
 			{
-				MakeDefault(ref val, env);
+				Try!(MakeDefault(ref val, env));
 
 				Try!(reader.ConsumeEmpty());
 			}	
@@ -389,7 +394,7 @@ namespace Bon.Integrated
 				if (reader.IsNull())
 				{
 					if (*(void**)val.DataPtr != null)
-						MakeDefault(ref val, env);
+						Try!(MakeDefault(ref val, env));
 
 					Try!(reader.ConsumeEmpty());
 				}
@@ -406,7 +411,7 @@ namespace Bon.Integrated
 							// it up to make our type instance below
 							if (*(void**)val.DataPtr != null
 								&& (*(Object*)val.DataPtr).GetType() != polyType) // Box still returns type of boxed
-								MakeDefault(ref val, env);
+								Try!(MakeDefault(ref val, env));
 
 							val.UnsafeSetType(boxType);
 
@@ -430,7 +435,7 @@ namespace Bon.Integrated
 							// it up to make our type instance below
 							if (*(void**)val.DataPtr != null
 								&& (*(Object*)val.DataPtr).GetType() != polyType)
-								MakeDefault(ref val, env);
+								Try!(MakeDefault(ref val, env));
 
 							val.UnsafeSetType(polyType);
 						}
@@ -507,9 +512,9 @@ namespace Bon.Integrated
 							// Deallocate old array if count doesn't match
 							if (*(void**)val.DataPtr != null)
 							{
-								let currCount = val.Get<Array>().Count;
+								let currCount = GetValField!<int_arsize>(val, "mLength");
 								if (fullCount != currCount)
-									MakeDefault(ref val, env);
+									Try!(MakeDefault(ref val, env));
 							}
 
 							if (*(void**)val.DataPtr == null)
@@ -517,7 +522,7 @@ namespace Bon.Integrated
 								// We're screwed on big collections, but who uses that...? hah
 								Try!(MakeArrayInstanceRef(ref val, (int32)fullCount));
 							}
-							Debug.Assert(val.Get<Array>().Count == fullCount);
+							Debug.Assert(GetValField!<int_arsize>(val, "mLength") == fullCount);
 
 							let arrType = t.GetGenericArg(0); // T
 							let classData = *(uint8**)val.DataPtr;
@@ -525,7 +530,7 @@ namespace Bon.Integrated
 							void* arrPtr = null;
 							if (t.GetField("mFirstElement") case .Ok(let field))
 								arrPtr = classData + field.MemberOffset; // T*
-							else Error!(t, "No reflection data forced for array type!"); // for example: [Serializable] extension Array1<T> {} or through build settings
+							else Error!(t, "No reflection data forced for array type"); // for example: [Serializable] extension Array1<T> {} or through build settings
 
 							switch (t.UnspecializedType)
 							{
@@ -555,9 +560,15 @@ namespace Bon.Integrated
 			}
 			else if (valType.IsPointer)
 			{
-				Debug.FatalError(); // TODO
+				// See this case in Serialize.bf
+
+				Error!(valType, "Cannot handle pointer values");
 			}
-			else Debug.FatalError();
+			else
+			{
+				Debug.FatalError();
+				Error!(valType, "Unhandled. Please report this");
+			}
 
 			return .Ok;
 		}
@@ -631,7 +642,7 @@ namespace Bon.Integrated
 				for (let f in fields)
 				{
 					Variant fieldVal = Variant.CreateReference(f.FieldType, ((uint8*)val.DataPtr) + f.MemberOffset);
-					MakeDefault(ref fieldVal, env);
+					Try!(MakeDefault(ref fieldVal, env));
 				}
 			}
 
@@ -654,7 +665,7 @@ namespace Bon.Integrated
 					{
 						// Null unless we leave these alone!
 						if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
-							MakeDefault(ref arrVal, env);
+							Try!(MakeDefault(ref arrVal, env));
 
 						Try!(reader.ConsumeEmpty());
 					}
@@ -669,14 +680,14 @@ namespace Bon.Integrated
 				if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
 				{
 					if (arrType.IsValueType)
-						Internal.MemSet(ptr, 0, arrType.Stride * ((int)count - i)); // MakeDefault would just do the same here
+						Internal.MemSet(ptr, 0, arrType.Stride * ((int)count - i), arrType.Align); // MakeDefault would just do the same here
 					else
 					{
 						// Default unaffected entries (since they aren't serialized)
 						for (let j < count - i)
 						{
 							var arrVal = Variant.CreateReference(arrType, ptr);
-							MakeDefault(ref arrVal, env);
+							Try!(MakeDefault(ref arrVal, env));
 
 							ptr += arrType.Stride;
 						}
@@ -709,9 +720,9 @@ namespace Bon.Integrated
 					for (let j < inner)
 						innerCounts[j] = counts[j + 1];
 
-					DefaultMultiDimensionalArray(arrType, ptr, env, params innerCounts);
+					Try!(DefaultMultiDimensionalArray(arrType, ptr, env, params innerCounts));
 				}
-				else DefaultArray(arrType, ptr, counts[1], env);
+				else Try!(DefaultArray(arrType, ptr, counts[1], env));
 			}
 
 			Try!(reader.ArrayBlock());
@@ -730,7 +741,7 @@ namespace Bon.Integrated
 						if (isDefault || !env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
 						{
 							if (arrType.IsValueType)
-								Internal.MemSet(ptr, 0, stride); // MakeDefault would just do the same here
+								Internal.MemSet(ptr, 0, stride, arrType.Align); // MakeDefault would just do the same here
 							else DefaultArray!(ptr);
 						}
 
@@ -759,7 +770,7 @@ namespace Bon.Integrated
 				if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
 				{
 					if (arrType.IsValueType)
-						Internal.MemSet(ptr, 0, stride * (count - i)); // MakeDefault would just do the same here
+						Internal.MemSet(ptr, 0, stride * (count - i), arrType.Align); // MakeDefault would just do the same here
 					else
 					{
 						// Default unaffected entries (since they aren't serialized)
@@ -778,19 +789,20 @@ namespace Bon.Integrated
 			return reader.ArrayBlockEnd();
 		}
 
-		public static void DefaultArray(Type arrType, void* arrPtr, int_arsize count, BonEnvironment env)
+		public static Result<void> DefaultArray(Type arrType, void* arrPtr, int_arsize count, BonEnvironment env)
 		{
 			var ptr = (uint8*)arrPtr;
 			for (let j < count)
 			{
 				var arrVal = Variant.CreateReference(arrType, ptr);
-				MakeDefault(ref arrVal, env);
+				Try!(MakeDefault(ref arrVal, env));
 
 				ptr += arrType.Stride;
 			}
+			return .Ok;
 		}
 
-		public static void DefaultMultiDimensionalArray(Type arrType, void* arrPtr, BonEnvironment env, params int_arsize[] counts)
+		public static Result<void> DefaultMultiDimensionalArray(Type arrType, void* arrPtr, BonEnvironment env, params int_arsize[] counts)
 		{
 			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
 
@@ -814,13 +826,14 @@ namespace Bon.Integrated
 						for (let j < inner)
 							innerCounts[j] = counts[j + 1];
 
-						DefaultMultiDimensionalArray(arrType, ptr, env, params innerCounts);
+						Try!(DefaultMultiDimensionalArray(arrType, ptr, env, params innerCounts));
 					}
-					else DefaultArray(arrType, ptr, counts[1], env);
+					else Try!(DefaultArray(arrType, ptr, counts[1], env));
 
 					ptr += stride;
 				}
 			}
+			return .Ok;
 		}
 
 		public static mixin String(BonReader reader, ref String parsedStr, BonEnvironment env)

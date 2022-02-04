@@ -53,6 +53,9 @@ namespace System
 	// but that would be just wasteful. Still, if you need it
 	// static this() => gBonEnv.RegisterPolyType!(typeof(Self));
 
+	[Reflect(.AllMembers)]
+	extension Array {}
+
 	[Serializable]
 	extension Array1<T> {}
 
@@ -67,6 +70,7 @@ namespace System
 
 	namespace Collections
 	{
+		// EnsureCapacity is forced to be included through build settings.
 		[Serializable,Reflect(.Methods)] // .Methods is needed to call EnsureCapacity
 		extension List<T> {}
 	}
