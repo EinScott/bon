@@ -1268,6 +1268,30 @@ namespace Bon.Tests
 				delete so;
 			}
 
+			using (PushDeFlags(.IgnoreUnmentionedValues))
+			{
+				uint64[,,,] s = scope .[1,2,3,4]();
+				s[0,1,0,3] = 1646;
+				s[0,0,0,0] = 5000;
+				s[0,0,2,1] = 9090;
+
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "<1,2,3,4>[[[[5000],?,[?,9090]],[[?,?,?,1646],?]]]");
+
+				uint64[,,,] so = scope .[1,2,3,4]();
+				so[0,1,1,1] = 50;
+				so[0,1,0,0] = 60;
+				so[0,1,2,0] = 70;
+
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok)
+					&& s[0,1,0,3] == so[0,1,0,3] // Fill mentioned values
+					&& s[0,0,0,0] == so[0,0,0,0]
+					&& s[0,0,2,1] == so[0,0,2,1]
+					&& so[0,1,1,1] == 50 // Ignore unmentioned
+					&& so[0,1,0,0] == 60
+					&& so[0,1,2,0] == 70);
+			}
+
 			{
 				uint16[,,] so = null;
 				Test.Assert(Bon.Deserialize(ref so, "<2,5,1>[[[1],[2],[3],[4],[5]],[[20],[21],[22],[23],[24],[]]]") case .Err);
@@ -1427,7 +1451,6 @@ namespace Bon.Tests
 			}
 		}
 
-		// TODO: tests for .IgnoreUnmentionedValues
 		// TODO: test arrays & collections for [Align()]
 
 		[Test]
