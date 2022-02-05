@@ -832,9 +832,27 @@ namespace Bon.Tests
 			case Something(float, float, Vector2);
 		}
 
+		enum Carry
+		{
+			case One(int);
+			case Two(String);
+			case Three(uint8[]);
+		}
+
 		[Test]
 		static void EnumUnions()
 		{
+			// No reflection data
+			using (PushFlags(.IncludeDefault))
+			{
+				Carry i = .One(1);
+				let str = Bon.Serialize(i, .. scope .());
+				Test.Assert(str == ".One{0=1}");
+
+				Carry si = ?;
+				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si == i);
+			}
+
 			using (PushFlags(.IncludeDefault))
 			{
 				Thing i = .Nothing;

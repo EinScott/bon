@@ -238,8 +238,9 @@ namespace Bon.Integrated
 						}
 					}
 
-					// TODO: fails sometimes
-					//Debug.Assert(didWrite);
+					// TODO: This fails sometimes but i don't know why. Even without reflection data the tests
+					// seem to run fine. Maybe do something if (!didWrite) to warn or something?
+					Debug.Assert(didWrite);
 				}
 				else if (GetCustomHandler(valType, env, let func))
 					func(writer, ref val, env);
