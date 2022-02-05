@@ -168,7 +168,7 @@ namespace Bon.Integrated
 			{
 				if (valType == typeof(StringView))
 				{
-					let view = val.Get<StringView>();
+					let view = *(StringView*)val.dataPtr;
 
 					if (view.Ptr == null)
 						writer.Null();
@@ -296,7 +296,7 @@ namespace Bon.Integrated
 					}
 					else if (polyType == typeof(String))
 					{
-						let str = val.Get<String>();
+						let str = *(String*)val.dataPtr;
 						writer.String(str);
 					}
 					else if (polyType.IsArray)

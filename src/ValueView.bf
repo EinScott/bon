@@ -3,6 +3,9 @@ using System.Diagnostics;
 
 namespace Bon
 {
+	// A reference to a value in memory. For structs, this is the struct body obviously (StringView* => void*).
+	// For classes, this is the pointer/reference to their body (String* => void**), just as things would be
+	// if you looked at the members of something.
 	struct ValueView
 	{
 		public void* dataPtr;

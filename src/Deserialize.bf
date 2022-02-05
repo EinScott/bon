@@ -448,7 +448,7 @@ namespace Bon.Integrated
 
 						if (polyType == typeof(String))
 						{
-							var str = *(String*)(void**)val.dataPtr;
+							var str = *(String*)val.dataPtr;
 
 							str.Clear();
 							String!(reader, ref str, env);
