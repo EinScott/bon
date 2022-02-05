@@ -37,7 +37,7 @@ namespace Bon
 		{
 			let writer = scope BonWriter(into, env.serializeFlags.HasFlag(.Verbose));
 			var value;
-			var variant = Variant.CreateReference(typeof(T), &value);
+			var variant = ValueView(typeof(T), &value);
 
 			Serialize.Thing(writer, ref variant, env);
 		}
@@ -46,7 +46,7 @@ namespace Bon
 		{
 			let reader = scope BonReader();
 			Try!(reader.Setup(from));
-			var variant = Variant.CreateReference(typeof(T), &value);
+			var variant = ValueView(typeof(T), &value);
 
 			return Deserialize.Thing(reader, ref variant, env);
 		}

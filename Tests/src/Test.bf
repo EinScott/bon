@@ -53,15 +53,15 @@ namespace Bon.Tests
 
 		static List<String> strings = new .() ~ DeleteContainerAndItems!(_);
 
-		static void MakeString(Variant val)
+		static void MakeString(ValueView val)
 		{
 			var val;
 			var str = strings.Add(.. new .());
 
-			BonAssignVariant!(val, str);
+			val.Assign(str);
 		}
 
-		static void DestroyString(Variant val)
+		static void DestroyString(ValueView val)
 		{
 			var val;
 			var str = val.Get<String>();

@@ -7,9 +7,9 @@ namespace Bon.Integrated
 {
 	static
 	{
-		public static void SerializeList(BonWriter writer, ref Variant val, BonEnvironment env)
+		public static void SerializeList(BonWriter writer, ref ValueView val, BonEnvironment env)
 		{
-			let t = (SpecializedGenericType)val.VariantType;
+			let t = (SpecializedGenericType)val.type;
 
 			Debug.Assert(t.UnspecializedType == typeof(List<>));
 			Debug.Assert(t.GetField("mSize") case .Ok, Serialize.CompNoReflectionError("List<>", "List<T>"));
@@ -23,9 +23,9 @@ namespace Bon.Integrated
 			Serialize.Array(writer, arrType, arrPtr, count, env);
 		}
 
-		public static Result<void> DeserializeList(BonReader reader, ref Variant val, BonEnvironment env)
+		public static Result<void> DeserializeList(BonReader reader, ref ValueView val, BonEnvironment env)
 		{
-			let t = (SpecializedGenericType)val.VariantType;
+			let t = (SpecializedGenericType)val.type;
 
 			Debug.Assert(t.UnspecializedType == typeof(List<>));
 
@@ -52,7 +52,7 @@ namespace Bon.Integrated
 			{
 				if (((t.GetMethod("EnsureCapacity", .NonPublic|.Instance) case .Ok(let method))
 					// Keep in mind, strictly speaking val.DataPtr is pointing to the field which references this list!
-					&& method.Invoke(*(Object*)val.DataPtr, (int)count, true) case .Ok)) // returns T*, which is sizeof(int), so Variant doesnt alloc
+					&& method.Invoke(*(Object*)val.dataPtr, (int)count, true) case .Ok)) // returns T*, which is sizeof(int), so Variant doesnt alloc
 				{
 					if (arrType.IsObject)
 					{

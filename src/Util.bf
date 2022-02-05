@@ -1,28 +1,15 @@
 using System;
 using System.Diagnostics;
 
-namespace Bon
-{
-	static
-	{
-		/// Meant as a helper for MakeThing functions
-		public static mixin BonAssignVariant<T>(Variant val, T assign)
-		{
-			Debug.Assert(val.VariantType == typeof(T));
-			*(T*)val.DataPtr = assign;
-		}
-	}
-}
-
 namespace Bon.Integrated
 {
 	static
 	{
-		public static mixin VariantDataIsZero(Variant val)
+		public static mixin ValueDataIsZero(ValueView val)
 		{
 			bool isZero = true;
-			var ptr = (uint8*)val.DataPtr;
-			let size = val.VariantType.Size;
+			var ptr = (uint8*)val.dataPtr;
+			let size = val.type.Size;
 			switch (size)
 			{
 			case 0:
@@ -49,46 +36,25 @@ namespace Bon.Integrated
 		// These are specifically for when we know that these fields exist (otherwise we crash because they should)
 		// We're not doing many checks here like the reflection functions do.
 
-		public static mixin GetValField<T>(Variant val, String field)
+		public static mixin GetValField<T>(ValueView val, String field)
 		{
-			let f = val.VariantType.GetField(field).Get();
+			let f = val.type.GetField(field).Get();
 			Debug.Assert(f.FieldType == typeof(T));
 
-			*(T*)(*(uint8**)val.DataPtr + f.[Inline]MemberOffset)
+			*(T*)(*(uint8**)val.dataPtr + f.[Inline]MemberOffset)
 		}
 
-		public static mixin GetValField<T>(uint8* dataPtr, Type t, String field)
+		public static mixin GetValFieldPtr(ValueView val, String field)
 		{
-			let f = t.GetField(field).Get();
+			*(uint8**)val.dataPtr + val.type.GetField(field).Get().[Inline]MemberOffset
+		}
+
+		public static mixin SetValField<T>(ValueView val, String field, T thing)
+		{
+			let f = val.type.GetField(field).Get();
 			Debug.Assert(f.FieldType == typeof(T));
 
-			*(T*)(dataPtr + f.[Inline]MemberOffset)
-		}
-
-		public static mixin GetValFieldPtr(Variant val, String field)
-		{
-			*(uint8**)val.DataPtr + val.VariantType.GetField(field).Get().[Inline]MemberOffset
-		}
-
-		public static mixin GetValFieldPtr(uint8* dataPtr, Type t, String field)
-		{
-			dataPtr + t.GetField(field).Get().[Inline]MemberOffset
-		}
-
-		public static mixin SetValField<T>(Variant val, String field, T thing)
-		{
-			let f = val.VariantType.GetField(field).Get();
-			Debug.Assert(f.FieldType == typeof(T));
-
-			*(T*)(*(uint8**)val.DataPtr + f.[Inline]MemberOffset) = thing;
-		}
-
-		public static mixin SetValField<T>(uint8* dataPtr, Type t, String field, T thing)
-		{
-			let f = t.GetField(field).Get();
-			Debug.Assert(f.FieldType == typeof(T));
-
-			*(T*)(dataPtr + f.[Inline]MemberOffset) = thing;
+			*(T*)(*(uint8**)val.dataPtr + f.[Inline]MemberOffset) = thing;
 		}
 	}
 }
@@ -103,15 +69,6 @@ namespace System
 				if (i == interfaceType)
 					return true;
 			return false;
-		}
-	}
-
-	extension Variant
-	{
-		[Inline]
-		public void UnsafeSetType(Type type) mut
-		{
-			mStructType = ((int)Internal.UnsafeCastToPtr(type) & ~3) | mStructType & 3;
 		}
 	}
 

@@ -9,9 +9,9 @@ namespace Bon.Integrated
 		[Comptime]
 		public static String CompNoReflectionError(String type, String example) => scope $"No reflection data forced for {type}!\n(for example: [Serializable] extension {example} {{}} or through build settings)";
 
-		static mixin DoInclude(ref Variant val, BonSerializeFlags flags)
+		static mixin DoInclude(ref ValueView val, BonSerializeFlags flags)
 		{
-			(flags.HasFlag(.IncludeDefault) || !VariantDataIsZero!(val))
+			(flags.HasFlag(.IncludeDefault) || !ValueDataIsZero!(val))
 		}
 
 		static mixin DoTypeOneLine(Type type, BonSerializeFlags flags)
@@ -19,7 +19,7 @@ namespace Bon.Integrated
 			(type.IsPrimitive || (type.IsTypedPrimitive && (!flags.HasFlag(.Verbose) || !type.IsEnum)))
 		}
 
-		public static void Thing(BonWriter writer, ref Variant val, BonEnvironment env)
+		public static void Thing(BonWriter writer, ref ValueView val, BonEnvironment env)
 		{
 			writer.Start();
 			if (DoInclude!(ref val, env.serializeFlags))
@@ -35,9 +35,9 @@ namespace Bon.Integrated
 			writer.End();
 		}
 
-		public static void Value(BonWriter writer, ref Variant val, BonEnvironment env, bool doOneLine = false)
+		public static void Value(BonWriter writer, ref ValueView val, BonEnvironment env, bool doOneLine = false)
 		{
-			let valType = val.VariantType;
+			let valType = val.type;
 
 			// Make sure that doOneLineVal is only passed when valid
 			Debug.Assert(!doOneLine || DoTypeOneLine!(valType, env.serializeFlags));
@@ -69,7 +69,7 @@ namespace Bon.Integrated
 					doPrintLiteral = false;
 
 					int64 valueData = 0;
-					Span<uint8>((uint8*)val.DataPtr, valType.Size).CopyTo(Span<uint8>((uint8*)&valueData, valType.Size));
+					Span<uint8>((uint8*)val.dataPtr, valType.Size).CopyTo(Span<uint8>((uint8*)&valueData, valType.Size));
 
 					bool found = false;
 					for (var field in valType.GetFields())
@@ -138,7 +138,7 @@ namespace Bon.Integrated
 
 								// Print remainder literal
 								doPrintLiteral = true;
-								printVal = Variant.CreateReference(val.VariantType, &enumRemainderVal);
+								printVal = .(val.type, &enumRemainderVal);
 
 								break;
 							}
@@ -188,12 +188,12 @@ namespace Bon.Integrated
 						if (enumField.[Friend]mFieldData.mFlags.HasFlag(.EnumDiscriminator))
 						{
 							let discrType = enumField.FieldType;
-							var discrVal = Variant.CreateReference(discrType, (uint8*)val.DataPtr + enumField.[Friend]mFieldData.mData);
+							var discrVal = ValueView(discrType, (uint8*)val.dataPtr + enumField.[Friend]mFieldData.mData);
 							Debug.Assert(discrType.IsInteger);
 
 							mixin GetVal<T>() where T : var
 							{
-								T thing = *(T*)discrVal.DataPtr;
+								T thing = *(T*)discrVal.dataPtr;
 								unionCaseIndex = (uint64)thing;
 							}
 
@@ -227,7 +227,7 @@ namespace Bon.Integrated
 								continue;
 							}
 
-							var unionPayload = Variant.CreateReference(enumField.FieldType, val.DataPtr);
+							var unionPayload = ValueView(enumField.FieldType, val.dataPtr);
 
 							// Do serialize of discriminator and payload
 							writer.Enum(enumField.Name);
@@ -256,21 +256,21 @@ namespace Bon.Integrated
 				if (env.serializeFlags.HasFlag(.Verbose))
 					writer.Sizer((.)count, true);
 
-				Array(writer, t.UnderlyingType, val.DataPtr, count, env);
+				Array(writer, t.UnderlyingType, val.dataPtr, count, env);
 			}
 			else if (TypeHoldsObject!(valType))
 			{
-				if (*(void**)val.DataPtr == null)
+				if (*(void**)val.dataPtr == null)
 					writer.Null();
 				else
 				{
-					let polyType = (*(Object*)val.DataPtr).GetType();
+					let polyType = (*(Object*)val.dataPtr).GetType();
 					if (polyType != valType)
 					{
 						Debug.Assert(!polyType.IsObject || polyType.IsSubtypeOf(valType) || (valType.IsInterface && polyType.HasInterface(valType)));
 
 						// Change type of pointer to actual type
-						val.UnsafeSetType(polyType);
+						val.type = polyType;
 
 						let typeName = polyType.GetFullName(.. scope .());
 						writer.Type(typeName);
@@ -281,13 +281,13 @@ namespace Bon.Integrated
 					{
 						// Throw together the pointer to the box payload
 						// in the corlib approved way. (See Variant.CreateFromBoxed)
-						let boxType = (*(Object*)val.DataPtr).[Friend]RawGetType();
-						let boxedPtr = (uint8*)*(void**)val.DataPtr + boxType.[Friend]mMemberDataOffset;
+						let boxType = (*(Object*)val.dataPtr).[Friend]RawGetType();
+						let boxedPtr = (uint8*)*(void**)val.dataPtr + boxType.[Friend]mMemberDataOffset;
 
 						Debug.Assert(!polyType.IsObject);
 
 						// polyType already is the type in the box
-						var boxedData = Variant.CreateReference(polyType, boxedPtr);
+						var boxedData = ValueView(polyType, boxedPtr);
 						Value(writer, ref boxedData, env);
 
 						// After this we only end the line but the Value call
@@ -308,8 +308,7 @@ namespace Bon.Integrated
 						Debug.Assert(t.GetField("mFirstElement") case .Ok, CompNoReflectionError("array type", "Array1<T>"));
 
 						let arrType = t.GetGenericArg(0); // T
-						let classData = *(uint8**)val.DataPtr;
-						var arrPtr = GetValFieldPtr!(classData, t, "mFirstElement"); // T*
+						var arrPtr = GetValFieldPtr!(val, "mFirstElement"); // T*
 						var count = GetValField!<int_arsize>(val, "mLength");
 						
 						switch (t.UnspecializedType)
@@ -319,24 +318,24 @@ namespace Bon.Integrated
 							Array(writer, arrType, arrPtr, count, env);
 
 						case typeof(Array2<>):
-							let count1 = GetValField!<int_cosize>(classData, t, "mLength1");
+							let count1 = GetValField!<int_cosize>(val, "mLength1");
 							count /= count1;
 							writer.MultiSizer((.)count,(.)count1);
 
 							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1);
 
 						case typeof(Array3<>):
-							let count2 = GetValField!<int_cosize>(classData, t, "mLength2");
-							let count1 = GetValField!<int_cosize>(classData, t, "mLength1");
+							let count2 = GetValField!<int_cosize>(val, "mLength2");
+							let count1 = GetValField!<int_cosize>(val, "mLength1");
 							count /= (count1 * count2);
 							writer.MultiSizer((.)count,(.)count1,(.)count2);
 
 							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1, count2);
 
 						case typeof(Array4<>):
-							let count1 = GetValField!<int_cosize>(classData, t, "mLength1");
-							let count2 = GetValField!<int_cosize>(classData, t, "mLength2");
-							let count3 = GetValField!<int_cosize>(classData, t, "mLength3");
+							let count1 = GetValField!<int_cosize>(val, "mLength1");
+							let count2 = GetValField!<int_cosize>(val, "mLength2");
+							let count3 = GetValField!<int_cosize>(val, "mLength3");
 							count /= (count1 * count2 * count3);
 							writer.MultiSizer((.)count,(.)count1,(.)count2,(.)count3);
 
@@ -395,19 +394,19 @@ namespace Bon.Integrated
 			return false;
 		}
 
-		public static void Class(BonWriter writer, ref Variant classVal, BonEnvironment env)
+		public static void Class(BonWriter writer, ref ValueView classVal, BonEnvironment env)
 		{
-			let classType = classVal.VariantType;
+			let classType = classVal.type;
 
 			Debug.Assert(classType.IsObject);
 
-			var classDataVal = Variant.CreateReference(classType, *(void**)classVal.DataPtr);
+			var classDataVal = ValueView(classType, *(void**)classVal.dataPtr);
 			Struct(writer, ref classDataVal, env);
 		}
 
-		public static void Struct(BonWriter writer, ref Variant structVal, BonEnvironment env)
+		public static void Struct(BonWriter writer, ref ValueView structVal, BonEnvironment env)
 		{
-			let structType = structVal.VariantType;
+			let structType = structVal.type;
 
 			bool hasUnnamedMembers = false;
 			using (writer.ObjectBlock())
@@ -422,7 +421,7 @@ namespace Bon.Integrated
 							&& (flags.HasFlag(.IgnoreAttributes) || !(m.GetCustomAttribute<DoSerializeAttribute>() case .Ok))) // check if we still include it anyway
 							continue;
 
-						Variant val = Variant.CreateReference(m.FieldType, ((uint8*)structVal.DataPtr) + m.MemberOffset);
+						var val = ValueView(m.FieldType, ((uint8*)structVal.dataPtr) + m.MemberOffset);
 
 						if (!DoInclude!(ref val, flags))
 							continue;
@@ -459,7 +458,7 @@ namespace Bon.Integrated
 						var ptr = (uint8*)arrPtr + arrType.Stride * (count - 1);
 						for (var i = count - 1; i >= 0; i--)
 						{
-							var arrVal = Variant.CreateReference(arrType, ptr);
+							var arrVal = ValueView(arrType, ptr);
 
 							// If this gets included, we'll have to include everything until here!
 							if (DoInclude!(ref arrVal, env.serializeFlags))
@@ -475,7 +474,7 @@ namespace Bon.Integrated
 					var ptr = (uint8*)arrPtr;
 					for (let i < includeCount)
 					{
-						var arrVal = Variant.CreateReference(arrType, ptr);
+						var arrVal = ValueView(arrType, ptr);
 						if (DoInclude!(ref arrVal, env.serializeFlags))
 							Value(writer, ref arrVal, env, doArrayOneLine);
 						else
@@ -567,14 +566,14 @@ namespace Bon.Integrated
 			writer.EntryEnd();
 		}
 
-		static mixin AsThingToString<T>(BonWriter writer, ref Variant val)
+		static mixin AsThingToString<T>(BonWriter writer, ref ValueView val)
 		{
-			T thing = *(T*)val.DataPtr;
+			T thing = *(T*)val.dataPtr;
 			thing.ToString(writer.outStr);
 		}
 
 		[Inline]
-		static void Integer(Type type, BonWriter writer, ref Variant val)
+		static void Integer(Type type, BonWriter writer, ref ValueView val)
 		{
 			switch (type)
 			{
@@ -595,20 +594,20 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
-		static void Char(Type type, BonWriter writer, ref Variant val)
+		static void Char(Type type, BonWriter writer, ref ValueView val)
 		{
 			char32 char = 0;
 			switch (type)
 			{
-			case typeof(char8): char = (.)*(char8*)val.DataPtr;
-			case typeof(char16): char = (.)*(char16*)val.DataPtr;
-			case typeof(char32): char = *(char32*)val.DataPtr;
+			case typeof(char8): char = (.)*(char8*)val.dataPtr;
+			case typeof(char16): char = (.)*(char16*)val.dataPtr;
+			case typeof(char32): char = *(char32*)val.dataPtr;
 			}
 			writer.Char(char);
 		}
 
 		[Inline]
-		static void Float(Type type, BonWriter writer, ref Variant val)
+		static void Float(Type type, BonWriter writer, ref ValueView val)
 		{
 			switch (type)
 			{
@@ -620,9 +619,9 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
-		static void Bool(BonWriter writer, ref Variant val, BonSerializeFlags flags)
+		static void Bool(BonWriter writer, ref ValueView val, BonSerializeFlags flags)
 		{
-			bool boolean = *(bool*)val.DataPtr;
+			bool boolean = *(bool*)val.dataPtr;
 			if (flags.HasFlag(.Verbose))
 				boolean.ToString(writer.outStr);
 			else (boolean ? 1 : 0).ToString(writer.outStr);

@@ -38,11 +38,11 @@ namespace Bon
 		case IgnorePointers = 1 << 1;
 	}
 	
-	public delegate void MakeThingFunc(Variant refIntoVal);
-	public delegate void DestroyThingFunc(Variant valRef);
+	public delegate void MakeThingFunc(ValueView refIntoVal);
+	public delegate void DestroyThingFunc(ValueView valRef);
 
-	public static function void HandleSerializeFunc(BonWriter writer, ref Variant val, BonEnvironment env);
-	public static function Result<void> HandleDeserializeFunc(BonReader reader, ref Variant val, BonEnvironment env);
+	public static function void HandleSerializeFunc(BonWriter writer, ref ValueView val, BonEnvironment env);
+	public static function Result<void> HandleDeserializeFunc(BonReader reader, ref ValueView val, BonEnvironment env);
 
 	/// Defines the behavior of bon. May be modified globally (gBonEnv)
 	/// or for some calls only be creating a BonEnvironment to modify
