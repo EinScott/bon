@@ -33,6 +33,11 @@ namespace Bon.Integrated
 				return;
 
 			var currPos = Math.Min(origStr.Length - inStr.Length, origStr.Length - 1);
+			if (currPos == -1)
+			{
+				buffer.Append("\n> (string is empty)");
+				return;
+			}
 
 			// Often time we have already discarded the empty space after a thing and are
 			// at the start of the next thing. Dial back until we point at something again!

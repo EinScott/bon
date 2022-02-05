@@ -25,6 +25,24 @@ namespace Bon.Tests
 			}
 		}
 
+		struct PushDeFlags : IDisposable
+		{
+			BonDeserializeFlags old;
+
+			[Inline]
+			public this(BonDeserializeFlags flags)
+			{
+				old = gBonEnv.deserializeFlags;
+				gBonEnv.deserializeFlags = flags;
+			}
+
+			[Inline]
+			public void Dispose()
+			{
+				gBonEnv.deserializeFlags = old;
+			}
+		}
+
 		static StringView HandleStringView(StringView view)
 		{
 			// Since we're dealing with const strings,
@@ -973,7 +991,7 @@ namespace Bon.Tests
 		[Serializable,PolySerialize]
 		class LookAThing<T>
 		{
-			public T tThingLook;
+			T tThingLook;
 		}
 
 		[Test]
@@ -1053,18 +1071,21 @@ namespace Bon.Tests
 				delete co;
 			}
 
+			using (PushFlags(.IncludeNonPublic))
 			{
-				let c = scope LookAThing<int>() { tThingLook = 55 };
+				let c = scope LookAThing<int>();
+				c.[Friend]tThingLook = 55;
 
 				let str = Bon.Serialize(c, .. scope .());
 				Test.Assert(str == "{tThingLook=55}");
 
 				LookAThing<int> co = scope .();
-				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && co.tThingLook == c.tThingLook);
+				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && co.[Friend]tThingLook == c.[Friend]tThingLook);
 			}
 
-			{
-				Object c = scope LookAThing<int>() { tThingLook = 55 };
+			using (PushFlags(.IncludeNonPublic))
+			TEST: {
+				Object c = { let a = scope:TEST LookAThing<int>(); a.[Friend]tThingLook = 55; a };
 
 				let str = Bon.Serialize(c, .. scope .());
 				Test.Assert(str == "(Bon.Tests.LookAThing<int>){tThingLook=55}");
@@ -1408,7 +1429,62 @@ namespace Bon.Tests
 
 		// TODO: tests for .IgnoreUnmentionedValues
 		// TODO: test arrays & collections for [Align()]
-		// TODO: pointer tests (mainly test-- unsupportedness right now)
+
+		[Test]
+		static void Pointers()
+		{
+			// These tests mostly assert how pointers *dont* work right now
+			// We might support them in limited way at some point...
+
+			// This only works because the pointer is a file-level entry
+			// that is null
+			{
+				uint8* p = null;
+				let str = Bon.Serialize(p, .. scope .());
+				Test.Assert(str == "?");
+
+				uint8* po = null;
+				Test.Assert(Bon.Deserialize(ref po, str) case .Ok);
+			}
+
+			{
+				uint8 number = 44;
+				uint8* p = &number;
+				let str = Bon.Serialize(p, .. scope .());
+				Test.Assert(str == "");
+
+				{
+					uint8* po = null;
+					Test.Assert(Bon.Deserialize(ref po, str) case .Err);
+				}
+			}
+
+			// Explicitly mentioned pointers always error
+			{
+				uint8* po = null;
+				Test.Assert(Bon.Deserialize(ref po, "d") case .Err);
+			}
+
+			{
+				uint8*[4] po = .();
+				Test.Assert(Bon.Deserialize(ref po, "[]") case .Ok);
+			}
+
+			{
+				uint8 d = 0;
+				uint8*[4] po = .(&d,&d,&d,&d); // Cannot null pointers
+				Test.Assert(Bon.Deserialize(ref po, "[]") case .Err);
+			}
+
+			using (PushDeFlags(.IgnorePointers))
+			{
+				uint8 d = 0;
+				uint8*[4] po = .(&d,&d,&d,&d);
+				uint8*[4] poc = po;
+				Test.Assert((Bon.Deserialize(ref po, "[]") case .Ok)
+					&& po == poc); // But nothing actually changed
+			}
+		}
 
 		[Test]
 		static void Trash()

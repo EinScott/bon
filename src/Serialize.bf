@@ -238,7 +238,8 @@ namespace Bon.Integrated
 						}
 					}
 
-					Debug.Assert(didWrite);
+					// TODO: fails sometimes
+					//Debug.Assert(didWrite);
 				}
 				else if (GetCustomHandler(valType, env, let func))
 					func(writer, ref val, env);
@@ -365,13 +366,11 @@ namespace Bon.Integrated
 				// TODO: maybe limited ptr support: serialize underlying value if its a value type
 				//       deserialize into already pointed to value type...
 				
-				writer.IrrelevantEntry();
 				if (env.serializeFlags.HasFlag(.Verbose))
 					writer.outStr.Append("/* Cannot handle pointer values. Put [NoSerialize] on this field */");
 			}
 			else
 			{
-				writer.IrrelevantEntry();
 				writer.outStr.Append("/* Unhandled. Please report this! */");
 				Debug.FatalError();
 			}

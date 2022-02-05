@@ -79,6 +79,7 @@ namespace Bon.Integrated
 				// we error by default to explicitly inform the user about this.
 				if (!env.deserializeFlags.HasFlag(.IgnorePointers))
 					Error!(valType, "Cannot handle pointer values. Set .IgnorePointers or .IgnoreUnmentionedValues if you manage those yourself.");
+				return .Ok;
 			}
 
 			let ptr = val.DataPtr;
@@ -664,7 +665,7 @@ namespace Bon.Integrated
 					if (reader.IsIrrelevantEntry())
 					{
 						// Null unless we leave these alone!
-						if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+						if (!((env.deserializeFlags & .IgnoreUnmentionedValues) == .IgnoreUnmentionedValues))
 							Try!(MakeDefault(ref arrVal, env));
 
 						Try!(reader.ConsumeEmpty());
@@ -677,7 +678,7 @@ namespace Bon.Integrated
 					ptr += arrType.Stride;
 				}
 
-				if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+				if (!((env.deserializeFlags & .IgnoreUnmentionedValues) == .IgnoreUnmentionedValues))
 				{
 					if (arrType.IsValueType)
 						Internal.MemSet(ptr, 0, arrType.Stride * ((int)count - i), arrType.Align); // MakeDefault would just do the same here
@@ -738,7 +739,7 @@ namespace Bon.Integrated
 					if (isDefault || reader.IsIrrelevantEntry())
 					{
 						// Null unless we leave these alone!
-						if (isDefault || !env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+						if (isDefault || !((env.deserializeFlags & .IgnoreUnmentionedValues) == .IgnoreUnmentionedValues))
 						{
 							if (arrType.IsValueType)
 								Internal.MemSet(ptr, 0, stride, arrType.Align); // MakeDefault would just do the same here
@@ -767,7 +768,7 @@ namespace Bon.Integrated
 					ptr += stride;
 				}
 
-				if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+				if (!((env.deserializeFlags & .IgnoreUnmentionedValues) == .IgnoreUnmentionedValues))
 				{
 					if (arrType.IsValueType)
 						Internal.MemSet(ptr, 0, stride * (count - i), arrType.Align); // MakeDefault would just do the same here
