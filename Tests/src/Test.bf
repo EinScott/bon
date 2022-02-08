@@ -447,7 +447,7 @@ namespace Bon.Tests
 			Named120 = 120
 		}
 
-		[Serializable]
+		[BonTarget]
 		enum TypeB : uint16
 		{
 			AThing,
@@ -455,7 +455,7 @@ namespace Bon.Tests
 			Count
 		}
 
-		[Serializable]
+		[BonTarget]
 		enum SomeValues
 		{
 			public const SomeValues defaultOption = .Option2;
@@ -465,7 +465,7 @@ namespace Bon.Tests
 			case Option3;
 		}
 
-		[Serializable]
+		[BonTarget]
 		enum PlaceFlags
 		{
 			None = 0,
@@ -486,7 +486,7 @@ namespace Bon.Tests
 			Forest = .Tree | .Path,
 		}
 
-		[Serializable,PolySerialize] // Also used for boxing tests
+		[BonTarget,BonPolyRegister] // Also used for boxing tests
 		enum SomeTokens : char8
 		{
 			Dot = '.',
@@ -646,7 +646,7 @@ namespace Bon.Tests
 			}
 		}
 
-		[Serializable,Ordered]
+		[BonTarget,Ordered]
 		struct SomeThings
 		{
 			public int i;
@@ -655,23 +655,23 @@ namespace Bon.Tests
 
 			uint8 intern;
 
-			[DoSerialize]
+			[BonInclude]
 			uint16 important;
 
-			[NoSerialize]
+			[BonIgnore]
 			public uint dont;
 
 			public int8 n;
 		}
 
-		[Serializable]
+		[BonTarget]
 		struct StructA
 		{
 			public int thing;
 			public StructB[5] bs;
 		}
 
-		[Serializable]
+		[BonTarget]
 		struct StructB
 		{
 			public StringView name;
@@ -679,7 +679,7 @@ namespace Bon.Tests
 			public TypeB type;
 		}
 
-		[Serializable,PolySerialize] // Also use it for boxing tests
+		[BonTarget,BonPolyRegister] // Also use it for boxing tests
 		struct SomeData : IThing
 		{
 			public double time;
@@ -709,6 +709,7 @@ namespace Bon.Tests
 				}
 
 				using (PushFlags(.IncludeNonPublic))
+				using (PushDeFlags(.AccessNonPublic))
 				{
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",intern=54,important=32656}");
@@ -728,21 +729,26 @@ namespace Bon.Tests
 				}
 
 				using (PushFlags(.IgnoreAttributes))
+				using (PushDeFlags(.AccessNonPublic))
 				{
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",dont=8}");
 
+					// We cannot access dont
 					SomeThings so = default;
-					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
+					Test.Assert(Bon.Deserialize(ref so, str) case .Err);
 				}
 
 				using (PushFlags(.IncludeNonPublic|.IgnoreAttributes|.IncludeDefault))
+				using (PushDeFlags(.AccessNonPublic))
 				{
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",intern=54,important=32656,dont=8,n=0}");
 
+					// We cannot access dont
 					SomeThings so = default;
-					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
+					Test.Assert(Bon.Deserialize(ref so, str) case .Err);
+					Test.Assert(Bon.Deserialize(ref so, "{i=5,f=1,str=\"oh hello\",intern=54,important=32656,n=0}") case .Ok);
 				}
 			}
 
@@ -820,10 +826,10 @@ namespace Bon.Tests
 			}
 		}
 
-		[Serializable]
+		[BonTarget]
 		struct Vector2 : this(float x, float y);
 
-		[Serializable, PolySerialize]
+		[BonTarget, BonPolyRegister]
 		enum Thing
 		{
 			case Nothing;
@@ -971,7 +977,7 @@ namespace Bon.Tests
 			}
 		}
 
-		[Serializable,PolySerialize]
+		[BonTarget,BonPolyRegister]
 		class AClass
 		{
 			public String aStringThing ~ if (_ != null) delete _;
@@ -979,7 +985,7 @@ namespace Bon.Tests
 			public SomeData data;
 		}
 
-		[Serializable] // Base classes also need to be marked!
+		[BonTarget] // Base classes also need to be marked!
 		abstract class BaseThing
 		{
 			public abstract int Number { get; set; }
@@ -992,7 +998,7 @@ namespace Bon.Tests
 
 		}
 
-		[Serializable,PolySerialize]
+		[BonTarget,BonPolyRegister]
 		class OtherClassThing : BaseThing, IThing
 		{
 			public uint32 something;
@@ -1000,13 +1006,13 @@ namespace Bon.Tests
 			public override int Number { get; set; }
 		}
 
-		[Serializable]
+		[BonTarget]
 		class FinClass : OtherClassThing
 		{
 			public new uint64 something;
 		}
 
-		[Serializable,PolySerialize]
+		[BonTarget,BonPolyRegister]
 		class LookAThing<T>
 		{
 			T tThingLook;
@@ -1039,6 +1045,7 @@ namespace Bon.Tests
 			}
 
 			using (PushFlags(.IncludeNonPublic))
+			using (PushDeFlags(.AccessNonPublic))
 			{
 				OtherClassThing c = scope OtherClassThing() { Number = 59992, something = 222252222 };
 				c.Name.Set("ohh");
@@ -1052,6 +1059,7 @@ namespace Bon.Tests
 			}
 
 			using (PushFlags(.IncludeNonPublic))
+			using (PushDeFlags(.AccessNonPublic))
 			{
 				Object c = scope OtherClassThing() { Number = 59992, something = 222252222 };
 
@@ -1064,6 +1072,7 @@ namespace Bon.Tests
 			}
 
 			using (PushFlags(.IncludeNonPublic))
+			using (PushDeFlags(.AccessNonPublic))
 			{
 				BaseThing c = scope OtherClassThing() { Number = 59992, something = 222252222 };
 
@@ -1090,6 +1099,7 @@ namespace Bon.Tests
 			}
 
 			using (PushFlags(.IncludeNonPublic))
+			using (PushDeFlags(.AccessNonPublic))
 			{
 				let c = scope LookAThing<int>();
 				c.[Friend]tThingLook = 55;
@@ -1102,6 +1112,7 @@ namespace Bon.Tests
 			}
 
 			using (PushFlags(.IncludeNonPublic))
+			using (PushDeFlags(.AccessNonPublic))
 			TEST: {
 				Object c = { let a = scope:TEST LookAThing<int>(); a.[Friend]tThingLook = 55; a };
 
@@ -1118,6 +1129,7 @@ namespace Bon.Tests
 		static void Interfaces()
 		{
 			using (PushFlags(.IncludeNonPublic))
+			using (PushDeFlags(.AccessNonPublic))
 			{
 				IThing c = scope OtherClassThing() { Number = 59992, something = 222252222 };
 
@@ -1386,7 +1398,7 @@ namespace Bon.Tests
 			}
 		}
 
-		[Serializable]
+		[BonTarget]
 		struct Compat
 		{
 			public uint version;

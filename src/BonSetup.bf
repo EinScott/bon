@@ -45,7 +45,7 @@ namespace System
 	// Include some reflection data that we need to support
 	// these builtin types!
 
-	[Serializable]
+	[BonTarget]
 	extension String {}
 
 	// We could, for example, put this in the static constructor
@@ -56,22 +56,22 @@ namespace System
 	[Reflect(.AllMembers)]
 	extension Array {}
 
-	[Serializable]
+	[BonTarget]
 	extension Array1<T> {}
 
-	[Serializable]
+	[BonTarget]
 	extension Array2<T> {}
 
-	[Serializable]
+	[BonTarget]
 	extension Array3<T> {}
 
-	[Serializable]
+	[BonTarget]
 	extension Array4<T> {}
 
 	namespace Collections
 	{
 		// EnsureCapacity is forced to be included through build settings.
-		[Serializable,Reflect(.Methods)] // .Methods is needed to call EnsureCapacity
+		[BonTarget,Reflect(.Methods)] // .Methods is needed to call EnsureCapacity
 		extension List<T> {}
 	}
 }

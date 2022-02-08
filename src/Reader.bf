@@ -303,7 +303,7 @@ namespace Bon.Integrated
 			return num;
 		}
 
-		public Result<(int len , bool isVerbatim)> StringLength()
+		public Result<(int len, bool isVerbatim)> StringLength()
 		{
 			let isVerbatim = Check('@');
 

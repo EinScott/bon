@@ -7,13 +7,13 @@ namespace Bon
 	// This makes it easier to work with types from other libraries (where you can
 	// only retroactively force reflection in the build settings)
 	[AttributeUsage(.Class|.Struct|.Enum, .AlwaysIncludeTarget, ReflectUser = .AllMembers | .DefaultConstructor, AlwaysIncludeUser = .AssumeInstantiated)]
-	struct SerializableAttribute : Attribute {}
+	struct BonTargetAttribute : Attribute {}
 
 	// In order to deserialize polymorphed values, the original type needs to be looked up by type name from bon string,
 	// so we need some sort of central lookup for them. That's why they need to be specifically registered with this.
 	// For inaccessible library types, you can just manually call gBonEnv.RegisterPolyType!(type) for it somewhere.
 	[AttributeUsage(.Class|.Struct|.Enum)]
-	struct PolySerializeAttribute : Attribute, IComptimeTypeApply
+	struct BonPolyRegisterAttribute : Attribute, IComptimeTypeApply
 	{
 		[Comptime]
 		public void ApplyToType(Type type)
@@ -22,12 +22,12 @@ namespace Bon
 		}
 	}
 
-	/// Never serialize this field!
+	/// Forbid access to this field in (de-) serialization.
 	[AttributeUsage(.Field, .ReflectAttribute)]
-	struct NoSerializeAttribute : Attribute {}
+	struct BonIgnoreAttribute : Attribute {}
 
-	/// Always serialize this field! (essentially makes this act like any other field included as per includeFlags,
-	/// so this will still not be serialized when the value is default and includeFlags doesn't explicitly include defaults)
+	/// Allow access to this field in (de-) serialization! (essentially makes this act like any other field included as per bonEnv,
+	/// so this will still not be serialized when the value is default and serializeFlags doesn't explicitly include defaults)
 	[AttributeUsage(.Field, .ReflectAttribute)]
-	struct DoSerializeAttribute : Attribute {}
+	struct BonIncludeAttribute : Attribute {}
 }

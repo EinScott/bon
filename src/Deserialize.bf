@@ -608,7 +608,7 @@ namespace Bon.Integrated
 			Try!(reader.ObjectBlock());
 
 			List<FieldInfo> fields = scope .(structType.FieldCount);
-			for (let f in structType.GetFields())
+			for (let f in structType.GetFields(.Instance))
 				fields.Add(f);
 
 			while (reader.ObjectHasMore())
@@ -629,6 +629,11 @@ namespace Bon.Integrated
 				}
 				if (!found)
 					Error!(reader, "Failed to find field");
+
+				if (!env.deserializeFlags.HasFlag(.AccessNonPublic) // we don't allow non-public
+					&& !(fieldInfo.[Friend]mFieldData.mFlags.HasFlag(.Public) || fieldInfo.GetCustomAttribute<BonIncludeAttribute>() case .Ok) // field is not accessible
+					|| fieldInfo.GetCustomAttribute<BonIgnoreAttribute>() case .Ok) // or field is ignored
+					Error!(reader, "Field access not allowed");
 
 				var fieldVal = ValueView(fieldInfo.FieldType, ((uint8*)val.dataPtr) + fieldInfo.MemberOffset);
 

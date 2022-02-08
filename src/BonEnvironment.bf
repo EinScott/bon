@@ -17,11 +17,16 @@ namespace Bon
 		/// Whether or not to include fields default values (e.g. null, etc)
 		case IncludeDefault = 1 << 1;
 
+		
+		/// If two fields referenced the same class, this relationship will be preserved. Only the
+		/// first occurrence will be serialized, the following ones will reference the first one.
+		case KeepInnerReferences = 1 << 2;
+
 		/// Ignore field attributes (only recommended for debugging / complete structure dumping)
-		case IgnoreAttributes = 1 << 2;
+		case IgnoreAttributes = 1 << 3;
 
 		/// The produced string will be formatted (and slightly more verbose) for manual editing.
-		case Verbose = 1 << 3;
+		case Verbose = 1 << 4;
 	}
 
 	enum BonDeserializeFlags : uint8
@@ -33,9 +38,12 @@ namespace Bon
 		/// instead of being nulled (and possibly deleted).
 		case IgnoreUnmentionedValues = 1 | IgnorePointers;
 
-		/// Ignore pointers when encountering them instead of erroring. Bon
-		/// does not manipulate pointers.
+		/// Ignore pointers when encountering them instead of erroring.
+		/// Bon does not manipulate pointers.
 		case IgnorePointers = 1 << 1;
+
+		/// Allows bon strings to access non-public fields.
+		case AccessNonPublic = 1 << 2;
 	}
 	
 	public delegate void MakeThingFunc(ValueView refIntoVal);
