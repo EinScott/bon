@@ -39,7 +39,7 @@ namespace Bon
 			var value;
 			var variant = ValueView(typeof(T), &value);
 
-			Serialize.Thing(writer, ref variant, env);
+			Serialize.Entry(writer, ref variant, env);
 		}
 
 		public static Result<BonContext> Deserialize<T>(ref T value, BonContext from, BonEnvironment env = gBonEnv)
@@ -48,7 +48,7 @@ namespace Bon
 			Try!(reader.Setup(from));
 			var variant = ValueView(typeof(T), &value);
 
-			return Deserialize.Thing(reader, ref variant, env);
+			return Deserialize.Entry(reader, ref variant, env);
 		}
 
 		public static Result<void> SerializeIntoFile<T>(T value, StringView path, BonEnvironment env = gBonEnv)

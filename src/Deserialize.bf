@@ -144,7 +144,7 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static Result<BonContext> Thing(BonReader reader, ref ValueView val, BonEnvironment env)
+		public static Result<BonContext> Entry(BonReader reader, ref ValueView val, BonEnvironment env)
 		{
 			Try!(reader.ConsumeEmpty());
 

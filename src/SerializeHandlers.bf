@@ -7,7 +7,7 @@ namespace Bon.Integrated
 {
 	static
 	{
-		public static void SerializeList(BonWriter writer, ref ValueView val, BonEnvironment env)
+		public static void SerializeList(BonWriter writer, ref ValueView val, Serialize.ReferenceLookup refLook, BonEnvironment env)
 		{
 			let t = (SpecializedGenericType)val.type;
 
@@ -20,7 +20,7 @@ namespace Bon.Integrated
 
 			// TODO: sizer only if last element is default
 			writer.Sizer((uint64)count);
-			Serialize.Array(writer, arrType, arrPtr, count, env);
+			Serialize.Array(writer, arrType, arrPtr, count, refLook, env);
 		}
 
 		public static Result<void> DeserializeList(BonReader reader, ref ValueView val, BonEnvironment env)

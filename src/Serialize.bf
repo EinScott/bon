@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Diagnostics;
 using System.Reflection;
 
@@ -6,6 +7,21 @@ namespace Bon.Integrated
 {
 	static class Serialize
 	{
+		public class ReferenceLookup
+		{
+			String refPaths = new .(128) ~ delete _;
+			public Dictionary<void*, Substring> knownRefs = new .(32) ~ delete _;
+
+			public String currPath = new .(32) ~ delete _; // TODO no clue if this really fits here, maybe just already use this in addEntry, update manually in funcs!
+
+			public void AddEntry(void* reference, StringView loc)
+			{
+				let start = refPaths.Length;
+				refPaths.Append(loc);
+				knownRefs.Add(reference, .(refPaths, start));
+			}
+		}
+
 		[Comptime]
 		public static String CompNoReflectionError(String type, String example) => scope $"No reflection data forced for {type}!\n(for example: [Serializable] extension {example} {{}} or through build settings)";
 
@@ -19,11 +35,11 @@ namespace Bon.Integrated
 			(type.IsPrimitive || (type.IsTypedPrimitive && (!flags.HasFlag(.Verbose) || !type.IsEnum)))
 		}
 
-		public static void Thing(BonWriter writer, ref ValueView val, BonEnvironment env)
+		public static void Entry(BonWriter writer, ref ValueView val, BonEnvironment env)
 		{
 			writer.Start();
 			if (DoInclude!(ref val, env.serializeFlags))
-				Value(writer, ref val, env);
+				Value(writer, ref val, env.serializeFlags.HasFlag(.KeepInnerReferences) ? scope ReferenceLookup() : null, env);
 			
 			if (writer.outStr.Length == 0)
 			{
@@ -35,7 +51,7 @@ namespace Bon.Integrated
 			writer.End();
 		}
 
-		public static void Value(BonWriter writer, ref ValueView val, BonEnvironment env, bool doOneLine = false)
+		public static void Value(BonWriter writer, ref ValueView val, ReferenceLookup refLook, BonEnvironment env, bool doOneLine = false)
 		{
 			let valType = val.type;
 
@@ -231,7 +247,7 @@ namespace Bon.Integrated
 
 							// Do serialize of discriminator and payload
 							writer.Enum(enumField.Name);
-							Struct(writer, ref unionPayload, env);
+							Struct(writer, ref unionPayload, refLook, env);
 
 							didWrite = true;
 							break;
@@ -243,8 +259,8 @@ namespace Bon.Integrated
 					Debug.Assert(didWrite);
 				}
 				else if (GetCustomHandler(valType, env, let func))
-					func(writer, ref val, env);
-				else Struct(writer, ref val, env);
+					func(writer, ref val, refLook, env);
+				else Struct(writer, ref val, refLook, env);
 			}
 			else if (valType is SizedArrayType)
 			{
@@ -257,7 +273,7 @@ namespace Bon.Integrated
 				if (env.serializeFlags.HasFlag(.Verbose))
 					writer.Sizer((.)count, true);
 
-				Array(writer, t.UnderlyingType, val.dataPtr, count, env);
+				Array(writer, t.UnderlyingType, val.dataPtr, count, refLook, env);
 			}
 			else if (TypeHoldsObject!(valType))
 			{
@@ -265,6 +281,8 @@ namespace Bon.Integrated
 					writer.Null();
 				else
 				{
+					// TODO: if KeepInnnerReferences, do refLook check. Then add or write Reference
+
 					let polyType = (*(Object*)val.dataPtr).GetType();
 					if (polyType != valType)
 					{
@@ -289,7 +307,7 @@ namespace Bon.Integrated
 
 						// polyType already is the type in the box
 						var boxedData = ValueView(polyType, boxedPtr);
-						Value(writer, ref boxedData, env);
+						Value(writer, ref boxedData, refLook, env);
 
 						// After this we only end the line but the Value call
 						// above has already done that.
@@ -316,14 +334,14 @@ namespace Bon.Integrated
 						{
 						case typeof(Array1<>):
 							writer.Sizer((.)count);
-							Array(writer, arrType, arrPtr, count, env);
+							Array(writer, arrType, arrPtr, count, refLook, env);
 
 						case typeof(Array2<>):
 							let count1 = GetValField!<int_cosize>(val, "mLength1");
 							count /= count1;
 							writer.MultiSizer((.)count,(.)count1);
 
-							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1);
+							MultiDimensionalArray(writer, arrType, arrPtr, refLook, env, count, count1);
 
 						case typeof(Array3<>):
 							let count2 = GetValField!<int_cosize>(val, "mLength2");
@@ -331,7 +349,7 @@ namespace Bon.Integrated
 							count /= (count1 * count2);
 							writer.MultiSizer((.)count,(.)count1,(.)count2);
 
-							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1, count2);
+							MultiDimensionalArray(writer, arrType, arrPtr, refLook, env, count, count1, count2);
 
 						case typeof(Array4<>):
 							let count1 = GetValField!<int_cosize>(val, "mLength1");
@@ -340,15 +358,15 @@ namespace Bon.Integrated
 							count /= (count1 * count2 * count3);
 							writer.MultiSizer((.)count,(.)count1,(.)count2,(.)count3);
 
-							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1, count2, count3);
+							MultiDimensionalArray(writer, arrType, arrPtr, refLook, env, count, count1, count2, count3);
 
 						default:
 							Debug.FatalError();
 						}
 					}
 					else if (GetCustomHandler(polyType, env, let func))
-						func(writer, ref val, env);
-					else Class(writer, ref val, env);
+						func(writer, ref val, refLook, env);
+					else Class(writer, ref val, refLook, env);
 				}
 			}
 			else if (valType.IsPointer)
@@ -395,17 +413,17 @@ namespace Bon.Integrated
 			return false;
 		}
 
-		public static void Class(BonWriter writer, ref ValueView classVal, BonEnvironment env)
+		public static void Class(BonWriter writer, ref ValueView classVal, ReferenceLookup refLook, BonEnvironment env)
 		{
 			let classType = classVal.type;
 
 			Debug.Assert(classType.IsObject);
 
 			var classDataVal = ValueView(classType, *(void**)classVal.dataPtr);
-			Struct(writer, ref classDataVal, env);
+			Struct(writer, ref classDataVal, refLook, env);
 		}
 
-		public static void Struct(BonWriter writer, ref ValueView structVal, BonEnvironment env)
+		public static void Struct(BonWriter writer, ref ValueView structVal, ReferenceLookup refLook, BonEnvironment env)
 		{
 			let structType = structVal.type;
 
@@ -431,7 +449,7 @@ namespace Bon.Integrated
 							hasUnnamedMembers = true;
 
 						writer.Identifier(m.Name);
-						Value(writer, ref val, env);
+						Value(writer, ref val, refLook, env);
 					}
 				}
 			}
@@ -446,7 +464,7 @@ namespace Bon.Integrated
 			}
 		}
 
-		public static void Array(BonWriter writer, Type arrType, void* arrPtr, int count, BonEnvironment env)
+		public static void Array(BonWriter writer, Type arrType, void* arrPtr, int count, ReferenceLookup refLook, BonEnvironment env)
 		{
 			let doArrayOneLine = DoTypeOneLine!(arrType, env.serializeFlags);
 			using (writer.ArrayBlock(doArrayOneLine))
@@ -477,10 +495,10 @@ namespace Bon.Integrated
 					{
 						var arrVal = ValueView(arrType, ptr);
 						if (DoInclude!(ref arrVal, env.serializeFlags))
-							Value(writer, ref arrVal, env, doArrayOneLine);
+							Value(writer, ref arrVal, refLook, env, doArrayOneLine);
 						else
 						{
-							// Shorten this... as mentioned in Thing() we don't automatically place default, but ?
+							// Shorten this... as mentioned in Entry() we don't automatically place default, but ?
 							Irrelevant(writer);
 						}
 
@@ -490,7 +508,7 @@ namespace Bon.Integrated
 			}
 		}
 
-		public static void MultiDimensionalArray(BonWriter writer, Type arrType, void* arrPtr, BonEnvironment env, params int[] counts)
+		public static void MultiDimensionalArray(BonWriter writer, Type arrType, void* arrPtr, ReferenceLookup refLook, BonEnvironment env, params int[] counts)
 		{
 			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
 
@@ -541,15 +559,15 @@ namespace Bon.Integrated
 								for (let j < inner)
 									innerCounts[j] = counts[j + 1];
 
-								MultiDimensionalArray(writer, arrType, ptr, env, params innerCounts);
+								MultiDimensionalArray(writer, arrType, ptr, refLook, env, params innerCounts);
 							}
-							else Array(writer, arrType, ptr, counts[1], env);
+							else Array(writer, arrType, ptr, counts[1], refLook, env);
 
 							writer.EntryEnd();
 						}	
 						else
 						{
-							// Shorten this... as mentioned in Thing() we don't automatically place default, but ?
+							// Shorten this... as mentioned in Entry() we don't automatically place default, but ?
 							Irrelevant(writer);
 						}
 
