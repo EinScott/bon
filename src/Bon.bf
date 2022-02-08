@@ -23,7 +23,7 @@ namespace Bon
 	// TODO: there are cases where we don't default stuff correctly
 	// like... nested arrays... we would need Default to check types
 	// and call some funcs, even extendable to custom handlers...
-	// -> this also means we don't need the array special case for default?
+	// -> this also means we can't have the array special case for default -> just a thing in normal default call that... calls itself??
 
 	// limits:
 	// should be able to print everything, pretty much

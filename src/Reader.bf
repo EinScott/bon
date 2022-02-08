@@ -286,7 +286,7 @@ namespace Bon.Integrated
 			var numLen = 0;
 			while ({
 				let char = inStr[numLen];
-				inStr.Length > numLen && char.IsNumber || char == '.' || char == '-' || char == 'e'
+				(inStr.Length > numLen && char.IsNumber || char == '.' || char == '-' || char == 'e')
 			})
 				numLen++;
 
