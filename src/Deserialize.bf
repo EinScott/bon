@@ -321,11 +321,13 @@ namespace Bon.Integrated
 					ValueView unionPayload = default;
 					uint64 unionDiscrIndex = 0;
 					ValueView discrVal = default;
-					bool foundCase = false;
+					bool foundCase = false, hasCaseData = false;
 					for (var enumField in valType.GetFields())
 					{
 						if (enumField.[Friend]mFieldData.mFlags.HasFlag(.EnumCase))
 						{
+							hasCaseData = true;
+
 							if (name == enumField.Name)
 							{
 								unionPayload = ValueView(enumField.FieldType, val.dataPtr);
@@ -346,6 +348,8 @@ namespace Bon.Integrated
 
 					Debug.Assert(discrVal != default);
 
+					if (!hasCaseData)
+						Error!(valType, "No reflection data for type");
 					if (!foundCase)
 						Error!(reader, "Enum union case not found");
 
@@ -381,7 +385,7 @@ namespace Bon.Integrated
 			{
 				if (reader.ArrayHasSizer())
 				{
-					Try!(reader.ArraySizer<const 1>(true));
+					Try!(reader.ArraySizer<1>(true));
 
 					// Ignore sizer content..
 					// we could do some checking, but erroring would be a bit harsh?
@@ -466,7 +470,7 @@ namespace Bon.Integrated
 							case typeof(Array1<>):
 								if (reader.ArrayHasSizer())
 								{
-									let sizer = Try!(reader.ArraySizer<const 1>(false));
+									let sizer = Try!(reader.ArraySizer<1>(false));
 									fullCount = Try!(ParseInt<int_arsize>(reader, sizer[0])); // We already check it's not negative
 								}
 								else
@@ -480,7 +484,7 @@ namespace Bon.Integrated
 								}
 
 							case typeof(Array2<>):
-								let sizer = Try!(reader.ArraySizer<const 2>(false));
+								let sizer = Try!(reader.ArraySizer<2>(false));
 								counts = scope:ARRAY .[2];
 								counts[0] = Try!(ParseInt<int_arsize>(reader, sizer[0]));
 								counts[1] = Try!(ParseInt<int_arsize>(reader, sizer[1]));
@@ -488,7 +492,7 @@ namespace Bon.Integrated
 								fullCount = counts[0] * counts[1];
 
 							case typeof(Array3<>):
-								let sizer = Try!(reader.ArraySizer<const 3>(false));
+								let sizer = Try!(reader.ArraySizer<3>(false));
 								counts = scope:ARRAY .[3];
 								counts[0] = Try!(ParseInt<int_arsize>(reader, sizer[0]));
 								counts[1] = Try!(ParseInt<int_arsize>(reader, sizer[1]));
@@ -497,7 +501,7 @@ namespace Bon.Integrated
 								fullCount = counts[0] * counts[1] * counts[2];
 
 							case typeof(Array4<>):
-								let sizer = Try!(reader.ArraySizer<const 4>(false));
+								let sizer = Try!(reader.ArraySizer<4>(false));
 								counts = scope:ARRAY .[4];
 								counts[0] = Try!(ParseInt<int_arsize>(reader, sizer[0]));
 								counts[1] = Try!(ParseInt<int_arsize>(reader, sizer[1]));
@@ -531,7 +535,7 @@ namespace Bon.Integrated
 							void* arrPtr = null;
 							if (t.GetField("mFirstElement") case .Ok(let field))
 								arrPtr = classData + field.MemberOffset; // T*
-							else Error!(t, "No reflection data forced for array type"); // for example: [Serializable] extension Array1<T> {} or through build settings
+							else Error!(t, "No reflection data for array type"); // for example: [Serializable] extension Array1<T> {} or through build settings
 
 							switch (t.UnspecializedType)
 							{
@@ -610,6 +614,9 @@ namespace Bon.Integrated
 			List<FieldInfo> fields = scope .(structType.FieldCount);
 			for (let f in structType.GetFields(.Instance))
 				fields.Add(f);
+
+			if (fields.Count == 0 && reader.ObjectHasMore())
+				Error!(structType, "No reflection data for type");
 
 			while (reader.ObjectHasMore())
 			{

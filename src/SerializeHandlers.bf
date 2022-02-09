@@ -12,7 +12,7 @@ namespace Bon.Integrated
 			let t = (SpecializedGenericType)val.type;
 
 			Debug.Assert(t.UnspecializedType == typeof(List<>));
-			Debug.Assert(t.GetField("mSize") case .Ok, Serialize.CompNoReflectionError("List<>", "List<T>"));
+			Debug.Assert(t.GetField("mSize") case .Ok, Serialize.CompNoReflectionError!("List<>", "List<T>"));
 
 			let arrType = t.GetGenericArg(0);
 			var arrPtr = *(void**)GetValFieldPtr!(val, "mItems"); // *(T**)
@@ -32,13 +32,13 @@ namespace Bon.Integrated
 			int_cosize count = 0;
 			if (reader.ArrayHasSizer())
 			{
-				let sizer = Try!(reader.ArraySizer<const 1>(false));
+				let sizer = Try!(reader.ArraySizer<1>(false));
 				count = Try!(Deserialize.ParseInt<int_cosize>(reader, sizer[0]));
 			}
 			else count = (.)Try!(reader.ArrayPeekCount());
 
 			if (t.GetField("mSize") case .Err)
-				Deserialize.Error!(t, "No reflection data forced for type!");
+				Deserialize.Error!(t, "No reflection data for type!");
 			let currCount = GetValField!<int_cosize>(val, "mSize");
 			
 			let arrType = t.GetGenericArg(0);
@@ -78,7 +78,7 @@ namespace Bon.Integrated
 		// outselves before... which is kind of weird?
 		// SerializeCollection<T>(..) where T : ICollection
 		// demo with SizedList<> or something!
-		
+
 		// support Variant ... Guid,Version and some other useful stuff?
 		// - for the last two, can we use a generic template that relies on ToString and Parse ?
 

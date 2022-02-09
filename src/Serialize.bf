@@ -22,8 +22,10 @@ namespace Bon.Integrated
 			}
 		}
 
-		[Comptime]
-		public static String CompNoReflectionError(String type, String example) => scope $"No reflection data forced for {type}!\n(for example: [Serializable] extension {example} {{}} or through build settings)";
+		public static mixin CompNoReflectionError(String type, String example)
+		{
+			scope:mixin $"No reflection data for {type}!\n(for example: [Serializable] extension {example} {{}} or through build settings)"
+		}
 
 		static mixin DoInclude(ref ValueView val, BonSerializeFlags flags)
 		{
@@ -254,9 +256,12 @@ namespace Bon.Integrated
 						}
 					}
 
-					// TODO: This fails sometimes but i don't know why. Even without reflection data the tests
-					// seem to run fine. Maybe do something if (!didWrite) to warn or something?
-					Debug.Assert(didWrite);
+					if (!didWrite)
+					{
+						writer.outStr.Append("default"); // Just like we just do {} on no reflection info structs
+						if (env.serializeFlags.HasFlag(.Verbose))
+							writer.outStr.Append(scope $"/* No reflection data for {valType}. Add [Serializable] or force it */");
+					}
 				}
 				else if (GetCustomHandler(valType, env, let func))
 					func(writer, ref val, refLook, env);
@@ -327,7 +332,7 @@ namespace Bon.Integrated
 
 						let t = polyType as ArrayType;
 						
-						Debug.Assert(t.GetField("mFirstElement") case .Ok, CompNoReflectionError("array type", "Array1<T>"));
+						Debug.Assert(t.GetField("mFirstElement") case .Ok, CompNoReflectionError!("array type", "Array1<T>"));
 
 						let arrType = t.GetGenericArg(0); // T
 						var arrPtr = GetValFieldPtr!(val, "mFirstElement"); // T*
