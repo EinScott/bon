@@ -1399,6 +1399,55 @@ namespace Bon.Tests
 		}
 
 		[BonTarget]
+		class Number
+		{
+			public int64 num;
+		}
+
+		[BonTarget]
+		struct NumLook
+		{
+			public Number one;
+			public Number other;
+			public Number current;
+		}
+
+		[Test]
+		static void InnerReferences()
+		{
+			let pf = PushFlags(.KeepInnerReferences);
+
+			{
+				let num1 = scope Number();
+				let num2 = scope Number();
+				num1.num = 920;
+				num2.num = 80;
+				let s = NumLook {
+					one = num1,
+					other = num2,
+					current = num1
+				};
+
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "{one={num=920},other={num=80},current=&one}");
+			}
+
+			{
+				let num1 = scope Number();
+				let num2 = scope Number();
+				num1.num = 99;
+				num2.num = 500;
+				let a = scope Number[7](
+					num1, num1, num2, num1, num2, null, num1);
+
+				let str = Bon.Serialize(a, .. scope .());
+				Test.Assert(str == "<7>[{num=99},&[0],{num=500},&[0],&[2],?,&[0]]");
+			}
+
+			pf.Dispose();
+		}
+
+		[BonTarget]
 		struct Compat
 		{
 			public uint version;

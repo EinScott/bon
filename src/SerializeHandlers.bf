@@ -18,7 +18,7 @@ namespace Bon.Integrated
 			var arrPtr = *(void**)GetValFieldPtr!(val, "mItems"); // *(T**)
 			let count = GetValField!<int_cosize>(val, "mSize");
 
-			// TODO: sizer only if last element is default
+			// TODO: sizer only if last element is default (also for alloc arrays)
 			writer.Sizer((uint64)count);
 			Serialize.Array(writer, arrType, arrPtr, count, refLook, env);
 		}

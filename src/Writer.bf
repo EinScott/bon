@@ -162,6 +162,12 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
+		public void Reference(StringView referencePath)
+		{
+			outStr..Append('&')..Append(referencePath);
+		}
+
+		[Inline]
 		public void Type(StringView typeName)
 		{
 			outStr..Append('(')..Append(typeName)..Append(')');

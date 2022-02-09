@@ -12,12 +12,12 @@ namespace Bon.Integrated
 			String refPaths = new .(128) ~ delete _;
 			public Dictionary<void*, Substring> knownRefs = new .(32) ~ delete _;
 
-			public String currPath = new .(32) ~ delete _; // TODO no clue if this really fits here, maybe just already use this in addEntry, update manually in funcs!
+			public String currPath = new .(32) ~ delete _;
 
-			public void AddEntry(void* reference, StringView loc)
+			public void AddEntry(void* reference)
 			{
 				let start = refPaths.Length;
-				refPaths.Append(loc);
+				refPaths.Append(currPath);
 				knownRefs.Add(reference, .(refPaths, start));
 			}
 		}
@@ -279,9 +279,12 @@ namespace Bon.Integrated
 			{
 				if (*(void**)val.dataPtr == null)
 					writer.Null();
+				else if (refLook != null && refLook.knownRefs.TryGetValue(*(void**)val.dataPtr, let reference))
+					writer.Reference(reference);
 				else
 				{
-					// TODO: if KeepInnnerReferences, do refLook check. Then add or write Reference
+					if (refLook != null)
+						refLook.AddEntry(*(void**)val.dataPtr);
 
 					let polyType = (*(Object*)val.dataPtr).GetType();
 					if (polyType != valType)
@@ -448,8 +451,20 @@ namespace Bon.Integrated
 						if (flags.HasFlag(.Verbose) && uint64.Parse(m.Name) case .Ok)
 							hasUnnamedMembers = true;
 
+						int currPathEnd = ?;
+						if (refLook != null)
+						{
+							currPathEnd = refLook.currPath.Length;
+							if (refLook.currPath.Length > 0)
+								refLook.currPath.Append('.');
+							refLook.currPath.Append(m.Name);
+						}
+
 						writer.Identifier(m.Name);
 						Value(writer, ref val, refLook, env);
+
+						if (refLook != null)
+							refLook.currPath.RemoveFromEnd(refLook.currPath.Length - currPathEnd);
 					}
 				}
 			}
@@ -493,6 +508,16 @@ namespace Bon.Integrated
 					var ptr = (uint8*)arrPtr;
 					for (let i < includeCount)
 					{
+						int currPathEnd = ?;
+						if (refLook != null)
+						{
+							currPathEnd = refLook.currPath.Length;
+							if (currPathEnd == 0 || refLook.currPath[currPathEnd - 1] != ',')
+								refLook.currPath.Append('['); // For multi-dim arrays, there might be stuff here!
+							i.ToString(refLook.currPath);
+							refLook.currPath.Append(']');
+						}
+
 						var arrVal = ValueView(arrType, ptr);
 						if (DoInclude!(ref arrVal, env.serializeFlags))
 							Value(writer, ref arrVal, refLook, env, doArrayOneLine);
@@ -501,6 +526,9 @@ namespace Bon.Integrated
 							// Shorten this... as mentioned in Entry() we don't automatically place default, but ?
 							Irrelevant(writer);
 						}
+
+						if (refLook != null)
+							refLook.currPath.RemoveFromEnd(refLook.currPath.Length - currPathEnd);
 
 						ptr += arrType.Stride;
 					}
@@ -552,6 +580,16 @@ namespace Bon.Integrated
 
 						if (!isZero || env.serializeFlags.HasFlag(.IncludeDefault))
 						{
+							int currPathEnd = ?;
+							if (refLook != null)
+							{
+								currPathEnd = refLook.currPath.Length;
+								if (currPathEnd == 0 || refLook.currPath[currPathEnd - 1] != ',')
+									refLook.currPath.Append('[');
+								i.ToString(refLook.currPath);
+								refLook.currPath.Append(',');
+							}
+
 							let inner = counts.Count - 1;
 							if (inner > 1)
 							{
@@ -562,6 +600,9 @@ namespace Bon.Integrated
 								MultiDimensionalArray(writer, arrType, ptr, refLook, env, params innerCounts);
 							}
 							else Array(writer, arrType, ptr, counts[1], refLook, env);
+
+							if (refLook != null)
+								refLook.currPath.RemoveFromEnd(refLook.currPath.Length - currPathEnd);
 
 							writer.EntryEnd();
 						}	
