@@ -92,8 +92,12 @@ namespace Bon.Integrated
 
 			if (doFormatting)
 				f.DoTabs(outStr);
-			outStr..Append(identifier)
-				.Append('=');
+			outStr.Append(identifier);
+			if (doFormatting)
+				outStr.Append(' ');
+			outStr.Append('=');
+			if (doFormatting)
+				outStr.Append(' ');
 		}
 
 		[Inline]
@@ -102,6 +106,8 @@ namespace Bon.Integrated
 			Debug.Assert(!outStr.EndsWith('=') && !outStr.EndsWith(':') && !outStr.EndsWith(','));
 
 			outStr.Append(':');
+			if (doFormatting)
+				outStr.Append(' ');
 		}
 
 		[Inline]

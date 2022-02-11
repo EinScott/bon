@@ -781,20 +781,20 @@ namespace Bon.Tests
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == """
 						{
-							thing=651,
-							bs=<const 5>[
+							thing = 651,
+							bs = <const 5>[
 								{
-									name="first element",
-									age=34,
-									type=.OtherThing
+									name = "first element",
+									age = 34,
+									type = .OtherThing
 								},
 								{
-									name="second element",
-									age=101
+									name = "second element",
+									age = 101
 								},
 								?,
 								{
-									name=""
+									name = ""
 								}
 							]
 						}
@@ -906,11 +906,11 @@ namespace Bon.Tests
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == """
 					.Circle{
-						pos={
-							x=10,
-							y=1
+						pos = {
+							x = 10,
+							y = 1
 						},
-						radius=4.5
+						radius = 4.5
 					}
 					""");
 

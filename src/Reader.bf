@@ -560,6 +560,33 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
+		public bool IsReference()
+		{
+			return Check('&', false);
+		}
+
+		public Result<StringView> Reference()
+		{
+			if (!Check('&'))
+				Error!("Expected type marker");
+
+			var refLen = 0;
+			for (; refLen < inStr.Length; refLen++)
+			{
+				let char = inStr[refLen];
+				if (!char.IsLetterOrDigit && char != '_' && char != '.' && char != '[' && char != ']')
+					break;
+			}
+
+			let reference = inStr.Substring(0, refLen);
+			inStr.RemoveFromStart(refLen);
+
+			Try!(ConsumeEmpty());
+
+			return reference;
+		}
+
+		[Inline]
 		public bool EnumHasNamed()
 		{
 			return inStr.Length > 1 && inStr[1].IsLetter // Don't mistake .95f as a named enum value!

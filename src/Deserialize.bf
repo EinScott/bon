@@ -403,6 +403,12 @@ namespace Bon.Integrated
 
 					Try!(reader.ConsumeEmpty());
 				}
+				else if (reader.IsReference())
+				{
+					let reference = Try!(reader.Reference());
+
+					// TODO: put reference in some lookup along with ValueView for later?
+				}
 				else
 				{
 					if (!polyType.IsObject)
