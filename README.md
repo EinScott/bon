@@ -5,15 +5,15 @@ bon is a **serialization library** for the [Beef programming language](https://g
 ## Basics
 
 bon is a reflection based serialization libary. (De-) Serialization of a value is done in one call to ``Bon.Serialize`` or ``Bon.Deserialize``.
-Any type (though pointer support is limited) can be passed into these calls to produce a valid result (or, in the case of Deserialization, a precise error).
+Any value (though pointer support is limited) can be passed into these calls to produce a valid result (or, in the case of Deserialization, a precise error).
 
-Primitives and strings (as well as [some common corlib types](#included-serialize-handlers) such as List<T>) are supported by default of the box. To support other custom types, reflection data for them simply needs to be included in the build.
+Primitives and strings (as well as [some common corlib types](#included-serialize-handlers), such as ``List<T>``) are supported by default. To support other custom types, reflection data for them simply needs to be included in the build.
 
 For example, assuming that all types used below use the build settings or the ``[BonTarget]`` Attribute to include reflection data for them, this structure results in the following serialized bon output.
 
 ```bf
 let structure = new State() {
-		currentMode = .Playing,
+		currentMode = .Battle(5),
 		playerInfo = new List<PlayerInfo>() {
 			.() {
 				gold = 231,
@@ -37,8 +37,10 @@ let serialized = Bon.Serialize(structure, .. scope String());
 Content of ``serialized``:
 ```
 {
-	currentMode = .Playing,
 	partyName = "ChaosCrew",
+	currentMode = .Battle{
+		stage = 5
+	},
 	playerInfo = <3>[
 		{
 			level = 2,
