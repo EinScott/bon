@@ -4,7 +4,7 @@ bon is a **serialization library** for the [Beef programming language](https://g
 
 ## Basics
 
-bon is a reflection based serialization library. (De-) Serialization of a value is done in one call to ``Bon.Serialize`` or ``Bon.Deserialize``.
+bon is reflection based. (De-) Serialization of a value is done in one call to ``Bon.Serialize`` or ``Bon.Deserialize``.
 Any value (though pointer support is limited) can be passed into these calls to produce a valid result (or, in the case of Deserialization, a precise error).
 
 Primitives and strings (as well as [some common corlib types](#supported-types), such as ``List<T>``) are supported by default. To support other custom types, reflection data for them simply needs to be included in the build.
@@ -108,10 +108,12 @@ Printing of errors is disabled in non-DEBUG configurations and can be forced off
 
 ### Syntax
 
-**Comments**
+**Comments**:
+
 Beef/C style comments are supported. ``//`` single line comments, and ``/* */`` multiline comments (even nested ones).
 
 **File-level**:
+
 Every file is a list of values. Most commonly, a file is only made up of one element/value. These elements are independent of each other and are each [serialized](#serialization) or [deserialized](#deserialization) in one call. For example:
 
 ```
@@ -142,11 +144,13 @@ Debug.Assert(context.GetEntryCount() == 0); // No more entries left in the file
 Similarly, multiple ``Bon.Serialize(...)`` calls can be performed on the same string to produce a file with multiple entries.
 
 **Special values**:
+
 - ``?`` **Irrelevant value**: Means default or ignored value based on [bon environment](#bon-environment) configuration. Is only valid in arrays, as otherwise the entry could just be omitted to achieve the same result.
 - ``default`` **Zero value** Value is explicitly zero.
 - ``null`` **Null reference**: Only valid on reference types.
 
 **Floating pointer numbers**:
+
 Can take on the following shapes:
 
 ```
@@ -156,6 +160,7 @@ Can take on the following shapes:
 ```
 
 **Integer numbers**:
+
 Integers are range-checked and can be denoted in decimal, hexadecimal, binary or octal notation. The ``u`` suffix is valid on unsigned numbers, the ``l`` suffix is recognized but ignored.
 
 ```
@@ -168,6 +173,7 @@ Integers are range-checked and can be denoted in decimal, hexadecimal, binary or
 ```
 
 **Chars**:
+
 Chars start and end with ``'`` and their contents are size- and range-checked. Escape sequences ``\', \", \\, \0, \a, \b, \f, \n, \r, \t, \v, \xFF, \u{10FFFF}`` are supported (based on the char size).
 
 ```
@@ -177,6 +183,7 @@ Chars start and end with ``'`` and their contents are size- and range-checked. E
 ```
 
 **Enums**:
+
 Enums can be represented by integer numbers or the type's named cases. Named cases are preceeded by a ``.``, multiple cases can be combined with ``|``.
 
 ```
@@ -188,6 +195,7 @@ Enums can be represented by integer numbers or the type's named cases. Named cas
 ```
 
 **Strings**:
+
 Strings are single-line and start and end with a (non-escaped) ``"``. The ``@`` prefix marks verbatim strings. The escape sequences listed in char are valid in strings as well.
 
 ```
@@ -198,6 +206,7 @@ Strings are single-line and start and end with a (non-escaped) ``"``. The ``@`` 
 ```
 
 **Object bodies**:
+
 Object bodies are enclosed by object brackets ``{}``. They contain a sequence of ``<fieldIdentifier>=<value>`` entries.
 
 ```
@@ -215,6 +224,7 @@ Object bodies are enclosed by object brackets ``{}``. They contain a sequence of
 ```
 
 **Array bodies**:
+
 Array bodies are enclosed by array brackets ``[]``. They contain a list of ``<value>`` entries. Array bodies might be preceded by array sizers ``<>``. Array sizers denote the actual length of the array, as default entries at the back of the array might have been omitted, but are otherwise optional. Arrays sizers for fixed-size array sizers can contain ``const`` solely to indicate their fixed nature to the user.
 
 ```
@@ -235,6 +245,7 @@ Array bodies are enclosed by array brackets ``[]``. They contain a list of ``<va
 ```
 
 **Enum unions**:
+
 Enum unions are denoted as a named case name followed by their payload object body. Case names are preceded by a ``.``.
 
 ```
@@ -243,6 +254,7 @@ Enum unions are denoted as a named case name followed by their payload object bo
 ```
 
 **Sub-file strings**:
+
 Bon sub-file strings start with ``$`` and are enclosed in array brackets ``[]``. The section inside is extracted as-is and represents an independent bon **file-level** array. The contents of the sub-file are only rudimentarily checked to ensure that the inner bracket structure is contained.
 
 ```
@@ -253,7 +265,9 @@ Bon sub-file strings start with ``$`` and are enclosed in array brackets ``[]``.
 			name = "image",
 			target = "sprites/*",
 			configStr = $[
-				{ // The importer's config file. In this case it only has this one entry.
+				// The importer's config file. In this case
+				// it only has this one entry.
+				{
 					compileAtlas = true,
 					atlas = {
 						padding = 2,
@@ -288,6 +302,7 @@ for (let importStatement in config.importers)
 ```
 
 **Type marker**:
+
 Type markers are enclosed by type brackets ``()``. They contain the full name of a beef type and are a prefix to a value. If the mentioned type is a struct, it must mean that the value is boxed. Type markers are necessary for polymorphed values (especially if the target type is abstract or an interface), optional on reference types if they are of the expected type already, and invalid on value types.
 
 For this to work with deserialization, bon needs to look up the types by name. Thus, a type that need to be serialized with polymorphism like this must be registered on the used [bon environment](#bon-environment) with ``env.RegisterPolyType(typeof(x))`` or by placing ``[BonPolyRegister]`` on the type.
@@ -307,10 +322,13 @@ For this to work with deserialization, bon needs to look up the types by name. T
 ```
 
 **References**:
+
 References start with ``&`` and are a path to another non-reference value within the structure. As such, values are only valid on reference types and are meant to preserve references to objects within a structure. This is an optional feature and has to be enabled on the used [bon environment](#bon-environment).
 
 ```
-// Note: of course, values are not actually valid on their own, they need to point to a value within the same file-level entry.
+// Note: of course, values are not actually valid on their own,
+// they need to point to a value within the same file-level entry.
+
 &attributes[1].description,
 &[0].name
 ```
