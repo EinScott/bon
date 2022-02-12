@@ -194,6 +194,16 @@ namespace Bon.Tests
 			}
 
 			{
+				float ob = ?;
+				Test.Assert((Bon.Deserialize(ref ob, "0.1") case .Ok) && ob == 0.1f);
+			}
+
+			{
+				float ob = ?;
+				Test.Assert((Bon.Deserialize(ref ob, ".1") case .Ok) && ob == 0.1f);
+			}
+
+			{
 				int i = ?;
 				Test.Assert((Bon.Deserialize(ref i, "\t11 ") case .Ok) && i == 11);
 			}
@@ -1395,6 +1405,22 @@ namespace Bon.Tests
 						2, 3, 4, 5, 6, 100, 200, 300, 400, 500, 1000, 2500, 8000, 10000 // oops, already in use
 					};
 				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && ArrayEqual!(l, lo));
+			}
+
+			{
+				gBonEnv.RegisterPolyType!(typeof(List<int32>));
+				Object l = scope List<int32>()
+					{
+						1, 2, 3, 8, 9, 10, 100, 1000, 10000, 0, 0
+					};
+				let str = Bon.Serialize(l, .. scope .());
+				Test.Assert(str == "(System.Collections.List<int32>)<11>[1,2,3,8,9,10,100,1000,10000]");
+
+				Object lo = scope List<int32>()
+					{
+						2, 3, 4, 5, 6, 100, 200, 300, 400, 500, 1000, 2500, 8000, 10000 // oops, already in use
+					};
+				Test.Assert(Bon.Deserialize(ref lo, str) case .Ok);
 			}
 		}
 

@@ -33,6 +33,11 @@ namespace Bon
 
 	static class Bon
 	{
+#if BON_PROVIDE_ERROR
+		internal static System.Threading.Monitor errMonitor = new .() ~ delete _;
+		public static String LastDeserializeError = new .() ~ delete _;
+#endif
+
 		public static void Serialize<T>(T value, String into, BonEnvironment env = gBonEnv)
 		{
 			let writer = scope BonWriter(into, env.serializeFlags.HasFlag(.Verbose));

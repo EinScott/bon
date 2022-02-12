@@ -19,6 +19,12 @@ namespace Bon.Integrated
 #if BON_PRINT
 			PrintError(reader, error);
 #endif
+#if BON_PROVIDE_ERROR
+			using (Bon.errMonitor.Enter())
+			{
+				Bon.LastDeserializeError.Set(error);
+			}
+#endif
 			return .Err(default);
 		}
 
@@ -37,6 +43,12 @@ namespace Bon.Integrated
 		{
 #if BON_PRINT
 			PrintError(type, error);
+#endif
+#if BON_PROVIDE_ERROR
+			using (Bon.errMonitor.Enter())
+			{
+				Bon.LastDeserializeError.Set(error);
+			}
 #endif
 			return .Err(default);
 		}

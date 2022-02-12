@@ -230,7 +230,7 @@ namespace Bon.Integrated
 			{
 				numLen++;
 				isNegative = true;
-			}	
+			}
 			if (inStr.Length > numLen + 1 && inStr[numLen] == '0')
 			{
 				let c = inStr[numLen + 1];
@@ -284,9 +284,9 @@ namespace Bon.Integrated
 		public Result<StringView> Floating()
 		{
 			var numLen = 0;
-			while ({
+			while (inStr.Length > numLen && {
 				let char = inStr[numLen];
-				inStr.Length > numLen && char.IsNumber || char == '.' || char == '-' || char == 'e'
+				char.IsNumber || char == '.' || char == '-' || char == 'e'
 			})
 				numLen++;
 
