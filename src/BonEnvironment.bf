@@ -33,8 +33,9 @@ namespace Bon
 		/// Fully set the state of the target structure based on the given string.
 		case Default = 0;
 
-		/// Values not mentioned in the given string will be left as they are
-		/// instead of being nulled (and possibly deleted).
+		/// Values not mentioned in the given string will be ignored  instead of being nulled
+		/// (or causing erros for reference types). As a result, a successful deserialize
+		/// call does not necessarily mean that the target value is set exactly.
 		case IgnoreUnmentionedValues = 1 | IgnorePointers;
 
 		/// Ignore pointers when encountering them instead of erroring.
@@ -46,14 +47,11 @@ namespace Bon
 	}
 	
 	public delegate void MakeThingFunc(ValueView refIntoVal);
-	public delegate void DestroyThingFunc(ValueView valRef);
 
 	public static function void HandleSerializeFunc(BonWriter writer, ref ValueView val, Serialize.ReferenceLookup refLook, BonEnvironment env);
 	public static function Result<void> HandleDeserializeFunc(BonReader reader, ref ValueView val, BonEnvironment env);
 
-	/// Defines the behavior of bon. May be modified globally (gBonEnv)
-	/// or for some calls only be creating a BonEnvironment to modify
-	/// and passing that to calls for use instead of the global fallback.
+	/// Defines the behavior of bon.
 	class BonEnvironment
 	{
 		public BonSerializeFlags serializeFlags;
@@ -61,24 +59,17 @@ namespace Bon
 
 		/// When bon serializes or deserializes an unknown type, it checks this to see if there are custom
 		/// functions to handle this type. Functions can be registered by type or by unspecialized generic
-		/// type, like List<>. For examples, see SerializeHandlers.bf
-		public Dictionary<Type, (HandleSerializeFunc serialize, HandleDeserializeFunc deserialize)> serializeHandlers = new .() ~ delete _;
+		/// type, like List<>. For examples, see TypeHandlers.bf
+		public Dictionary<Type, (HandleSerializeFunc serialize, HandleDeserializeFunc deserialize)> typeHandlers = new .() ~ delete _;
 
-		/// When bon needs to allocate or deallocate a reference type, a handler is called for it when possible
-		/// instead of allocating with new or deleting. This can be used to gain more control over the allocation
-		/// or specific types, for example to reference existing ones or register allocated instances elsewhere
-		/// as well.
+		/// When bon needs to allocate a reference type, a handler is called for it when possible
+		/// instead of allocating with new. This can be used to gain more control over the allocation
+		/// or specific types, for example to reference existing ones or register allocated instances
+		/// elsewhere as well.
 		/// Functions can be registered by type or by unspecialized generic type, like List<> but keep in mind
 		/// that you need to deal with any specialized type indicated by the Variant. So you will probably still
-		/// have to use CreateObjet, but you can manage the reference at least
-		public Dictionary<Type, (MakeThingFunc make, DestroyThingFunc destroy)> instanceHandlers = new .() ~ {
-			for (let p in _.Values)
-			{
-				if (p.make != null) delete p.make;
-				if (p.destroy != null) delete p.destroy;
-			}
-			delete _;
-		};
+		/// have to use CreateObject reflection, but you can manage the reference at least
+		public Dictionary<Type, MakeThingFunc> allocHandlers = new .() ~ DeleteDictionaryAndValues!(_);
 
 		/// Will be called for every deserialized StringView string. Must return a valid string view
 		/// of the passed-in string.
@@ -105,19 +96,13 @@ namespace Bon
 			serializeFlags = gBonEnv.serializeFlags;
 			deserializeFlags = gBonEnv.deserializeFlags;
 			
-			for (let pair in gBonEnv.serializeHandlers)
-				serializeHandlers.Add(pair);
+			for (let pair in gBonEnv.typeHandlers)
+				typeHandlers.Add(pair);
 
-			mixin CloneDelegate(var del)
+			for (let pair in gBonEnv.allocHandlers)
 			{
-				new Delegate()..SetFuncPtr(del.[Friend]mFuncPtr, del.[Friend]mTarget)
-			}
-
-			for (let pair in gBonEnv.instanceHandlers)
-			{
-				Delegate make = pair.value.make == null ? null : CloneDelegate!(pair.value.make);
-				Delegate destroy = pair.value.destroy == null ? null : CloneDelegate!(pair.value.destroy);
-				instanceHandlers.Add(pair.key, ((.)make, (.)destroy));
+				Delegate make = pair.value == null ? null : new Delegate()..SetFuncPtr(pair.value.[Friend]mFuncPtr, pair.value.[Friend]mTarget);
+				allocHandlers.Add(pair.key, (.)make);
 			}
 
 			stringViewHandler = gBonEnv.stringViewHandler;

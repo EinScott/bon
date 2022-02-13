@@ -406,12 +406,12 @@ namespace Bon.Integrated
 
 		static bool GetCustomHandler(Type type, BonEnvironment env, out HandleSerializeFunc func)
 		{
-			if (env.serializeHandlers.TryGetValue(type, let val) && val.serialize != null)
+			if (env.typeHandlers.TryGetValue(type, let val) && val.serialize != null)
 			{
 				func = val.serialize;
 				return true;
 			}
-			else if (type is SpecializedGenericType && env.serializeHandlers.TryGetValue(((SpecializedGenericType)type).UnspecializedType, let gVal)
+			else if (type is SpecializedGenericType && env.typeHandlers.TryGetValue(((SpecializedGenericType)type).UnspecializedType, let gVal)
 				&& gVal.serialize != null)
 			{
 				func = gVal.serialize;

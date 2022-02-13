@@ -61,27 +61,18 @@ namespace Bon.Tests
 			val.Assign(str);
 		}
 
-		static void DestroyString(ValueView val)
-		{
-			var val;
-			var str = val.Get<String>();
-
-			if (strings.Remove(str))
-				delete str; // We allocated it!
-		}
-
 		static mixin SetupStringHandler()
 		{
 			gBonEnv.stringViewHandler = => HandleStringView;
 
-			if (!gBonEnv.instanceHandlers.ContainsKey(typeof(String)))
-				gBonEnv.instanceHandlers.Add(typeof(String), ((.)new => MakeString, (.)new => DestroyString));
+			if (!gBonEnv.allocHandlers.ContainsKey(typeof(String)))
+				gBonEnv.allocHandlers.Add(typeof(String), (.)new => MakeString);
 		}
 
 		static mixin NoStringHandler()
 		{
 			gBonEnv.stringViewHandler = => HandleStringView;
-			gBonEnv.instanceHandlers.Remove(typeof(String));
+			gBonEnv.allocHandlers.Remove(typeof(String));
 		}
 
 		[Test]
@@ -981,9 +972,8 @@ namespace Bon.Tests
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == "(Bon.Tests.Thing).Circle{pos={x=20,y=50},radius=1}");
 
-				Object oi = new box SomeTokens.Dash; // oops- wrong type
-				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi.GetType() == i.GetType() && Bon.Serialize(oi, .. scope .()) == str);
-				delete oi;
+				Object oi = scope box SomeTokens.Dash; // oops- wrong type
+				Test.Assert(Bon.Deserialize(ref oi, str) case .Err);
 			}
 		}
 
@@ -1077,7 +1067,7 @@ namespace Bon.Tests
 				Test.Assert(str == "(Bon.Tests.OtherClassThing){something=222252222,prop__Number=59992,Name=\"nothing\"}");
 
 				Object co = new AClass(); // oops.. wrong type there!
-				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType() && Bon.Serialize(co, .. scope .()) == str);
+				Test.Assert(Bon.Deserialize(ref co, str) case .Err);
 				delete co;
 			}
 
@@ -1236,9 +1226,8 @@ namespace Bon.Tests
 				let str = Bon.Serialize(s, .. scope .());
 				Test.Assert(str == "<7>[12,24,53,34,5]");
 
-				uint8[] so = new .[17]; // oops, wrong size
-				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
-				delete so;
+				uint8[] so = scope .[17]; // oops, wrong size
+				Test.Assert(Bon.Deserialize(ref so, str) case .Err);
 			}
 
 			{

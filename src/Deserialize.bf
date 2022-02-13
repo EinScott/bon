@@ -14,10 +14,10 @@ namespace Bon.Integrated
 {
 	static class Deserialize
 	{
-		public static mixin Error(BonReader reader, String error)
+		public static mixin Error(String error, BonReader reader, Type type = null)
 		{
 #if BON_PRINT
-			PrintError(reader, error);
+			PrintError(reader, type, error);
 #endif
 #if BON_PROVIDE_ERROR
 			using (Bon.errMonitor.Enter())
@@ -28,10 +28,14 @@ namespace Bon.Integrated
 			return .Err(default);
 		}
 
-		static void PrintError(BonReader reader, String error)
+		static void PrintError(BonReader reader, Type type, String error)
 		{
-			let err = scope $"BON ERROR: {error}. ";
-			reader.GetCurrentPos(err);
+			let err = scope String(512)..AppendF("BON ERROR: {}. ", error);
+			if (reader != null)
+				reader.GetCurrentPos(err);
+			if (type != null)
+				err.AppendF("\n> On type: {}", type);
+
 #if TEST
 			Console.WriteLine(err);
 #else
@@ -39,58 +43,30 @@ namespace Bon.Integrated
 #endif
 		}
 
-		public static mixin Error(Type type, String error)
-		{
-#if BON_PRINT
-			PrintError(type, error);
-#endif
-#if BON_PROVIDE_ERROR
-			using (Bon.errMonitor.Enter())
-			{
-				Bon.LastDeserializeError.Set(error);
-			}
-#endif
-			return .Err(default);
-		}
-
-		static void PrintError(Type type, String error)
-		{
-			let err = scope $"BON ERROR: {error}.\nOn type: ";
-			type.ToString(err);
-#if TEST
-			Console.WriteLine(err);
-#else
-			Debug.WriteLine(err);
-#endif
-		}
-
-		static Result<void> MakeDefault(ref ValueView val, BonEnvironment env)
+		public static Result<void> MakeDefault(BonReader reader, ref ValueView val, BonEnvironment env)
 		{
 			if (ValueDataIsZero!(val))
 				return .Ok;
-
+			
 			let valType = val.type;
-			if (valType.IsObject)
+			if (valType.IsStruct)
 			{
-				DestroyThingFunc destroy = null;
-				if (env.instanceHandlers.TryGetValue(valType, let funcs)
-					&& funcs.destroy != null)
-					destroy = funcs.destroy;
-				else if (valType is SpecializedGenericType && env.instanceHandlers.TryGetValue(((SpecializedGenericType)valType).UnspecializedType, let gFuncs)
-					&& gFuncs.destroy != null)
-					destroy = gFuncs.destroy;
-
-				if (destroy != null)
-					destroy(val);
-				else delete Internal.UnsafeCastToObject(*(void**)val.dataPtr);
+				// TODO: scan for reftype fields we maybe can't just default!
+				// also do this in structs we contain
+			}
+			else if (valType is SizedArrayType)
+			{
+				let t = (SizedArrayType)valType;
+				Try!(DefaultArray(reader, t.UnderlyingType, val.dataPtr, t.ElementCount, env));
+			}
+			else if (valType.IsObject)
+			{
+				Try!(NullInstanceRef(reader, ref val, env));
 			}
 			else if (valType.IsPointer)
 			{
-				// We set an object to be exactly what is specified in the
-				// bon string. Since we cannot do this with pointers in the mix,
-				// we error by default to explicitly inform the user about this.
 				if (!env.deserializeFlags.HasFlag(.IgnorePointers))
-					Error!(valType, "Cannot handle pointer values. Set .IgnorePointers or .IgnoreUnmentionedValues if you manage those yourself.");
+					Error!("Cannot handle pointer values. Set .IgnorePointers or .IgnoreUnmentionedValues if are aware of this", reader, valType);
 				return .Ok;
 			}
 
@@ -110,18 +86,79 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static Result<void> MakeInstanceRef(ref ValueView val, BonEnvironment env)
+		public static Result<void> DefaultArray(BonReader reader, Type arrType, void* arrPtr, int64 count, BonEnvironment env)
+		{
+			var ptr = (uint8*)arrPtr;
+			for (let j < count)
+			{
+				var arrVal = ValueView(arrType, ptr);
+				Try!(MakeDefault(reader, ref arrVal, env));
+
+				ptr += arrType.Stride;
+			}
+			return .Ok;
+		}
+
+		public static Result<void> DefaultMultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, BonEnvironment env, params int64[] counts)
+		{
+			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
+
+			let count = counts[0];
+			var stride = counts[1];
+			if (counts.Count > 2)
+				for (let i < counts.Count - 2)
+					stride *= counts[i + 2];
+			stride *= arrType.Stride;
+
+			if (count > 0)
+			{
+				var ptr = (uint8*)arrPtr;
+				
+				for (let i < count)
+				{
+					let inner = counts.Count - 1;
+					if (inner > 1)
+					{
+						int64[] innerCounts = scope .[inner];
+						for (let j < inner)
+							innerCounts[j] = counts[j + 1];
+
+						Try!(DefaultMultiDimensionalArray(reader, arrType, ptr, env, params innerCounts));
+					}
+					else Try!(DefaultArray(reader, arrType, ptr, counts[1], env));
+
+					ptr += stride;
+				}
+			}
+			return .Ok;
+		}
+
+		[Inline]
+		public static Result<void> NullInstanceRef(BonReader reader, ref ValueView val, BonEnvironment env)
+		{
+			if (*(void**)val.dataPtr != null)
+			{
+				// TODO: when field is marked as allow to null, then do
+				// Try!(MakeDefault(ref val, env)); instead
+
+				Error!("Cannot null reference. Put [BonNullable] on this field if bon can safely null it without leaking anything", reader, val.type);
+			}
+
+			return .Ok;
+		}
+
+		public static Result<void> MakeInstanceRef(BonReader reader, ref ValueView val, BonEnvironment env)
 		{
 			let valType = val.type;
 			Debug.Assert(!valType.IsArray && (valType.IsObject));
 
 			MakeThingFunc make = null;
-			if (env.instanceHandlers.TryGetValue(valType, let funcs)
-				&& funcs.make != null)
-				make = funcs.make;
-			else if (valType is SpecializedGenericType && env.instanceHandlers.TryGetValue(((SpecializedGenericType)valType).UnspecializedType, let gFuncs)
-				&& gFuncs.make != null)
-				make = gFuncs.make;
+			if (env.allocHandlers.TryGetValue(valType, let func)
+				&& func != null)
+				make = func;
+			else if (valType is SpecializedGenericType && env.allocHandlers.TryGetValue(((SpecializedGenericType)valType).UnspecializedType, let gFunc)
+				&& gFunc != null)
+				make = gFunc;
 
 			if (make != null)
 				make(val);
@@ -130,7 +167,7 @@ namespace Bon.Integrated
 				void* objRef;
 				if (val.type.CreateObject() case .Ok(let createdObj))
 					objRef = Internal.UnsafeCastToPtr(createdObj);
-				else Error!(val.type, "Failed to create object");
+				else Error!("Failed to create object", null, val.type);
 
 				*((void**)val.dataPtr) = objRef;
 			}
@@ -149,7 +186,7 @@ namespace Bon.Integrated
 			void* objRef;
 			if (valType.CreateObject(count) case .Ok(let createdObj))
 				objRef = Internal.UnsafeCastToPtr(createdObj);
-			else Error!(val.type, "Failed to create array");
+			else Error!("Failed to create array", null, val.type);
 
 			*((void**)val.dataPtr) = objRef;
 
@@ -161,13 +198,13 @@ namespace Bon.Integrated
 			Try!(reader.ConsumeEmpty());
 
 			if (reader.ReachedEnd())
-				Error!(reader, "Expected entry");
+				Error!("Expected entry", reader);
 			else
 			{
 				if (reader.IsIrrelevantEntry())
 				{
 					if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
-						Try!(MakeDefault(ref val, env));
+						Try!(MakeDefault(reader, ref val, env));
 
 					Try!(reader.ConsumeEmpty());
 				}
@@ -201,29 +238,29 @@ namespace Bon.Integrated
 						if (valType.IsInterface)
 						{
 							if (!type.HasInterface(valType))
-								Error!(reader, scope $"Specified type does not implement {valType}");
+								Error!(scope $"Specified type does not implement {valType}", reader, type);
 						}
 						else if (type.IsObject /* boxed structs or primitives */ && !type.IsSubtypeOf(valType))
-							Error!(reader, scope $"Specified type is not a sub-type of {valType}");
+							Error!(scope $"Specified type is not a sub-type of {valType}", reader, type);
 
 						// Store it but don't apply it, so that we still easily
 						// select the IsObject case even for boxed structs
 						polyType = type;
 					}
 					else if (typeName != (StringView)valType.GetFullName(.. scope .())) // It's the base type itself, and we got that!
-						Error!(reader, "Specified type not found in bonEnvironment.polyTypes");
+						Error!("Specified type not found in bonEnvironment.polyTypes", reader, valType);
 				}
-				else Error!(reader, "Type markers are only valid on reference types and interfaces");
+				else Error!("Type markers are only valid on reference types and interfaces", reader, valType);
 			}
 
 			if (reader.IsDefault())
 			{
-				Try!(MakeDefault(ref val, env));
+				Try!(MakeDefault(reader, ref val, env));
 
 				Try!(reader.ConsumeEmpty());
 			}	
 			else if (reader.IsIrrelevantEntry())
-				Error!(reader, "Ignored markers are only valid in arrays");
+				Error!("Ignored markers are only valid in arrays", reader);
 			else if (valType.IsPrimitive)
 			{
 				if (valType.IsInteger)
@@ -274,7 +311,7 @@ namespace Bon.Integrated
 								}
 
 							if (!found)
-								Error!(reader, "Enum case not found");
+								Error!("Enum case not found", reader, valType);
 						}
 						else
 						{
@@ -327,7 +364,7 @@ namespace Bon.Integrated
 				else if (valType.IsEnum && valType.IsUnion)
 				{
 					if (!reader.EnumHasNamed())
-						Error!(reader, "Expected enum union case name");
+						Error!("Expected enum union case name", reader);
 					let name = Try!(reader.EnumName());
 
 					ValueView unionPayload = default;
@@ -361,9 +398,9 @@ namespace Bon.Integrated
 					Debug.Assert(discrVal != default);
 
 					if (!hasCaseData)
-						Error!(valType, "No reflection data for type");
+						Error!("No reflection data for type", null, valType);
 					if (!foundCase)
-						Error!(reader, "Enum union case not found");
+						Error!("Enum union case not found", reader, valType);
 
 					mixin PutVal<T>() where T : var
 					{
@@ -410,8 +447,7 @@ namespace Bon.Integrated
 			{
 				if (reader.IsNull())
 				{
-					if (*(void**)val.dataPtr != null)
-						Try!(MakeDefault(ref val, env));
+					Try!(NullInstanceRef(reader, ref val, env));
 
 					Try!(reader.ConsumeEmpty());
 				}
@@ -420,6 +456,7 @@ namespace Bon.Integrated
 					let reference = Try!(reader.Reference());
 
 					// TODO: put reference in some lookup along with ValueView for later?
+					// later check if field is already occupied with that exact reference... or if we need to CheckInstanceNull here (and then set)
 				}
 				else
 				{
@@ -431,15 +468,15 @@ namespace Bon.Integrated
 						if (boxType != null)
 						{
 							// Current reference is of a different type, so clean
-							// it up to make our type instance below
+							// it up to make our instance below
 							if (*(void**)val.dataPtr != null
 								&& (*(Object*)val.dataPtr).GetType() != polyType) // Box still returns type of boxed
-								Try!(MakeDefault(ref val, env));
+								Try!(NullInstanceRef(reader, ref val, env));
 
 							val.type = boxType;
 
 							if (*(void**)val.dataPtr == null)
-								Try!(MakeInstanceRef(ref val, env));
+								Try!(MakeInstanceRef(reader, ref val, env));
 
 							// Throw together the pointer to the box payload
 							// in the corlib approved way. (See Variant.CreateFromBoxed)
@@ -448,17 +485,17 @@ namespace Bon.Integrated
 							var boxedData = ValueView(polyType, boxedPtr);
 							Try!(Value(reader, ref boxedData, env));
 						}
-						else Error!(reader, "Failed to access boxed type");
+						else Error!("Failed to access boxed type", reader, polyType);
 					}
 					else
 					{
 						if (polyType != valType)
 						{
 							// Current reference is of a different type, so clean
-							// it up to make our type instance below
+							// it up to make our instance below
 							if (*(void**)val.dataPtr != null
 								&& (*(Object*)val.dataPtr).GetType() != polyType)
-								Try!(MakeDefault(ref val, env));
+								Try!(NullInstanceRef(reader, ref val, env));
 
 							val.type = polyType;
 						}
@@ -466,7 +503,7 @@ namespace Bon.Integrated
 
 						if (*(void**)val.dataPtr == null
 							&& !polyType.IsArray) // Arrays handle it differently
-							Try!(MakeInstanceRef(ref val, env));
+							Try!(MakeInstanceRef(reader, ref val, env));
 
 						if (polyType == typeof(String))
 						{
@@ -481,8 +518,8 @@ namespace Bon.Integrated
 
 							let t = polyType as ArrayType;
 
-							int_arsize fullCount = 0;
-							int_arsize[] counts = null;
+							int64 fullCount = 0;
+							int64[] counts = null;
 							switch (t.UnspecializedType)
 							{
 							case typeof(Array1<>):
@@ -532,12 +569,12 @@ namespace Bon.Integrated
 								Debug.FatalError();
 							}
 
-							// Deallocate old array if count doesn't match
+							// Old array if count doesn't match!
 							if (*(void**)val.dataPtr != null)
 							{
 								let currCount = GetValField!<int_arsize>(val, "mLength");
 								if (fullCount != currCount)
-									Try!(MakeDefault(ref val, env));
+									Try!(NullInstanceRef(reader, ref val, env));
 							}
 
 							if (*(void**)val.dataPtr == null)
@@ -553,18 +590,18 @@ namespace Bon.Integrated
 							void* arrPtr = null;
 							if (t.GetField("mFirstElement") case .Ok(let field))
 								arrPtr = classData + field.MemberOffset; // T*
-							else Error!(t, "No reflection data for array type"); // for example: [Serializable] extension Array1<T> {} or through build settings
+							else Error!("No reflection data for array type", null, t); // for example: [Serializable] extension Array1<T> {} or through build settings
 
 							switch (t.UnspecializedType)
 							{
 							case typeof(Array4<>):
-								SetValField!(val, "mLength3", counts[3]);
+								SetValField!(val, "mLength3", (int_arsize)counts[3]);
 								fallthrough;
 							case typeof(Array3<>):
-								SetValField!(val, "mLength2", counts[2]);
+								SetValField!(val, "mLength2", (int_arsize)counts[2]);
 								fallthrough;
 							case typeof(Array2<>):
-								SetValField!(val, "mLength1", counts[1]);
+								SetValField!(val, "mLength1", (int_arsize)counts[1]);
 
 								Try!(MultiDimensionalArray(reader, arrType, arrPtr, env, params counts));
 
@@ -585,12 +622,12 @@ namespace Bon.Integrated
 			{
 				// See this case in Serialize.bf
 
-				Error!(valType, "Cannot handle pointer values");
+				Error!("Cannot handle pointer values", reader, valType);
 			}
 			else
 			{
 				Debug.FatalError();
-				Error!(valType, "Unhandled. Please report this");
+				Error!("Unhandled. Please report this", reader, valType);
 			}
 
 			return .Ok;
@@ -598,12 +635,12 @@ namespace Bon.Integrated
 
 		static bool GetCustomHandler(Type type, BonEnvironment env, out HandleDeserializeFunc func)
 		{
-			if (env.serializeHandlers.TryGetValue(type, let val) && val.deserialize != null)
+			if (env.typeHandlers.TryGetValue(type, let val) && val.deserialize != null)
 			{
 				func = val.deserialize;
 				return true;
 			}
-			else if (type is SpecializedGenericType && env.serializeHandlers.TryGetValue(((SpecializedGenericType)type).UnspecializedType, let gVal)
+			else if (type is SpecializedGenericType && env.typeHandlers.TryGetValue(((SpecializedGenericType)type).UnspecializedType, let gVal)
 				&& gVal.deserialize != null)
 			{
 				func = gVal.deserialize;
@@ -634,7 +671,7 @@ namespace Bon.Integrated
 				fields.Add(f);
 
 			if (fields.Count == 0 && reader.ObjectHasMore())
-				Error!(structType, "No reflection data for type");
+				Error!("No reflection data for type", null, structType);
 
 			while (reader.ObjectHasMore())
 			{
@@ -653,12 +690,12 @@ namespace Bon.Integrated
 					}
 				}
 				if (!found)
-					Error!(reader, "Failed to find field");
+					Error!("Failed to find field", reader, structType);
 
 				if (!env.deserializeFlags.HasFlag(.AccessNonPublic) // we don't allow non-public
 					&& !(fieldInfo.[Friend]mFieldData.mFlags.HasFlag(.Public) || fieldInfo.GetCustomAttribute<BonIncludeAttribute>() case .Ok) // field is not accessible
 					|| fieldInfo.GetCustomAttribute<BonIgnoreAttribute>() case .Ok) // or field is ignored
-					Error!(reader, "Field access not allowed");
+					Error!("Field access not allowed", reader, structType);
 
 				var fieldVal = ValueView(fieldInfo.FieldType, ((uint8*)val.dataPtr) + fieldInfo.MemberOffset);
 
@@ -673,7 +710,7 @@ namespace Bon.Integrated
 				for (let f in fields)
 				{
 					var fieldVal = ValueView(f.FieldType, ((uint8*)val.dataPtr) + f.MemberOffset);
-					Try!(MakeDefault(ref fieldVal, env));
+					Try!(MakeDefault(reader, ref fieldVal, env));
 				}
 			}
 
@@ -696,7 +733,7 @@ namespace Bon.Integrated
 					{
 						// Null unless we leave these alone!
 						if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
-							Try!(MakeDefault(ref arrVal, env));
+							Try!(MakeDefault(reader, ref arrVal, env));
 
 						Try!(reader.ConsumeEmpty());
 					}
@@ -718,7 +755,7 @@ namespace Bon.Integrated
 						for (let j < count - i)
 						{
 							var arrVal = ValueView(arrType, ptr);
-							Try!(MakeDefault(ref arrVal, env));
+							Try!(MakeDefault(reader, ref arrVal, env));
 
 							ptr += arrType.Stride;
 						}
@@ -726,12 +763,12 @@ namespace Bon.Integrated
 				}
 			}
 			if (reader.ArrayHasMore())
-				Error!(reader, "Array cannot fit element");
+				Error!("Array cannot fit element", reader);
 
 			return reader.ArrayBlockEnd();
 		}
 
-		public static Result<void> MultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, BonEnvironment env, params int_arsize[] counts)
+		public static Result<void> MultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, BonEnvironment env, params int64[] counts)
 		{
 			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
 
@@ -747,13 +784,13 @@ namespace Bon.Integrated
 				let inner = counts.Count - 1;
 				if (inner > 1)
 				{
-					int_arsize[] innerCounts = scope .[inner];
+					int64[] innerCounts = scope .[inner];
 					for (let j < inner)
 						innerCounts[j] = counts[j + 1];
 
-					Try!(DefaultMultiDimensionalArray(arrType, ptr, env, params innerCounts));
+					Try!(DefaultMultiDimensionalArray(reader, arrType, ptr, env, params innerCounts));
 				}
-				else Try!(DefaultArray(arrType, ptr, counts[1], env));
+				else Try!(DefaultArray(reader, arrType, ptr, counts[1], env));
 			}
 
 			Try!(reader.ArrayBlock());
@@ -783,7 +820,7 @@ namespace Bon.Integrated
 						let inner = counts.Count - 1;
 						if (inner > 1)
 						{
-							int_arsize[] innerCounts = scope .[inner];
+							int64[] innerCounts = scope .[inner];
 							for (let j < inner)
 								innerCounts[j] = counts[j + 1];
 
@@ -815,56 +852,9 @@ namespace Bon.Integrated
 				}
 			}
 			if (reader.ArrayHasMore())
-				Error!(reader, "Array cannot fit element");
+				Error!("Array cannot fit element", reader);
 
 			return reader.ArrayBlockEnd();
-		}
-
-		public static Result<void> DefaultArray(Type arrType, void* arrPtr, int_arsize count, BonEnvironment env)
-		{
-			var ptr = (uint8*)arrPtr;
-			for (let j < count)
-			{
-				var arrVal = ValueView(arrType, ptr);
-				Try!(MakeDefault(ref arrVal, env));
-
-				ptr += arrType.Stride;
-			}
-			return .Ok;
-		}
-
-		public static Result<void> DefaultMultiDimensionalArray(Type arrType, void* arrPtr, BonEnvironment env, params int_arsize[] counts)
-		{
-			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
-
-			let count = counts[0];
-			var stride = counts[1];
-			if (counts.Count > 2)
-				for (let i < counts.Count - 2)
-					stride *= counts[i + 2];
-			stride *= arrType.Stride;
-
-			if (count > 0)
-			{
-				var ptr = (uint8*)arrPtr;
-				
-				for (let i < count)
-				{
-					let inner = counts.Count - 1;
-					if (inner > 1)
-					{
-						int_arsize[] innerCounts = scope .[inner];
-						for (let j < inner)
-							innerCounts[j] = counts[j + 1];
-
-						Try!(DefaultMultiDimensionalArray(arrType, ptr, env, params innerCounts));
-					}
-					else Try!(DefaultArray(arrType, ptr, counts[1], env));
-
-					ptr += stride;
-				}
-			}
-			return .Ok;
 		}
 
 		public static mixin String(BonReader reader, ref String parsedStr, BonEnvironment env)
@@ -936,12 +926,12 @@ namespace Bon.Integrated
 				}
 				else if (c == '\'')
 					continue;
-				else Error!(reader, scope $"Failed to parse {typeof(T)}");
+				else Error!("Failed to parse integer", reader,  typeof(T));
 
 				digits++;
 
 				if (result < prevRes)
-					Error!(reader, scope $"Integer is out of range for {typeof(T)}");
+					Error!("Integer is out of range", reader, typeof(T));
 				prevRes = result;
 			}
 
@@ -949,17 +939,17 @@ namespace Bon.Integrated
 			if (isNegative)
 			{
 				if (result > int64.MaxValue)
-					Error!(reader, scope $"Integer is out of range for {typeof(T)}");
+					Error!("Integer is out of range", reader, typeof(T));
 				let num = -(*(int64*)&result);
 				if (num < (int64)T.MinValue || num > (int64)T.MaxValue)
-					Error!(reader, scope $"Integer is out of range for {typeof(T)}");
+					Error!("Integer is out of range", reader, typeof(T));
 				else return .Ok((T)num);
 			}
 			else
 			{
 				let num = result;
 				if (result > (uint64)T.MaxValue)
-					Error!(reader, scope $"Integer is out of range for {typeof(T)}");
+					Error!("Integer is out of range", reader, typeof(T));
 				else return .Ok((T)num);
 			}
 		}
@@ -968,7 +958,7 @@ namespace Bon.Integrated
 		{
 			T thing = default;
 			if (!(T.Parse(.(&num[0], num.Length)) case .Ok(out thing)))
-				Error!(reader, scope $"Failed to parse {typeof(T)}");
+				Error!("Failed to parse", reader, typeof(T));
 			thing
 		}
 
@@ -1006,7 +996,7 @@ namespace Bon.Integrated
 		static mixin DoChar<T, TI>(BonReader reader, ref ValueView val, char32 char) where T : var where TI : var
 		{
 			if ((uint)char > TI.MaxValue)
-				Error!(reader, scope $"Char is out of range for {typeof(T)}");
+				Error!("Char is out of range", reader, typeof(T));
 
 			*(T*)val.dataPtr = *(T*)&char;
 		}

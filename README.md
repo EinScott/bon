@@ -4,7 +4,7 @@ bon is a **serialization library** for the [Beef programming language](https://g
 
 ## Basics
 
-bon is reflection based. (De-) Serialization of a value is done in one call to ``Bon.Serialize`` or ``Bon.Deserialize``.
+Bon is reflection based. (De-) Serialization of a value is done in one call to ``Bon.Serialize`` or ``Bon.Deserialize``.
 Any value (though pointer support is limited) can be passed into these calls to produce a valid result (or, in the case of Deserialization, a precise error).
 
 Primitives and strings (as well as [some common corlib types](#supported-types), such as ``List<T>``) are supported by default. To support other custom types, reflection data for them simply needs to be included in the build.
@@ -38,7 +38,7 @@ let serialized = Bon.Serialize(structure, .. scope String());
 Content of ``serialized``:
 ```
 {
-	gameRulse = .FriendlyFire|.RandomDrops,
+	gameRules = .FriendlyFire|.RandomDrops,
 	partyName = "ChaosCrew",
 	currentMode = .Battle{
 		stage = 5
@@ -62,6 +62,8 @@ For an extensive overview of bon's capabilites, see [Documentation](#documentati
 
 ## How do i..?
 
+all common errors or things that go wrong in usage "why it says reflection missing" "how to use polyTypes" "custom handlers?" "manage memory?"
+
 ## Serialization
 
 ```bf
@@ -70,6 +72,9 @@ Bon.Serialize(i, outStr); // outStr: "15"
 ```
 
 ## Deserialization
+
+mention what it can and can't do
+-> no dealloc of stuff...etc
 
 ## Documentation
 
@@ -104,15 +109,15 @@ BON ERROR: Cannot handle pointer values.
 On type: uint8*
 ```
 
-Printing of errors is disabled in non-DEBUG configurations and can be forced off by defining ``BON_NO_PRINT`` in the workspace settings. Optionally, defining ``BON_PROVIDE_ERROR`` always makes bon set ``Bon.LastDeserializeError`` to its error message before exiting (in case you want to want to properly report it somehow).
+Printing of errors is disabled in non-DEBUG configurations and can be forced off by defining ``BON_NO_PRINT`` in the workspace settings. Optionally, defining ``BON_PROVIDE_ERROR`` always makes bon set ``Bon.LastDeserializeError`` to its error message before returning (in case you want to want to properly report it somehow).
 
 ### Syntax
 
-**Comments**:
+#### Comments
 
 Beef/C style comments are supported. ``//`` single line comments, and ``/* */`` multiline comments (even nested ones).
 
-**File-level**:
+#### File-level
 
 Every file is a list of values. Most commonly, a file is only made up of one element/value. These elements are independent of each other and are each [serialized](#serialization) or [deserialized](#deserialization) in one call. For example:
 
@@ -143,7 +148,7 @@ Debug.Assert(context.GetEntryCount() == 0); // No more entries left in the file
 
 Similarly, multiple ``Bon.Serialize(...)`` calls can be performed on the same string to produce a file with multiple entries.
 
-**Special values**:
+#### Special values
 
 - ``?`` **Irrelevant value**: Means default or ignored value based on [bon environment](#bon-environment) configuration. Is only valid in arrays, as otherwise the entry could just be omitted to achieve the same result.
 - ``default`` **Zero value** Value is explicitly zero.
@@ -159,7 +164,7 @@ Can take on the following shapes:
 1.352e-3d
 ```
 
-**Integer numbers**:
+#### Integer numbers
 
 Integers are range-checked and can be denoted in decimal, hexadecimal, binary or octal notation. The ``u`` suffix is valid on unsigned numbers, the ``l`` suffix is recognized but ignored.
 
@@ -172,7 +177,7 @@ Integers are range-checked and can be denoted in decimal, hexadecimal, binary or
 0o270
 ```
 
-**Chars**:
+#### Chars
 
 Chars start and end with ``'`` and their contents are size- and range-checked. Escape sequences ``\', \", \\, \0, \a, \b, \f, \n, \r, \t, \v, \xFF, \u{10FFFF}`` are supported (based on the char size).
 
@@ -182,7 +187,7 @@ Chars start and end with ``'`` and their contents are size- and range-checked. E
 '\x09'
 ```
 
-**Enums**:
+#### Enums
 
 Enums can be represented by integer numbers or the type's named cases. Named cases are preceeded by a ``.``, multiple cases can be combined with ``|``.
 
@@ -194,7 +199,7 @@ Enums can be represented by integer numbers or the type's named cases. Named cas
 .SHIFT | .STRG | 'q' // For char enums, also allow char literals
 ```
 
-**Strings**:
+#### Strings
 
 Strings are single-line and start and end with a (non-escaped) ``"``. The ``@`` prefix marks verbatim strings. The escape sequences listed in char are valid in strings as well.
 
@@ -205,7 +210,7 @@ Strings are single-line and start and end with a (non-escaped) ``"``. The ``@`` 
 "What's this: \u{30A1}? Don't know..."
 ```
 
-**Object bodies**:
+#### Object bodies
 
 Object bodies are enclosed by object brackets ``{}``. They contain a sequence of ``<fieldIdentifier>=<value>`` entries.
 
@@ -223,7 +228,7 @@ Object bodies are enclosed by object brackets ``{}``. They contain a sequence of
 }
 ```
 
-**Array bodies**:
+#### Array bodies
 
 Array bodies are enclosed by array brackets ``[]``. They contain a list of ``<value>`` entries. Array bodies might be preceded by array sizers ``<>``. Array sizers denote the actual length of the array, as default entries at the back of the array might have been omitted, but are otherwise optional. Arrays sizers for fixed-size array sizers can contain ``const`` solely to indicate their fixed nature to the user.
 
@@ -244,7 +249,7 @@ Array bodies are enclosed by array brackets ``[]``. They contain a list of ``<va
 ]
 ```
 
-**Enum unions**:
+#### Enum unions
 
 Enum unions are denoted as a named case name followed by their payload object body. Case names are preceded by a ``.``.
 
@@ -253,9 +258,9 @@ Enum unions are denoted as a named case name followed by their payload object bo
 .Rect{x=5, y=5, width=20, height=10}
 ```
 
-**Sub-file strings**:
+#### Sub-file strings
 
-Bon sub-file strings start with ``$`` and are enclosed in array brackets ``[]``. The section inside is extracted as-is and represents an independent bon **file-level** array. The contents of the sub-file are only rudimentarily checked to ensure that the inner bracket structure is contained.
+Bon sub-file strings start with ``$`` and are enclosed in array brackets ``[]``. The section inside is extracted as-is and represents an independent bon **file-level** array. The contents of the sub-file are mostly unchecked and not necessarily valid apart from the array bracket structure.
 
 ```
 {
@@ -281,6 +286,20 @@ Bon sub-file strings start with ``$`` and are enclosed in array brackets ``[]``.
 }
 ```
 
+Here, ``importers[0].configStr`` will be equivalent to:
+
+```
+{
+	compileAtlas = true,
+	atlas = {
+		padding = 2,
+		maxPageSize = 1024
+	}
+}
+```
+
+A structure like that might be used like this:
+
 ```bf
 PackageConfig config = null;
 defer
@@ -301,7 +320,9 @@ for (let importStatement in config.importers)
 }
 ```
 
-**Type marker**:
+The package builder does not know what options the individual importers might take. They simply get a bon string to deserialize into their own config structures. This aims to make more complex setups possible within one coherent looking file under the constraint of single-call deserialization.
+
+#### Type markers
 
 Type markers are enclosed by type brackets ``()``. They contain the full name of a beef type and are a prefix to a value. If the mentioned type is a struct, it must mean that the value is boxed. Type markers are necessary for polymorphed values (especially if the target type is abstract or an interface), optional on reference types if they are of the expected type already, and invalid on value types.
 
@@ -321,27 +342,65 @@ For this to work with deserialization, bon needs to look up the types by name. T
 (System.Collections.List<int>)[55555, 6666]
 ```
 
-**References**:
+#### References
 
-References start with ``&`` and are a path to another non-reference value within the structure. As such, values are only valid on reference types and are meant to preserve references to objects within a structure. This is an optional feature and has to be enabled on the used [bon environment](#bon-environment).
+References start with ``&`` and are an absolute path to another non-reference value within the structure. As such, values are only valid on reference types and are meant to preserve references to objects. This is an optional feature and has to be enabled on the used [bon environment](#bon-environment).
 
 ```
-// Note: of course, values are not actually valid on their own,
-// they need to point to a value within the same file-level entry.
+// Note: of course references are not actually valid on their own,
+// as they need to point to a value within the same file-level entry.
 
+& // References the entry value
 &attributes[1].description,
 &[0].name
 ```
 
 ### Type setup
 
-what attributes do
-field access
-the attributes BonTarget and BonPolyRegister don't need to be used
-BonTarget -> just does reflection force for you, can also be done in build settings
+For a type from your code to be used with bon, you simply have to place ``[BonTarget]`` on it. Fields with ``[BonIgnore]`` will never (except with ``.IgnoreAttributes``) be serialized and can never be deserialized into. Fields with ``[BonInclude]`` will be treated like other public fields. Private/Forbidden fields cannot be accessed in deserialization.
+
+```bf
+[BonTarget]
+class State
+{
+	public GameMode currentMode;
+	public GameRules gameRules;
+	
+	public List<PlayerInfo> playerInfo ~ if (_ != null) delete _;
+	
+	// Will be serialized, allthough it's not public
+	[BonInclude]
+	String partyName ~ if (_ != null) delete _;
+	
+	// Will not be serialized, allthough it's public
+	[BonIgnore]
+	public Scene gameScene;
+	
+	// Will not be serialized
+	TimeSpan sessionPlaytime;
+}
+```
+
+#### Allocation
+
+On deserialization,
+
+#### Polymorphism
+
+If the structure you want to serialize references this type polymorphically, for example as an ``Object`` reference, you also need to place ``[BonPolyRegister]`` on it as well.
+
 polymorphism handling
-BonPolyRegister -> types can also be registered into BonEnv manually by calling RegisterPolyType!(type)
+
+#### Manual setup
+
+If you 
+
+the attributes BonTarget and BonPolyRegister don't need to be used
+
 how to force reflection data in the IDE...
+
+BonTarget -> just does reflection force for you, can also be done in build settings
+BonPolyRegister -> types can also be registered into BonEnv manually by calling RegisterPolyType!(type)
 
 ### Bon environment
 
@@ -356,6 +415,6 @@ flags & handlers, how to reset default config
 
 basically some pointers on writing handlers
 ..?
--> serialize can never error. it either must be forced by default by the lib to be always present, or, if info is not provided, a valid "empty" value should be printed, like ```{}``` for objects without reflection info.
+-> serialize can never error. it either must be forced by default by the lib to be always present, or, if info is not provided, a valid "empty" value should be printed, like ``{}`` for objects without reflection info.
 
 ### Integrated usage

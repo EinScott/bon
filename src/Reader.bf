@@ -127,7 +127,7 @@ namespace Bon.Integrated
 
 		mixin Error(String error)
 		{
-			Deserialize.Error!(this, error);
+			Deserialize.Error!(error, this);
 		}
 
 		public Result<void> ConsumeEmpty()

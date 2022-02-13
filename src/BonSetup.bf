@@ -29,7 +29,12 @@ namespace Bon
 			env.RegisterPolyType!(typeof(Float));
 			env.RegisterPolyType!(typeof(Double));
 
-			env.serializeHandlers.Add(typeof(List<>), ((.)=> SerializeList, (.)=> DeserializeList));
+			// TODO: some things could just be custom handlers
+			//env.typeHandlers.Add(typeof(Array1<>), ((.)=> ArraySerialize, (.)=> ArrayDeserialize));
+			//env.typeHandlers.Add(typeof(Array2<>), ((.)=> ArraySerialize, (.)=> ArrayDeserialize));
+			//env.typeHandlers.Add(typeof(Array3<>), ((.)=> ArraySerialize, (.)=> ArrayDeserialize));
+			//env.typeHandlers.Add(typeof(Array4<>), ((.)=> ArraySerialize, (.)=> ArrayDeserialize));
+			env.typeHandlers.Add(typeof(List<>), ((.)=> ListSerialize, (.)=> ListDeserialize));
 #endif
 		}
 

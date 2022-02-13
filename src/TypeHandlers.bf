@@ -7,7 +7,17 @@ namespace Bon.Integrated
 {
 	static
 	{
-		public static void SerializeList(BonWriter writer, ref ValueView val, Serialize.ReferenceLookup refLook, BonEnvironment env)
+		public static void ArraySerialize(BonWriter writer, ref ValueView val, Serialize.ReferenceLookup refLook, BonEnvironment env)
+		{
+
+		}
+
+		public static Result<void> ArrayDeserialize(BonReader reader, ref ValueView val, BonEnvironment env)
+		{
+			return .Ok;
+		}
+
+		public static void ListSerialize(BonWriter writer, ref ValueView val, Serialize.ReferenceLookup refLook, BonEnvironment env)
 		{
 			let t = (SpecializedGenericType)val.type;
 
@@ -16,20 +26,20 @@ namespace Bon.Integrated
 
 			let arrType = t.GetGenericArg(0);
 			var arrPtr = *(void**)GetValFieldPtr!(val, "mItems"); // *(T**)
-			let count = GetValField!<int_cosize>(val, "mSize");
+			var count = GetValField!<int_cosize>(val, "mSize");
 
 			// TODO: sizer only if last element is default (also for alloc arrays)
-			writer.Sizer((uint64)count);
+			writer.Sizer((.)count);
 			Serialize.Array(writer, arrType, arrPtr, count, refLook, env);
 		}
 
-		public static Result<void> DeserializeList(BonReader reader, ref ValueView val, BonEnvironment env)
+		public static Result<void> ListDeserialize(BonReader reader, ref ValueView val, BonEnvironment env)
 		{
 			let t = (SpecializedGenericType)val.type;
 
 			Debug.Assert(t.UnspecializedType == typeof(List<>));
 
-			int_cosize count = 0;
+			int64 count = 0;
 			if (reader.ArrayHasSizer())
 			{
 				let sizer = Try!(reader.ArraySizer<1>(false));
@@ -38,7 +48,7 @@ namespace Bon.Integrated
 			else count = (.)Try!(reader.ArrayPeekCount());
 
 			if (t.GetField("mSize") case .Err)
-				Deserialize.Error!(t, "No reflection data for type!");
+				Deserialize.Error!("No reflection data for type!", null, t);
 			let currCount = GetValField!<int_cosize>(val, "mSize");
 			
 			let arrType = t.GetGenericArg(0);
@@ -60,10 +70,10 @@ namespace Bon.Integrated
 						Internal.MemSet(*(uint8**)itemsFieldPtr + currCount * arrType.Stride, 0, (count - currCount) * arrType.Stride, arrType.Align);
 					}
 				}
-				else Deserialize.Error!(t, "Method reflection data needed to enlargen List<> size"); // include with [Reflect(.Methods)] extension List<T> {} or in build settings
+				else Deserialize.Error!("Method reflection data needed to enlargen List<> size", null, t); // include with [Reflect(.Methods)] extension List<T> {} or in build settings
 			}
 			
-			SetValField!<int_cosize>(val, "mSize", count);
+			SetValField!<int_cosize>(val, "mSize", (int_cosize)count);
 
 			// Since mItems is a pointer...
 			let arrPtr = *(void**)itemsFieldPtr;
@@ -81,6 +91,7 @@ namespace Bon.Integrated
 
 		// support Variant ... Guid,Version and some other useful stuff?
 		// - for the last two, can we use a generic template that relies on ToString and Parse ?
+		// handle type? we have polyType info...?
 
 		// "!somethingName" are a way to make the deserializer call a function with this string as the key (also member type, type member is on), which then is expected to provide a variant to put there!
 		// this could be a templated handler that calls a function? i guess... would do the parsing & being called in the first place part automatically then?
