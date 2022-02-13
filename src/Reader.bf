@@ -329,11 +329,7 @@ namespace Bon.Integrated
 			}
 
 			if (strLen >= inStr.Length)
-			{
-				if (strLen > 0)
-					inStr.RemoveFromStart(inStr.Length - 1);
 				Error!("Unterminated string");
-			}
 
 			return .Ok((strLen, isVerbatim));
 		}
@@ -366,20 +362,51 @@ namespace Bon.Integrated
 			Try!(ArrayBlock());
 
 			if (inStr.Length == 0)
-				Error!("Unterminated subfile string");
+				Error!("Expected sub-file string");
+
+			// TODO: fix this... comments are still missing
+			// this will also have to be done for the peek and skip stuff below!
 
 			int len = 0;
 			int arrayDepth = 0;
+			bool str = false, verbStr = false, char = false, escaped = false;
 			while (inStr.Length > len && (arrayDepth != 0 || inStr[len] != ']'))
 			{
-				let char = inStr[len];
-				if (char == '[')
-					arrayDepth++;
-				else if (char == ']')
-					arrayDepth--;
+				switch (inStr[len])
+				{
+				case '[':
+					if (!str && !char)
+						arrayDepth++;
+				case ']':
+					if (!str && !char)
+						arrayDepth--;
+				case '\'':
+					if (!str && !escaped)
+						char = !char;
+				case '\"':
+					if (!char && !escaped)
+					{
+						if (!str)
+							verbStr = len > 0 && inStr[len - 1] == '@';
 
+						str = !str;
+					}
+				case '\\':
+					if (!escaped && (char || str && verbStr))
+					{
+						escaped = true;
+
+						len++;
+						continue;
+					}	
+				}
+
+				escaped = false;
 				len++;
 			}
+
+			if (str || char || len >= inStr.Length)
+				Error!("Unterminated sub-file string");
 
 			return .Ok(len);
 		}

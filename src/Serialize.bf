@@ -265,7 +265,13 @@ namespace Bon.Integrated
 				}
 				else if (GetCustomHandler(valType, env, let func))
 					func(writer, ref val, refLook, env);
-				else Struct(writer, ref val, refLook, env);
+				else
+				{
+					if (valType.IsUnion && env.serializeFlags.HasFlag(.Verbose))
+						writer.outStr.Append("/* Union struct! fields influence each other */");
+
+					Struct(writer, ref val, refLook, env);
+				}
 			}
 			else if (valType is SizedArrayType)
 			{

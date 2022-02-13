@@ -97,16 +97,20 @@ BON ERROR: Unterminated string. (line 1)
 >   "eg\"
 >       ^
 
-BON ERROR: Integer is out of range for int8. (line 1)
+BON ERROR: Integer is out of range. (line 1)
 > 299
 >   ^
+> On type: int8
 
 BON ERROR: Field access not allowed. (line 1)
-> {i=5,f=1,str="oh hello",intern=54,important=32656,dont=8,n=0}
->                                                        ^
+> {i=5,f=1,str="oh hello",dont=8}
+>                              ^
+> On type: Bon.Tests.SomeThings
 
-BON ERROR: Cannot handle pointer values.
-On type: uint8*
+BON ERROR: Cannot handle pointer values. (line 1)
+> {}
+> ^
+> On type: uint8*
 ```
 
 Printing of errors is disabled in non-DEBUG configurations and can be forced off by defining ``BON_NO_PRINT`` in the workspace settings. Optionally, defining ``BON_PROVIDE_ERROR`` always makes bon set ``Bon.LastDeserializeError`` to its error message before returning (in case you want to want to properly report it somehow).
