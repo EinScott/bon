@@ -1,5 +1,6 @@
 using System;
 using Bon.Integrated;
+using System.Diagnostics;
 
 using internal Bon;
 
@@ -11,7 +12,7 @@ namespace Bon
 		internal StringView origStr;
 		internal bool hasMore;
 
-		public int64 GetEntryCount(bool countLeft = true)
+		public Result<int64> GetEntryCount(bool countLeft = true)
 		{
 			let reader = scope BonReader();
 			if (reader.Setup(.(origStr, countLeft ? strLeft : origStr)) case .Err)
@@ -33,6 +34,8 @@ namespace Bon
 		[Inline]
 		public this(StringView bonString)
 		{
+			Debug.Assert(bonString.Ptr != null);
+
 			strLeft = origStr = bonString;
 			hasMore = bonString.Length > 0;
 		}

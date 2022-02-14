@@ -161,7 +161,8 @@ namespace Bon.Integrated
 							}
 							else if (inStr[[Unchecked]i + 1] == '/')
 							{
-								lineComment = true;
+								if (commentDepth == 0)
+									lineComment = true;
 								i++;
 								continue;
 							}
@@ -188,6 +189,112 @@ namespace Bon.Integrated
 			inStr.RemoveFromStart(i);
 
 			return .Ok;
+		}
+
+		/// Parses contents until an *actual* endChar on the same scope level, which it does not include in len.
+		/// Error checking can be performed on all the return params. DID NOT FIND endChar IF LEN == inStr.Len
+		public (int len, int bracketDepth, int commentDepth, bool str, bool char, bool lineComment, bool isEmpty) SkipContentsUntil(int startIdx, params char8[] endChars)
+		{
+			if (inStr.Length <= 0)
+				return default;
+
+			let strLen = inStr.Length;
+			bool isEmpty = true;
+			int i = startIdx;
+			int bracketDepth = 0, commentDepth = 0;
+			bool str = false, verbStr = false, char = false, escaped = false, lineComment = false;
+			PARSE:while (i < strLen)
+			{
+				let c = inStr[[Unchecked]i];
+
+				// We've found an *actual* endChar on the same scope level
+				if (!str && !char && !lineComment && commentDepth == 0 && bracketDepth == 0)
+				{
+					for (let ec in endChars)
+						if (c == ec)
+							break PARSE;
+				}
+
+				bool doResetEscape = true, doCheckContent = true;
+				switch (c)
+				{
+				case '[', '{':
+					if (!str && !char && !lineComment && commentDepth == 0)
+						bracketDepth++;
+				case ']', '}':
+					if (!str && !char && !lineComment && commentDepth == 0)
+						bracketDepth--;
+					
+				case '\'':
+					if (!str && !escaped && !lineComment && commentDepth == 0)
+						char = !char;
+				case '"':
+					if (!char && !escaped && !lineComment && commentDepth == 0)
+					{
+						if (!str)
+							verbStr = i > 0 && inStr[[Unchecked]i - 1] == '@';
+
+						str = !str;
+					}
+				case '\\':
+					if (!escaped && (char || str && !verbStr) && !lineComment && commentDepth == 0)
+					{
+						escaped = true;
+
+						// Don't reset escaped right away
+						doResetEscape = false;
+					}
+				case '/':
+					if (!str && !char && i + 1 < strLen && !lineComment)
+					{
+						let next = inStr[[Unchecked]i + 1];
+
+						if (next == '*')
+						{
+							commentDepth++;
+							i++;
+						}
+						else if (next == '/')
+						{
+							if (commentDepth == 0)
+								lineComment = true;
+							i++;
+						}
+
+						// If any of the above bodies was run, we're now in
+						// a comment, which will fail the content check
+					}
+				case '*':
+					if (!str && !char && i + 1 < strLen && commentDepth > 0)
+					{
+						let next = inStr[[Unchecked]i + 1];
+						if (next == '/')
+						{
+							commentDepth--;
+							i++;
+
+							// Maybe we're not in a comment anymore. But
+							// don't count this as content yet
+							doCheckContent = false;
+						}	
+					}
+				case '\n':
+					lineComment = false;
+				}
+
+				if (escaped && doResetEscape)
+					escaped = false;
+
+				if (isEmpty && doCheckContent && !lineComment && commentDepth == 0 && !c.IsWhiteSpace)
+					isEmpty = false;
+
+				i++;
+
+				if (commentDepth < 0 || bracketDepth < 0)
+					break;
+			}
+
+			return (i - startIdx, bracketDepth, commentDepth, str, char, lineComment, isEmpty);
 		}
 
 		[Inline]
@@ -361,54 +468,20 @@ namespace Bon.Integrated
 			Try!(ConsumeEmpty());
 			Try!(ArrayBlock());
 
-			if (inStr.Length == 0)
-				Error!("Expected sub-file string");
+			let res = SkipContentsUntil(0, ']');
 
-			// TODO: fix this... comments are still missing
-			// this will also have to be done for the peek and skip stuff below!
-
-			int len = 0;
-			int arrayDepth = 0;
-			bool str = false, verbStr = false, char = false, escaped = false;
-			while (inStr.Length > len && (arrayDepth != 0 || inStr[len] != ']'))
-			{
-				switch (inStr[len])
-				{
-				case '[':
-					if (!str && !char)
-						arrayDepth++;
-				case ']':
-					if (!str && !char)
-						arrayDepth--;
-				case '\'':
-					if (!str && !escaped)
-						char = !char;
-				case '\"':
-					if (!char && !escaped)
-					{
-						if (!str)
-							verbStr = len > 0 && inStr[len - 1] == '@';
-
-						str = !str;
-					}
-				case '\\':
-					if (!escaped && (char || str && verbStr))
-					{
-						escaped = true;
-
-						len++;
-						continue;
-					}	
-				}
-
-				escaped = false;
-				len++;
-			}
-
-			if (str || char || len >= inStr.Length)
+			if (res.str)
+				Error!("Unterminated string in sub-file string");
+			else if (res.char)
+				Error!("Unterminated char in sub-file string");
+			else if (res.lineComment || res.commentDepth != 0)
+				Error!("Unbalanced comment in sub-file string");
+			else if (res.bracketDepth != 0)
+				Error!("Unbalanced bracket in sub-file string");
+			else if (res.len >= inStr.Length)
 				Error!("Unterminated sub-file string");
 
-			return .Ok(len);
+			return .Ok(res.len);
 		}
 
 		public Result<void> SubfileString(String into, int parsedStrLen)
@@ -734,92 +807,64 @@ namespace Bon.Integrated
 			return !Check('}', false) && inStr.Length > 0;
 		}
 
-		mixin PeekCount(out bool unterminated, int initialIndex = 0, int initialBracketDepth = 0, char8 terminator = '\0')
-		{
-			
-
-			uint64 count = 1;
-			var i = initialIndex;
-			let len = inStr.Length;
-			
-			unterminated = false;
-			bool wasEmpty = true;
-			int bracketDepth = initialBracketDepth;
-			while (bracketDepth != 0 || (inStr[i] != terminator && terminator != '\0'))
-			{
-				let char = inStr[i];
-				switch (char)
-				{
-				case '[', '{':
-					bracketDepth++;
-				case ']', '}':
-					bracketDepth--;
-				case ',':
-					if (bracketDepth == 0)
-						count++;
-				default:
-					if (!char.IsWhiteSpace)
-						wasEmpty = false;
-				}
-
-				i++;
-
-				if (i >= len)
-				{
-					unterminated = true;
-					break;
-				}
-			}
-			Debug.Assert(bracketDepth == 0);
-
-			if (wasEmpty && count == 1)
-				count = 0;
-
-			count
-		}
-
 		public Result<int64> ArrayPeekCount()
 		{
-			// This is only an estimate, but will be correct
-			// if the later functions decide the array is valid
-			// in the first place
+			// Validates the top-structure of the array and basic integrity of entrires.
 
 			int i = 0;
-			int64 count = 1;
+			int64 count = 0;
 			let len = inStr.Length;
 
 			// Advance until opening [
-			while (i < len && inStr[i] != '[')
+			while (i < len && inStr[[Unchecked]i] != '[')
 				i++;
+			i++; // Pass it
 
-			if (inStr[i] != '[')
-				Error!("Expected array");
+			mixin DoErr(String str)
+			{
+				inStr.RemoveFromStart(i);
+				Error!(str);
+			}
+
+			if (i >= len)
+				DoErr!("Expected array");
 
 			bool wasEmpty = true;
-			int bracketDepth = -1; // We're currently pointing at the array opening bracket, which we don't count
-			while (bracketDepth != 0 || inStr[i] != ']')
+			while (i < len)
 			{
-				let char = inStr[i];
-				switch (char)
-				{
-				case '[', '{':
-					bracketDepth++;
-				case ']', '}':
-					bracketDepth--;
-				case ',':
-					if (bracketDepth == 0)
-						count++;
-				default:
-					if (!char.IsWhiteSpace)
-						wasEmpty = false;
-				}
+				// Skip array entry until ,
+				let res = SkipContentsUntil(i, ',', ']');
 
-				i++;
+				if (res.str)
+					DoErr!("Unterminated string in array element");
+				else if (res.char)
+					DoErr!("Unterminated char in array element");
+				else if (res.lineComment || res.commentDepth != 0)
+					DoErr!("Unbalanced comment in array element");
+				else if (res.bracketDepth != 0)
+					DoErr!("Unbalanced brackets in array element");
+
+				i += res.len;
+				count++;
+				if (!res.isEmpty)
+					wasEmpty = false;
 
 				if (i >= len)
-					Error!("Unterminated array");
+					DoErr!("Unterminated array");
+
+				if (inStr[[Unchecked]i] == ',')
+					i++;
+				else
+				{
+					if (count > 1 && res.isEmpty)
+						DoErr!("Empty array element");
+
+					Debug.Assert(inStr[[Unchecked]i] ==  ']');
+					break;
+				}
 			}
-			Debug.Assert(bracketDepth == 0);
+			if (i >= len)
+				DoErr!("Unterminated array");
 
 			if (wasEmpty && count == 1)
 				count = 0;
@@ -837,30 +882,47 @@ namespace Bon.Integrated
 
 		public Result<int64> FileEntryPeekCount()
 		{
-			int64 count = 1;
-			bool wasEmpty = true;
-			int bracketDepth = 0;
-
+			int i = 0;
+			int64 count = 0;
 			let len = inStr.Length;
-			for (var i = 0; i < len; i++)
+			bool wasEmpty = true;
+
+			mixin DoErr(String str)
 			{
-				let char = inStr[i];
-				switch (char)
+				inStr.RemoveFromStart(i);
+				Error!(str);
+			}
+
+			while (i < len)
+			{
+				// Skip array entry until , (or eof)
+				let res = SkipContentsUntil(i, ',');
+
+				if (res.str)
+					DoErr!("Unterminated string in entry");
+				else if (res.char)
+					DoErr!("Unterminated char in entry");
+				else if (res.lineComment || res.commentDepth != 0)
+					DoErr!("Unbalanced comment in entry");
+				else if (res.bracketDepth != 0)
+					DoErr!("Unbalanced brackets in entry");
+
+				i += res.len;
+				count++;
+				if (!res.isEmpty)
+					wasEmpty = false;
+
+				if (i >= len)
 				{
-				case '[', '{':
-					bracketDepth++;
-				case ']', '}':
-					bracketDepth--;
-				case ',':
-					if (bracketDepth == 0)
-						count++;
-				default:
-					if (!char.IsWhiteSpace)
-						wasEmpty = false;
+					if (count > 1 && res.isEmpty)
+						DoErr!("Empty entry");
+				}
+				else
+				{
+					Debug.Assert(inStr[[Unchecked]i] == ',');
+					i++;
 				}
 			}
-			if (bracketDepth != 0)
-				Error!("Unbalanced brackets");
 
 			if (wasEmpty && count == 1)
 				count = 0;
@@ -874,39 +936,56 @@ namespace Bon.Integrated
 
 			if (skipCount == 0)
 				return .Ok;
-
-			int64 count = 1;
-			bool wasEmpty = true;
-			int bracketDepth = 0;
-
-			var i = 0;
+			
+			int i = 0;
+			int64 count = 0;
 			let len = inStr.Length;
-			for (; i < len; i++)
+			bool wasEmpty = true;
+
+			mixin DoErr(String str)
 			{
-				let char = inStr[i];
-				switch (char)
+				inStr.RemoveFromStart(i);
+				Error!(str);
+			}
+
+			while (i < len)
+			{
+				// Skip array entry until , (or eof)
+				let res = SkipContentsUntil(i, ',');
+
+				if (res.str)
+					DoErr!("Unterminated string in entry");
+				else if (res.char)
+					DoErr!("Unterminated char in entry");
+				else if (res.lineComment || res.commentDepth != 0)
+					DoErr!("Unbalanced comment in entry");
+				else if (res.bracketDepth != 0)
+					DoErr!("Unbalanced brackets in entry");
+
+				i += res.len;
+				count++;
+				if (!res.isEmpty)
+					wasEmpty = false;
+
+				if (i >= len)
 				{
-				case '[', '{':
-					bracketDepth++;
-				case ']', '}':
-					bracketDepth--;
-				case ',':
-					if (bracketDepth == 0)
-					{
-						if (count == skipCount)
-						{
-							inStr.RemoveFromStart(i + 1);
-							return .Ok;
-						}
-						count++;
-					}
-				default:
-					if (!char.IsWhiteSpace)
-						wasEmpty = false;
+					if (count > 1 && res.isEmpty)
+						DoErr!("Empty entry");
+				}
+				else
+				{
+					Debug.Assert(inStr[[Unchecked]i] == ',');
+					i++;
+				}
+				
+				if (count == skipCount)
+				{
+					inStr.RemoveFromStart(i);
+					return .Ok;
 				}
 			}
 
-			if (!wasEmpty && count == 1 && bracketDepth == 0)
+			if (!wasEmpty && count == 1)
 			{
 				// This will be the end...
 				inStr.RemoveFromStart(i);

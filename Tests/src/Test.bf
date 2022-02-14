@@ -1209,7 +1209,11 @@ namespace Bon.Tests
 
 				uint8[] so = null;
 				Test.Assert((Bon.Deserialize(ref so, "[ ]") case .Ok) && so.Count == 0);
+				Test.Assert((Bon.Deserialize(ref so, "[]") case .Ok) && so.Count == 0);
 				delete so;
+				so = null;
+				
+				Test.Assert(Bon.Deserialize(ref so, "[,]") case .Err);
 			}
 
 			{
@@ -1532,16 +1536,66 @@ namespace Bon.Tests
 			{
 				StructB so = ?;
 				Test.Assert((Bon.Deserialize(ref so, "{name=$[{},\n{age=325}],age=23,type=1}") case .Ok) && so.name == "{},\n{age=325}");
+				Test.Assert((Bon.Deserialize(ref so, "{name=$[],age=23,type=1}") case .Ok) && so.name == "");
+				Test.Assert(Bon.Deserialize(ref so, "{name=$[/*/**/],age=23,type=1}") case .Err);
+				Test.Assert(Bon.Deserialize(ref so, "{name=$[//],age=23,type=1}") case .Err);
+				Test.Assert(Bon.Deserialize(ref so, "{name=$[[],age=23,type=1}") case .Err);
+				Test.Assert(Bon.Deserialize(ref so, "{name=$[]],age=23,type=1}") case .Err);
+				Test.Assert(Bon.Deserialize(ref so, "{name=$[{],age=23,type=1}") case .Err);
+
+				Test.Assert((Bon.Deserialize(ref so, """
+					{
+						// ]
+						/*
+						/* ]
+						//*/
+						*/
+						// /*
+
+						name = $[
+							{
+								name = "]"
+								age = 325
+							},
+							']'
+							// ]
+							/*
+							/* ]
+							//*/
+							*/
+							// /*
+						],
+						age = 23,
+						type = 1
+					}
+					""") case .Ok) && so.name == """
+					{
+								name = "]"
+								age = 325
+							},
+							']'
+							// ]
+							/*
+							/* ]
+							//*/
+							*/
+							// /*
+					"""); // this formatting is.. slightly weird, but probably doesnt matter. Maybe change?
 			}
 
 			{
 				StructB so = ?;
 
-				let c = BonContext("[14,362,12],{lalala},{name=$[{},\n{age=325}],age=23,type=1}");
-				Test.Assert(c.GetEntryCount() == 3);
+				var c = BonContext("[14,362,12],{lalala@\"\\\"},{name=$[{} /*] // \\'\"*/,\n{age=325,name=\"}\",c='/*',oop='\\''}],age=23,type=1}");
+				Test.Assert(c.GetEntryCount() case .Ok(3));
 				Test.Assert(c.SkipEntry(2) case .Ok(let skipped));
-				Test.Assert((Bon.Deserialize(ref so, skipped) case .Ok(let empty)) && so.name == "{},\n{age=325}");
+				Test.Assert((Bon.Deserialize(ref so, skipped) case .Ok(let empty)) && so.name == "{} /*] // \\'\"*/,\n{age=325,name=\"}\",c='/*',oop='\\''}");
 				Test.Assert(empty.Rewind() == c);
+				Test.Assert(c.SkipEntry(3) case .Ok(let none));
+				Test.Assert(none.SkipEntry(1) case .Err);
+
+				c = BonContext("");
+				Test.Assert(c.SkipEntry(1) case .Err);
 			}
 		}
 
@@ -1617,6 +1671,7 @@ namespace Bon.Tests
 			Test.Assert(Bon.Deserialize(ref i, "11 34") case .Err);
 			Test.Assert(Bon.Deserialize(ref i, "  11.") case .Err);
 			Test.Assert(Bon.Deserialize(ref i, " \n\t") case .Err);
+			Test.Assert(Bon.Deserialize(ref i, "") case .Err);
 
 			Test.Assert(Bon.Deserialize(ref s, "\"") case .Err);
 			Test.Assert(Bon.Deserialize(ref s, "\"egnionsoibe") case .Err);
