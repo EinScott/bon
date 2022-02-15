@@ -7,13 +7,18 @@ namespace Bon.Integrated
 {
 	static
 	{
-		public static void ArraySerialize(BonWriter writer, ref ValueView val, Serialize.ReferenceLookup refLook, BonEnvironment env)
+		public static void StringSerialize(BonWriter writer, ref ValueView val, Serialize.ReferenceLookup refLook, BonEnvironment env)
 		{
-
+			let str = *(String*)val.dataPtr;
+			writer.String(str);
 		}
 
-		public static Result<void> ArrayDeserialize(BonReader reader, ref ValueView val, BonEnvironment env)
+		public static Result<void> StringDeserialize(BonReader reader, ref ValueView val, BonEnvironment env)
 		{
+			var str = *(String*)val.dataPtr;
+
+			str.Clear();
+			Deserialize.String!(reader, ref str, env);
 			return .Ok;
 		}
 

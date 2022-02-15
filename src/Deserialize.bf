@@ -505,14 +505,7 @@ namespace Bon.Integrated
 							&& !polyType.IsArray) // Arrays handle it differently
 							Try!(MakeInstanceRef(reader, ref val, env));
 
-						if (polyType == typeof(String))
-						{
-							var str = *(String*)val.dataPtr;
-
-							str.Clear();
-							String!(reader, ref str, env);
-						}
-						else if (polyType.IsArray) ARRAY:
+						if (polyType.IsArray) ARRAY:
 						{
 							Debug.Assert(polyType != typeof(Array) && polyType is ArrayType);
 

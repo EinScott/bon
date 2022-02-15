@@ -327,11 +327,6 @@ namespace Bon.Integrated
 						// above has already done that.
 						return;
 					}
-					else if (polyType == typeof(String))
-					{
-						let str = *(String*)val.dataPtr;
-						writer.String(str);
-					}
 					else if (polyType.IsArray)
 					{
 						Debug.Assert(polyType != typeof(Array) && polyType is ArrayType);
