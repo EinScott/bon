@@ -28,8 +28,8 @@ namespace Bon.Integrated
 			var arrPtr = *(void**)GetValFieldPtr!(val, "mItems"); // *(T**)
 			var count = GetValField!<int_cosize>(val, "mSize");
 
-			// TODO: sizer only if last element is default (also for alloc arrays)
-			writer.Sizer((.)count);
+			if (count != 0 && !Serialize.IsArrayFilled(arrType, arrPtr, count, env))
+				writer.Sizer((.)count);
 			Serialize.Array(writer, arrType, arrPtr, count, refLook, env);
 		}
 
@@ -70,14 +70,13 @@ namespace Bon.Integrated
 						Internal.MemSet(*(uint8**)itemsFieldPtr + currCount * arrType.Stride, 0, (count - currCount) * arrType.Stride, arrType.Align);
 					}
 				}
-				else Deserialize.Error!("Method reflection data needed to enlargen List<> size", null, t); // include with [Reflect(.Methods)] extension List<T> {} or in build settings
+				else Deserialize.Error!("Method reflection data needed to enlargen List<> size. Include with [Reflect(.Methods)] extension List<T> {} or in build settings", null, t);
 			}
 			
 			SetValField!<int_cosize>(val, "mSize", (int_cosize)count);
 
 			// Since mItems is a pointer...
 			let arrPtr = *(void**)itemsFieldPtr;
-
 			Try!(Deserialize.Array(reader, arrType, arrPtr, count, env));
 
 			return .Ok;

@@ -1226,9 +1226,9 @@ namespace Bon.Tests
 			}
 
 			{
-				uint8[] s = scope .(12, 24, 53, 34, 5, 0, 0);
+				uint8[] s = scope .(12, 24, 53, 34, 5);
 				let str = Bon.Serialize(s, .. scope .());
-				Test.Assert(str == "<7>[12,24,53,34,5]");
+				Test.Assert(str == "[12,24,53,34,5]");
 
 				uint8[] so = scope .[17]; // oops, wrong size
 				Test.Assert(Bon.Deserialize(ref so, str) case .Err);
@@ -1360,7 +1360,7 @@ namespace Bon.Tests
 			{
 				let l = scope List<AClass>();
 				let str = Bon.Serialize(l, .. scope .());
-				Test.Assert(str == "<0>[]");
+				Test.Assert(str == "[]");
 
 				List<AClass> lo = null;
 				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && l.Count == lo.Count);
@@ -1372,7 +1372,7 @@ namespace Bon.Tests
 				l.Add(scope AClass() { aStringThing = new $"uhh", thing = 255, data = .{ time=1, value=10 } });
 				l.Add(scope AClass() { aStringThing = new $"Hi, na?", thing = 42 });
 				let str = Bon.Serialize(l, .. scope .());
-				Test.Assert(str == "<2>[{aStringThing=\"uhh\",thing=255,data={time=1,value=10}},{aStringThing=\"Hi, na?\",thing=42}]");
+				Test.Assert(str == "[{aStringThing=\"uhh\",thing=255,data={time=1,value=10}},{aStringThing=\"Hi, na?\",thing=42}]");
 
 				List<AClass> lo = null;
 				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && l.Count == lo.Count && l[0].aStringThing == lo[0].aStringThing);
@@ -1460,7 +1460,7 @@ namespace Bon.Tests
 					num1, num1, num2, num1, num2, null, num1);
 
 				let str = Bon.Serialize(a, .. scope .());
-				Test.Assert(str == "<7>[{num=99},&[0],{num=500},&[0],&[2],?,&[0]]");
+				Test.Assert(str == "[{num=99},&[0],{num=500},&[0],&[2],?,&[0]]");
 			}
 
 			pf.Dispose();
@@ -1586,7 +1586,7 @@ namespace Bon.Tests
 			{
 				StructB so = ?;
 
-				var c = BonContext("[14,362,12],{lalala@\"\\\"},{name=$[{} /*] // \\'\"*/,\n{age=325,name=\"}\",c='/*',oop='\\''}],age=23,type=1}");
+				var c = BonContext("[14,362,12],{lalala@\"\\\"},{name=$[/*] // \\'\"*/{} /*] // \\'\"*/,\n{age=325,name=\"}\",c='/*',oop='\\''}],age=23,type=1}");
 				Test.Assert(c.GetEntryCount() case .Ok(3));
 				Test.Assert(c.SkipEntry(2) case .Ok(let skipped));
 				Test.Assert((Bon.Deserialize(ref so, skipped) case .Ok(let empty)) && so.name == "{} /*] // \\'\"*/,\n{age=325,name=\"}\",c='/*',oop='\\''}");

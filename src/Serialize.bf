@@ -347,7 +347,8 @@ namespace Bon.Integrated
 						switch (t.UnspecializedType)
 						{
 						case typeof(Array1<>):
-							writer.Sizer((.)count);
+							if (!Serialize.IsArrayFilled(arrType, arrPtr, count, env))
+								writer.Sizer((.)count);
 							Array(writer, arrType, arrPtr, count, refLook, env);
 
 						case typeof(Array2<>):
@@ -488,6 +489,14 @@ namespace Bon.Integrated
 				else if (hasUnnamedMembers)
 					writer.outStr.Append("/* Type has unnamed members */");
 			}
+		}
+
+		public static bool IsArrayFilled(Type arrType, void* arrPtr, int count, BonEnvironment env)
+		{
+			var lastVal = ValueView(arrType, (uint8*)arrPtr + arrType.Stride * (count - 1));
+			if (DoInclude!(ref lastVal, env.serializeFlags))
+				return true;
+			return false;
 		}
 
 		public static void Array(BonWriter writer, Type arrType, void* arrPtr, int count, ReferenceLookup refLook, BonEnvironment env)

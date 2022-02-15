@@ -590,7 +590,7 @@ namespace Bon.Integrated
 							void* arrPtr = null;
 							if (t.GetField("mFirstElement") case .Ok(let field))
 								arrPtr = classData + field.MemberOffset; // T*
-							else Error!("No reflection data for array type", null, t); // for example: [Serializable] extension Array1<T> {} or through build settings
+							else Error!("No reflection data for array type. For example: force with [Serializable] extension Array1<T> {} or through build settings", null, t);
 
 							switch (t.UnspecializedType)
 							{

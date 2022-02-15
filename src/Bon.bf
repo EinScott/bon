@@ -12,7 +12,6 @@ namespace Bon
 	// TODO: & as a general token for retrieving references... maybe must be enabled with flag YAH- would be a serialize AND deserialize flag though
 	// - deserial: put refs into list (current path + given relative ? + target variant), resolve path and handle at end
 
-	// TODO: make comments after errors part of the error!
 	// TODO: something like... @property = dd to call the property setter for deserialize? maybe?
 
 	static class Bon
