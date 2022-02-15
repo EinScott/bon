@@ -56,7 +56,9 @@ namespace Bon.Integrated
 
 			if (currCount > count)
 			{
-				// TODO: call defaultArray on the vals we exclude here!
+				// The error handling here.. is a bit hacky..
+				if (Deserialize.DefaultArray(reader, arrType, *(uint8**)itemsFieldPtr + count * arrType.Stride, currCount - count, env) case .Err)
+					Deserialize.Error!("Couldn't shrink List (linked with previous error). Values in the back of the list that were to be defaulted likely couldn't be handled.", null, t);
 			}
 			else if (currCount < count)
 			{
@@ -64,11 +66,8 @@ namespace Bon.Integrated
 					// Keep in mind, strictly speaking val.DataPtr is pointing to the field which references this list!
 					&& method.Invoke(*(Object*)val.dataPtr, (int)count, true) case .Ok)) // returns T*, which is sizeof(int), so Variant doesnt alloc
 				{
-					if (arrType.IsObject)
-					{
-						// Null the new chunk, else we think this random data are valid pointers
-						Internal.MemSet(*(uint8**)itemsFieldPtr + currCount * arrType.Stride, 0, (count - currCount) * arrType.Stride, arrType.Align);
-					}
+					// Null the new chunk
+					Internal.MemSet(*(uint8**)itemsFieldPtr + currCount * arrType.Stride, 0, (count - currCount) * arrType.Stride);
 				}
 				else Deserialize.Error!("Method reflection data needed to enlargen List<> size. Include with [Reflect(.Methods)] extension List<T> {} or in build settings", null, t);
 			}

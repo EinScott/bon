@@ -1380,6 +1380,16 @@ namespace Bon.Tests
 			}
 
 			{
+				var l = scope List<AClass>();
+				l.Add(scope AClass() { aStringThing = new $"uhh", thing = 255, data = .{ time=1, value=10 } });
+				l.Add(scope AClass() { aStringThing = new $"Hi, na?", thing = 42 });
+
+				// Setting the first value is fine, but since we shrink the array here
+				// we'd leak the second element, which should error!
+				Test.Assert(Bon.Deserialize(ref l, "[{aStringThing=\"Hi, na?\",thing=42}]") case .Err);
+			}
+
+			{
 				List<AClass> lo = null;
 				Test.Assert((Bon.Deserialize(ref lo, "[{aStringThing=\"uhh\",thing=255,data={time=1,value=10}},{aStringThing=\"Hi, na?\",thing=42}]") case .Ok) && lo.Count == 2);
 				DeleteContainerAndItems!(lo);
