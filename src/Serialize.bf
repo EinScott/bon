@@ -37,12 +37,16 @@ namespace Bon.Integrated
 			(type.IsPrimitive || (type.IsTypedPrimitive && (!flags.HasFlag(.Verbose) || !type.IsEnum)))
 		}
 
-		public static void Entry(BonWriter writer, ValueView val, BonEnvironment env)
+		// These two are for integrated use!
+		[Inline]
+		public static void Start(BonWriter writer)
 		{
 			writer.Start();
-			if (DoInclude!(val, env.serializeFlags))
-				Value(writer, val, env, env.serializeFlags.HasFlag(.KeepInnerReferences) ? scope ReferenceLookup() : null);
-			
+		}
+
+		[Inline]
+		public static void End(BonWriter writer)
+		{
 			if (writer.outStr.Length == 0)
 			{
 				// We never explicitly place default automatically to enable DeserializeFlags.IgnoreUnmentionedValues
@@ -51,6 +55,16 @@ namespace Bon.Integrated
 			}
 
 			writer.End();
+		}
+
+		public static void Entry(BonWriter writer, ValueView val, BonEnvironment env)
+		{
+			Start(writer);
+
+			if (DoInclude!(val, env.serializeFlags))
+				Value(writer, val, env, env.serializeFlags.HasFlag(.KeepInnerReferences) ? scope ReferenceLookup() : null);
+			
+			End(writer);
 		}
 
 		public static void Value(BonWriter writer, ValueView val, BonEnvironment env, ReferenceLookup refLook = null, bool doOneLine = false)

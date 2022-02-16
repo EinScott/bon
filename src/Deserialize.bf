@@ -192,33 +192,45 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static Result<BonContext> Entry(BonReader reader, ValueView val, BonEnvironment env)
+		// These two are for integrated use!
+		[Inline]
+		public static Result<void> Start(BonReader reader)
 		{
 			Try!(reader.ConsumeEmpty());
 
 			if (reader.ReachedEnd())
 				Error!("Expected entry", reader);
-			else
+			return .Ok;
+		}
+
+		[Inline]
+		public static Result<BonContext> End(BonReader reader)
+		{
+			if (!reader.ReachedEnd())
 			{
-				if (reader.IsIrrelevantEntry())
-				{
-					if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
-						Try!(MakeDefault(reader, val, env));
-
-					Try!(reader.ConsumeEmpty());
-				}
-				else Try!(Value(reader, val, env));
-
-				if (!reader.ReachedEnd())
-				{
-					// Remove ',' between this and possibly the next entry
-					// Checks are restricted to this file entry, everything after the comma is not our business.
-					Try!(reader.FileEntryEnd());
-				}
+				// Remove ',' between this and possibly the next entry
+				// Checks are restricted to this file entry, everything after the comma is not our business.
+				Try!(reader.FileEntryEnd());
 			}
 
 			// Pass state on
 			return .Ok(.(reader.origStr, reader.inStr));
+		}
+
+		public static Result<BonContext> Entry(BonReader reader, ValueView val, BonEnvironment env)
+		{
+			Try!(Start(reader));
+
+			if (reader.IsIrrelevantEntry())
+			{
+				if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+					Try!(MakeDefault(reader, val, env));
+
+				Try!(reader.ConsumeEmpty());
+			}
+			else Try!(Value(reader, val, env));
+
+			return End(reader);
 		}
 
 		public static Result<void> Value(BonReader reader, ValueView val, BonEnvironment env)
