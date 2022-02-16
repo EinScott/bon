@@ -77,7 +77,7 @@ namespace Bon
 
 		// Collection of registered types used in polymorphism.
 		// Required to get a type info from a serialized name.
-		internal Dictionary<String, Type> polyTypes = new .() ~ DeleteDictionaryAndKeys!(_);
+		Dictionary<String, Type> polyTypes = new .() ~ DeleteDictionaryAndKeys!(_);
 
 		public mixin RegisterPolyType(Type type)
 		{
@@ -86,6 +86,12 @@ namespace Bon
 			if (!polyTypes.ContainsKey(str))
 				polyTypes.Add(str, type);
 			else delete str;
+		}
+
+		[Inline]
+		public bool TryGetPolyType(StringView typeName, out Type type)
+		{
+			return polyTypes.TryGetValue(scope .(typeName), out type);
 		}
 
 		public this()
@@ -106,6 +112,9 @@ namespace Bon
 			}
 
 			stringViewHandler = gBonEnv.stringViewHandler;
+
+			for (let pair in gBonEnv.polyTypes)
+				polyTypes.Add(new .(pair.key), pair.value);
 		}
 	}
 }

@@ -16,9 +16,9 @@ namespace Bon
 
 	static class Bon
 	{
-#if BON_PROVIDE_ERROR
-		internal static System.Threading.Monitor errMonitor = new .() ~ delete _;
-		public static String LastDeserializeError = new .() ~ delete _;
+#if BON_PROVIDE_ERROR_MESSAGE
+		static System.Threading.Monitor errLock = new .() ~ delete _;
+		public static Event<delegate void(StringView errorMessage)> onDeserializeError = .() ~ _.Dispose();
 #endif
 
 		public static void Serialize<T>(T value, String into, BonEnvironment env = gBonEnv)

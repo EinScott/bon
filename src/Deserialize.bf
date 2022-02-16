@@ -16,30 +16,32 @@ namespace Bon.Integrated
 	{
 		public static mixin Error(String error, BonReader reader, Type type = null)
 		{
-#if BON_PRINT
-			PrintError(reader, type, error);
+#if BON_PRINT || BON_PROVIDE_ERROR_MESSAGE
+			ProcessMessage(error, reader, type);
 #endif
-#if BON_PROVIDE_ERROR
-			using (Bon.errMonitor.Enter())
-			{
-				Bon.LastDeserializeError.Set(error);
-			}
-#endif
+
 			return .Err(default);
 		}
 
-		static void PrintError(BonReader reader, Type type, String error)
+		static void ProcessMessage(String error, BonReader reader, Type type)
 		{
-			let err = scope String(512)..AppendF("BON ERROR: {}. ", error);
+			let message = scope String(512);
+			message.AppendF("BON ERROR: {}. ", error);
 			if (reader != null)
-				reader.GetCurrentPos(err);
+				reader.GetCurrentPos(message);
 			if (type != null)
-				err.AppendF("\n> On type: {}", type);
-
+				message.AppendF("\n> On type: {}", type);
+#if BON_PRINT
 #if TEST
-			Console.WriteLine(err);
+			Console.WriteLine(message);
 #else
-			Debug.WriteLine(err);
+			Debug.WriteLine(message);
+#endif
+#endif
+#if BON_PROVIDE_ERROR_MESSAGE
+			using (Bon.[Friend]errLock.Enter())
+				if (Bon.onDeserializeError.HasListeners)
+					Bon.onDeserializeError(message);
 #endif
 		}
 
@@ -244,7 +246,7 @@ namespace Bon.Integrated
 				{
 					let typeName = Try!(reader.Type());
 
-					if (env.polyTypes.TryGetValue(scope .(typeName), let type))
+					if (env.TryGetPolyType(typeName, let type))
 					{
 						if (valType.IsInterface)
 						{

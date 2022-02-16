@@ -103,7 +103,12 @@ namespace Bon.Integrated
 		[Inline]
 		public void Pair()
 		{
-			Debug.Assert(!outStr.EndsWith('=') && !outStr.EndsWith(':') && !outStr.EndsWith(','));
+			Debug.Assert(!outStr.EndsWith('=') && !outStr.EndsWith(':'));
+
+			if (outStr.EndsWith(','))
+				outStr.RemoveFromEnd(1);
+			else if (doFormatting && outStr.EndsWith(",\n"))
+				outStr.RemoveFromEnd(2);
 
 			outStr.Append(':');
 			if (doFormatting)

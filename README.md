@@ -113,7 +113,7 @@ BON ERROR: Cannot handle pointer values. (line 1)
 > On type: uint8*
 ```
 
-Printing of errors is disabled in non-DEBUG configurations and can be forced off by defining ``BON_NO_PRINT`` in the workspace settings. Optionally, defining ``BON_PROVIDE_ERROR`` always makes bon set ``Bon.LastDeserializeError`` to its error message before returning (in case you want to want to properly report it somehow).
+Printing of errors is disabled in non-DEBUG configurations and can be forced off by defining ``BON_NO_PRINT`` in the workspace settings. Optionally, defining ``BON_PROVIDE_ERROR_MESSAGE`` always makes bon call the ``Bon.onDeserializeError`` event with the error message before returning (in case you want to want to properly report it somehow).
 
 ### Syntax
 
