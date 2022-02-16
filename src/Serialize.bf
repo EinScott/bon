@@ -24,7 +24,7 @@ namespace Bon.Integrated
 
 		public static mixin CompNoReflectionError(String type, String example)
 		{
-			scope:mixin $"No reflection data for {type}!\n(for example: [Serializable] extension {example} {{}} or through build settings)"
+			scope:mixin $"No reflection data for {type}!\n(for example: [BonTarget] extension {example} {{}} or through build settings)"
 		}
 
 		static mixin DoInclude(ValueView val, BonSerializeFlags flags)
@@ -272,7 +272,7 @@ namespace Bon.Integrated
 					{
 						writer.outStr.Append("default"); // Just like we just do {} on no reflection info structs
 						if (env.serializeFlags.HasFlag(.Verbose))
-							writer.outStr.Append(scope $"/* No reflection data for {valType}. Add [Serializable] or force it */");
+							writer.outStr.Append(scope $"/* No reflection data for {valType}. Add [BonTarget] or force it */");
 					}
 				}
 				else if (GetCustomHandler(valType, env, let func))
@@ -492,7 +492,7 @@ namespace Bon.Integrated
 			{
 				// Just add this as a comment in case anyone wonders...
 				if (!structType is TypeInstance)
-					writer.outStr.Append(scope $"/* No reflection data for {structType}. Add [Serializable] or force it */");
+					writer.outStr.Append(scope $"/* No reflection data for {structType}. Add [BonTarget] or force it */");
 				else if (hasUnnamedMembers)
 					writer.outStr.Append("/* Type has unnamed members */");
 			}
