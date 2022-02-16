@@ -329,6 +329,14 @@ namespace Bon.Integrated
 			return name;
 		}
 
+		public Result<void> Pair()
+		{
+			if (!Check(':'))
+				Error!("Expected value pair");
+
+			return ConsumeEmpty();
+		}
+
 		public Result<StringView> Integer()
 		{
 			var numLen = 0;

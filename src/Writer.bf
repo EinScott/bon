@@ -101,7 +101,7 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
-		public void Key()
+		public void Pair()
 		{
 			Debug.Assert(!outStr.EndsWith('=') && !outStr.EndsWith(':') && !outStr.EndsWith(','));
 

@@ -43,7 +43,7 @@ namespace Bon.Integrated
 #endif
 		}
 
-		public static Result<void> MakeDefault(BonReader reader, ref ValueView val, BonEnvironment env)
+		public static Result<void> MakeDefault(BonReader reader, ValueView val, BonEnvironment env)
 		{
 			if (ValueDataIsZero!(val))
 				return .Ok;
@@ -61,7 +61,7 @@ namespace Bon.Integrated
 			}
 			else if (valType.IsObject)
 			{
-				Try!(NullInstanceRef(reader, ref val, env));
+				Try!(NullInstanceRef(reader, val, env));
 			}
 			else if (valType.IsPointer)
 			{
@@ -91,8 +91,7 @@ namespace Bon.Integrated
 			var ptr = (uint8*)arrPtr;
 			for (let j < count)
 			{
-				var arrVal = ValueView(arrType, ptr);
-				Try!(MakeDefault(reader, ref arrVal, env));
+				Try!(MakeDefault(reader, ValueView(arrType, ptr), env));
 
 				ptr += arrType.Stride;
 			}
@@ -134,7 +133,7 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
-		public static Result<void> NullInstanceRef(BonReader reader, ref ValueView val, BonEnvironment env)
+		public static Result<void> NullInstanceRef(BonReader reader, ValueView val, BonEnvironment env)
 		{
 			if (*(void**)val.dataPtr != null)
 			{
@@ -147,7 +146,7 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static Result<void> MakeInstanceRef(BonReader reader, ref ValueView val, BonEnvironment env)
+		public static Result<void> MakeInstanceRef(BonReader reader, ValueView val, BonEnvironment env)
 		{
 			let valType = val.type;
 			Debug.Assert(!valType.IsArray && (valType.IsObject));
@@ -175,7 +174,7 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static Result<void> MakeArrayInstanceRef(ref ValueView val, int32 count)
+		public static Result<void> MakeArrayInstanceRef(ValueView val, int32 count)
 		{
 			Debug.Assert(val.type.IsArray);
 			let valType = (ArrayType)val.type;
@@ -193,7 +192,7 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static Result<BonContext> Entry(BonReader reader, ref ValueView val, BonEnvironment env)
+		public static Result<BonContext> Entry(BonReader reader, ValueView val, BonEnvironment env)
 		{
 			Try!(reader.ConsumeEmpty());
 
@@ -204,11 +203,11 @@ namespace Bon.Integrated
 				if (reader.IsIrrelevantEntry())
 				{
 					if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
-						Try!(MakeDefault(reader, ref val, env));
+						Try!(MakeDefault(reader, val, env));
 
 					Try!(reader.ConsumeEmpty());
 				}
-				else Try!(Value(reader, ref val, env));
+				else Try!(Value(reader, val, env));
 
 				if (!reader.ReachedEnd())
 				{
@@ -222,7 +221,7 @@ namespace Bon.Integrated
 			return .Ok(.(reader.origStr, reader.inStr));
 		}
 
-		public static Result<void> Value(BonReader reader, ref ValueView val, BonEnvironment env)
+		public static Result<void> Value(BonReader reader, ValueView val, BonEnvironment env)
 		{
 			let valType = val.type;
 			var polyType = valType;
@@ -255,7 +254,7 @@ namespace Bon.Integrated
 
 			if (reader.IsDefault())
 			{
-				Try!(MakeDefault(reader, ref val, env));
+				Try!(MakeDefault(reader, val, env));
 
 				Try!(reader.ConsumeEmpty());
 			}	
@@ -264,27 +263,27 @@ namespace Bon.Integrated
 			else if (valType.IsPrimitive)
 			{
 				if (valType.IsInteger)
-					Integer!(valType, reader, ref val);
+					Integer!(valType, reader, val);
 				else if (valType.IsFloatingPoint)
-					Float!(valType, reader, ref val);
+					Float!(valType, reader, val);
 				else if (valType.IsChar)
-					Char!(valType, reader, ref val);
+					Char!(valType, reader, val);
 				else if (valType == typeof(bool))
-					Bool!(reader, ref val);
+					Bool!(reader, val);
 				else Debug.FatalError(); // Should be unreachable
 			}
 			else if (valType.IsTypedPrimitive)
 			{
-				mixin ParseUnderlyingLiteral(ref ValueView parseVal)
+				mixin ParseUnderlyingLiteral(ValueView parseVal)
 				{
 					if (valType.UnderlyingType.IsInteger)
-						Integer!(valType.UnderlyingType, reader, ref parseVal);
+						Integer!(valType.UnderlyingType, reader, parseVal);
 					else if (valType.UnderlyingType.IsFloatingPoint)
-						Float!(valType.UnderlyingType, reader, ref parseVal);
+						Float!(valType.UnderlyingType, reader, parseVal);
 					else if (valType.UnderlyingType.IsChar)
-						Char!(valType.UnderlyingType, reader, ref parseVal);
+						Char!(valType.UnderlyingType, reader, parseVal);
 					else if (valType.UnderlyingType == typeof(bool))
-						Bool!(reader, ref parseVal);
+						Bool!(reader, parseVal);
 					else Debug.FatalError(); // Should be unreachable
 				}
 
@@ -316,8 +315,7 @@ namespace Bon.Integrated
 						else
 						{
 							int64 literalData = 0;
-							var parseVal = ValueView(val.type, &literalData);
-							ParseUnderlyingLiteral!(ref parseVal);
+							ParseUnderlyingLiteral!(ValueView(val.type, &literalData));
 							enumValue |= literalData;
 						}
 					}
@@ -333,7 +331,7 @@ namespace Bon.Integrated
 					default: Debug.FatalError(); // Should be unreachable
 					}
 				}
-				else ParseUnderlyingLiteral!(ref val);
+				else ParseUnderlyingLiteral!(val);
 			}
 			else if (valType.IsStruct)
 			{
@@ -424,11 +422,11 @@ namespace Bon.Integrated
 					default: Debug.FatalError(); // Should be unreachable
 					}
 
-					Try!(Struct(reader, ref unionPayload, env));
+					Try!(Struct(reader, unionPayload, env));
 				}
 				else if (GetCustomHandler(valType, env, let func))
-					Try!(func(reader, ref val, env));
-				else Try!(Struct(reader, ref val, env));
+					Try!(func(reader, val, env));
+				else Try!(Struct(reader, val, env));
 			}
 			else if (valType is SizedArrayType)
 			{
@@ -447,7 +445,7 @@ namespace Bon.Integrated
 			{
 				if (reader.IsNull())
 				{
-					Try!(NullInstanceRef(reader, ref val, env));
+					Try!(NullInstanceRef(reader, val, env));
 
 					Try!(reader.ConsumeEmpty());
 				}
@@ -460,6 +458,9 @@ namespace Bon.Integrated
 				}
 				else
 				{
+					// We may set val's type to polytype for further calls
+					var val;
+
 					if (!polyType.IsObject)
 					{
 						Debug.Assert(valType != polyType);
@@ -471,19 +472,18 @@ namespace Bon.Integrated
 							// it up to make our instance below
 							if (*(void**)val.dataPtr != null
 								&& (*(Object*)val.dataPtr).GetType() != polyType) // Box still returns type of boxed
-								Try!(NullInstanceRef(reader, ref val, env));
+								Try!(NullInstanceRef(reader, val, env));
 
 							val.type = boxType;
 
 							if (*(void**)val.dataPtr == null)
-								Try!(MakeInstanceRef(reader, ref val, env));
+								Try!(MakeInstanceRef(reader, val, env));
 
 							// Throw together the pointer to the box payload
 							// in the corlib approved way. (See Variant.CreateFromBoxed)
 							let boxedPtr = (uint8*)*(void**)val.dataPtr + boxType.[Friend]mMemberDataOffset;
 
-							var boxedData = ValueView(polyType, boxedPtr);
-							Try!(Value(reader, ref boxedData, env));
+							Try!(Value(reader, ValueView(polyType, boxedPtr), env));
 						}
 						else Error!("Failed to access boxed type", reader, polyType);
 					}
@@ -495,7 +495,7 @@ namespace Bon.Integrated
 							// it up to make our instance below
 							if (*(void**)val.dataPtr != null
 								&& (*(Object*)val.dataPtr).GetType() != polyType)
-								Try!(NullInstanceRef(reader, ref val, env));
+								Try!(NullInstanceRef(reader, val, env));
 
 							val.type = polyType;
 						}
@@ -503,7 +503,7 @@ namespace Bon.Integrated
 
 						if (*(void**)val.dataPtr == null
 							&& !polyType.IsArray) // Arrays handle it differently
-							Try!(MakeInstanceRef(reader, ref val, env));
+							Try!(MakeInstanceRef(reader, val, env));
 
 						if (polyType.IsArray) ARRAY:
 						{
@@ -567,13 +567,13 @@ namespace Bon.Integrated
 							{
 								let currCount = GetValField!<int_arsize>(val, "mLength");
 								if (fullCount != currCount)
-									Try!(NullInstanceRef(reader, ref val, env));
+									Try!(NullInstanceRef(reader, val, env));
 							}
 
 							if (*(void**)val.dataPtr == null)
 							{
 								// We're screwed on big collections, but who uses that...? hah
-								Try!(MakeArrayInstanceRef(ref val, (int32)fullCount));
+								Try!(MakeArrayInstanceRef(val, (int32)fullCount));
 							}
 							Debug.Assert(GetValField!<int_arsize>(val, "mLength") == fullCount);
 
@@ -606,8 +606,8 @@ namespace Bon.Integrated
 							}
 						}
 						else if (GetCustomHandler(polyType, env, let func))
-							Try!(func(reader, ref val, env));
-						else Try!(Class(reader, ref val, env));
+							Try!(func(reader, val, env));
+						else Try!(Class(reader, val, env));
 					}
 				}
 			}
@@ -643,18 +643,17 @@ namespace Bon.Integrated
 			return false;
 		}
 
-		public static Result<void> Class(BonReader reader, ref ValueView val, BonEnvironment env)
+		public static Result<void> Class(BonReader reader, ValueView val, BonEnvironment env)
 		{
 			let classType = val.type;
 			Debug.Assert(classType.IsObject);
 
-			var classDataVal = ValueView(classType, *(void**)val.dataPtr);
-			Try!(Struct(reader, ref classDataVal, env));
+			Try!(Struct(reader, ValueView(classType, *(void**)val.dataPtr), env));
 
 			return .Ok;
 		}
 
-		public static Result<void> Struct(BonReader reader, ref ValueView val, BonEnvironment env)
+		public static Result<void> Struct(BonReader reader, ValueView val, BonEnvironment env)
 		{
 			let structType = val.type;
 			Try!(reader.ObjectBlock());
@@ -690,9 +689,7 @@ namespace Bon.Integrated
 					|| fieldInfo.GetCustomAttribute<BonIgnoreAttribute>() case .Ok) // or field is ignored
 					Error!("Field access not allowed", reader, structType);
 
-				var fieldVal = ValueView(fieldInfo.FieldType, ((uint8*)val.dataPtr) + fieldInfo.MemberOffset);
-
-				Try!(Value(reader, ref fieldVal, env));
+				Try!(Value(reader, ValueView(fieldInfo.FieldType, ((uint8*)val.dataPtr) + fieldInfo.MemberOffset), env));
 
 				if (reader.ObjectHasMore())
 					Try!(reader.EntryEnd());
@@ -701,10 +698,7 @@ namespace Bon.Integrated
 			if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
 			{
 				for (let f in fields)
-				{
-					var fieldVal = ValueView(f.FieldType, ((uint8*)val.dataPtr) + f.MemberOffset);
-					Try!(MakeDefault(reader, ref fieldVal, env));
-				}
+					Try!(MakeDefault(reader, ValueView(f.FieldType, ((uint8*)val.dataPtr) + f.MemberOffset), env));
 			}
 
 			return reader.ObjectBlockEnd();
@@ -726,11 +720,11 @@ namespace Bon.Integrated
 					{
 						// Null unless we leave these alone!
 						if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
-							Try!(MakeDefault(reader, ref arrVal, env));
+							Try!(MakeDefault(reader, arrVal, env));
 
 						Try!(reader.ConsumeEmpty());
 					}
-					else Try!(Value(reader, ref arrVal, env));
+					else Try!(Value(reader, arrVal, env));
 
 					if (reader.ArrayHasMore())
 						Try!(reader.EntryEnd());
@@ -747,8 +741,7 @@ namespace Bon.Integrated
 						// Default unaffected entries (since they aren't serialized)
 						for (let j < count - i)
 						{
-							var arrVal = ValueView(arrType, ptr);
-							Try!(MakeDefault(reader, ref arrVal, env));
+							Try!(MakeDefault(reader, ValueView(arrType, ptr), env));
 
 							ptr += arrType.Stride;
 						}
@@ -955,7 +948,7 @@ namespace Bon.Integrated
 			thing
 		}
 
-		static mixin Integer(Type type, BonReader reader, ref ValueView val)
+		static mixin Integer(Type type, BonReader reader, ValueView val)
 		{
 			let num = Try!(reader.Integer());
 
@@ -975,7 +968,7 @@ namespace Bon.Integrated
 			}
 		}
 
-		static mixin Float(Type type, BonReader reader, ref ValueView val)
+		static mixin Float(Type type, BonReader reader, ValueView val)
 		{
 			let num = Try!(reader.Floating());
 
@@ -986,7 +979,7 @@ namespace Bon.Integrated
 			}
 		}
 
-		static mixin DoChar<T, TI>(BonReader reader, ref ValueView val, char32 char) where T : var where TI : var
+		static mixin DoChar<T, TI>(BonReader reader, ValueView val, char32 char) where T : var where TI : var
 		{
 			if ((uint)char > TI.MaxValue)
 				Error!("Char is out of range", reader, typeof(T));
@@ -994,19 +987,19 @@ namespace Bon.Integrated
 			*(T*)val.dataPtr = *(T*)&char;
 		}
 
-		static mixin Char(Type type, BonReader reader, ref ValueView val)
+		static mixin Char(Type type, BonReader reader, ValueView val)
 		{
 			var char = Try!(reader.Char());
 
 			switch (type)
 			{
-			case typeof(char8): DoChar!<char8, uint8>(reader, ref val, char);
-			case typeof(char16): DoChar!<char16, uint16>(reader, ref val, char);
-			case typeof(char32): DoChar!<char32, uint32>(reader, ref val, char);
+			case typeof(char8): DoChar!<char8, uint8>(reader, val, char);
+			case typeof(char16): DoChar!<char16, uint16>(reader, val, char);
+			case typeof(char32): DoChar!<char32, uint32>(reader, val, char);
 			}
 		}
 
-		static mixin Bool(BonReader reader, ref ValueView val)
+		static mixin Bool(BonReader reader, ValueView val)
 		{
 			let b = Try!(reader.Bool());
 

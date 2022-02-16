@@ -7,13 +7,13 @@ namespace Bon.Integrated
 {
 	static
 	{
-		public static void StringSerialize(BonWriter writer, ref ValueView val, Serialize.ReferenceLookup refLook, BonEnvironment env)
+		public static void StringSerialize(BonWriter writer, ValueView val, BonEnvironment env, Serialize.ReferenceLookup refLook)
 		{
 			let str = *(String*)val.dataPtr;
 			writer.String(str);
 		}
 
-		public static Result<void> StringDeserialize(BonReader reader, ref ValueView val, BonEnvironment env)
+		public static Result<void> StringDeserialize(BonReader reader, ValueView val, BonEnvironment env)
 		{
 			var str = *(String*)val.dataPtr;
 
@@ -22,7 +22,7 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static void ListSerialize(BonWriter writer, ref ValueView val, Serialize.ReferenceLookup refLook, BonEnvironment env)
+		public static void ListSerialize(BonWriter writer, ValueView val, BonEnvironment env, Serialize.ReferenceLookup refLook)
 		{
 			let t = (SpecializedGenericType)val.type;
 
@@ -35,10 +35,10 @@ namespace Bon.Integrated
 
 			if (count != 0 && !Serialize.IsArrayFilled(arrType, arrPtr, count, env))
 				writer.Sizer((.)count);
-			Serialize.Array(writer, arrType, arrPtr, count, refLook, env);
+			Serialize.Array(writer, arrType, arrPtr, count, env, refLook);
 		}
 
-		public static Result<void> ListDeserialize(BonReader reader, ref ValueView val, BonEnvironment env)
+		public static Result<void> ListDeserialize(BonReader reader, ValueView val, BonEnvironment env)
 		{
 			let t = (SpecializedGenericType)val.type;
 

@@ -27,7 +27,7 @@ namespace Bon.Integrated
 			scope:mixin $"No reflection data for {type}!\n(for example: [Serializable] extension {example} {{}} or through build settings)"
 		}
 
-		static mixin DoInclude(ref ValueView val, BonSerializeFlags flags)
+		static mixin DoInclude(ValueView val, BonSerializeFlags flags)
 		{
 			(flags.HasFlag(.IncludeDefault) || !ValueDataIsZero!(val))
 		}
@@ -37,11 +37,11 @@ namespace Bon.Integrated
 			(type.IsPrimitive || (type.IsTypedPrimitive && (!flags.HasFlag(.Verbose) || !type.IsEnum)))
 		}
 
-		public static void Entry(BonWriter writer, ref ValueView val, BonEnvironment env)
+		public static void Entry(BonWriter writer, ValueView val, BonEnvironment env)
 		{
 			writer.Start();
-			if (DoInclude!(ref val, env.serializeFlags))
-				Value(writer, ref val, env.serializeFlags.HasFlag(.KeepInnerReferences) ? scope ReferenceLookup() : null, env);
+			if (DoInclude!(val, env.serializeFlags))
+				Value(writer, val, env, env.serializeFlags.HasFlag(.KeepInnerReferences) ? scope ReferenceLookup() : null);
 			
 			if (writer.outStr.Length == 0)
 			{
@@ -53,7 +53,7 @@ namespace Bon.Integrated
 			writer.End();
 		}
 
-		public static void Value(BonWriter writer, ref ValueView val, ReferenceLookup refLook, BonEnvironment env, bool doOneLine = false)
+		public static void Value(BonWriter writer, ValueView val, BonEnvironment env, ReferenceLookup refLook = null, bool doOneLine = false)
 		{
 			let valType = val.type;
 
@@ -65,13 +65,13 @@ namespace Bon.Integrated
 			if (valType.IsPrimitive)
 			{
 				if (valType.IsInteger)
-					Integer(valType, writer, ref val);
+					Integer(valType, writer, val);
 				else if (valType.IsFloatingPoint)
-					Float(valType, writer, ref val);
+					Float(valType, writer, val);
 				else if (valType.IsChar)
-					Char(valType, writer, ref val);
+					Char(valType, writer, val);
 				else if (valType == typeof(bool))
-					Bool(writer, ref val, env.serializeFlags);
+					Bool(writer, val, env.serializeFlags);
 				else Debug.FatalError(); // Should be unreachable
 			}
 			else if (valType.IsTypedPrimitive)
@@ -172,13 +172,13 @@ namespace Bon.Integrated
 				if (doPrintLiteral)
 				{
 					if (valType.UnderlyingType.IsInteger)
-						Integer(valType.UnderlyingType, writer, ref printVal);
+						Integer(valType.UnderlyingType, writer, printVal);
 					else if (valType.UnderlyingType.IsFloatingPoint)
-						Float(valType.UnderlyingType, writer, ref printVal);
+						Float(valType.UnderlyingType, writer, printVal);
 					else if (valType.UnderlyingType.IsChar)
-						Char(valType.UnderlyingType, writer, ref printVal);
+						Char(valType.UnderlyingType, writer, printVal);
 					else if (valType.UnderlyingType == typeof(bool))
-						Bool(writer, ref printVal, env.serializeFlags);
+						Bool(writer, printVal, env.serializeFlags);
 					else Debug.FatalError(); // Should be unreachable
 				}
 			}
@@ -245,11 +245,9 @@ namespace Bon.Integrated
 								continue;
 							}
 
-							var unionPayload = ValueView(enumField.FieldType, val.dataPtr);
-
 							// Do serialize of discriminator and payload
 							writer.Enum(enumField.Name);
-							Struct(writer, ref unionPayload, refLook, env);
+							Struct(writer, ValueView(enumField.FieldType, val.dataPtr), env, refLook);
 
 							didWrite = true;
 							break;
@@ -264,13 +262,13 @@ namespace Bon.Integrated
 					}
 				}
 				else if (GetCustomHandler(valType, env, let func))
-					func(writer, ref val, refLook, env);
+					func(writer, val, env, refLook);
 				else
 				{
 					if (valType.IsUnion && env.serializeFlags.HasFlag(.Verbose))
 						writer.outStr.Append("/* Union struct! fields influence each other */");
 
-					Struct(writer, ref val, refLook, env);
+					Struct(writer, val, env, refLook);
 				}
 			}
 			else if (valType is SizedArrayType)
@@ -284,7 +282,7 @@ namespace Bon.Integrated
 				if (env.serializeFlags.HasFlag(.Verbose))
 					writer.Sizer((.)count, true);
 
-				Array(writer, t.UnderlyingType, val.dataPtr, count, refLook, env);
+				Array(writer, t.UnderlyingType, val.dataPtr, count, env, refLook);
 			}
 			else if (TypeHoldsObject!(valType))
 			{
@@ -297,6 +295,9 @@ namespace Bon.Integrated
 					if (refLook != null)
 						refLook.AddEntry(*(void**)val.dataPtr);
 
+					// We may modify type with polytype for further operations
+					var val;
+
 					let polyType = (*(Object*)val.dataPtr).GetType();
 					if (polyType != valType)
 					{
@@ -305,8 +306,7 @@ namespace Bon.Integrated
 						// Change type of pointer to actual type
 						val.type = polyType;
 
-						let typeName = polyType.GetFullName(.. scope .());
-						writer.Type(typeName);
+						Type(writer, polyType);
 					}
 					else Debug.Assert(!valType.IsInterface);
 
@@ -320,8 +320,7 @@ namespace Bon.Integrated
 						Debug.Assert(!polyType.IsObject);
 
 						// polyType already is the type in the box
-						var boxedData = ValueView(polyType, boxedPtr);
-						Value(writer, ref boxedData, refLook, env);
+						Value(writer, ValueView(polyType, boxedPtr), env, refLook);
 
 						// After this we only end the line but the Value call
 						// above has already done that.
@@ -344,14 +343,14 @@ namespace Bon.Integrated
 						case typeof(Array1<>):
 							if (!Serialize.IsArrayFilled(arrType, arrPtr, count, env))
 								writer.Sizer((.)count);
-							Array(writer, arrType, arrPtr, count, refLook, env);
+							Array(writer, arrType, arrPtr, count, env, refLook);
 
 						case typeof(Array2<>):
 							let count1 = GetValField!<int_cosize>(val, "mLength1");
 							count /= count1;
 							writer.MultiSizer((.)count,(.)count1);
 
-							MultiDimensionalArray(writer, arrType, arrPtr, refLook, env, count, count1);
+							MultiDimensionalArray(writer, arrType, arrPtr, env, refLook, count, count1);
 
 						case typeof(Array3<>):
 							let count2 = GetValField!<int_cosize>(val, "mLength2");
@@ -359,7 +358,7 @@ namespace Bon.Integrated
 							count /= (count1 * count2);
 							writer.MultiSizer((.)count,(.)count1,(.)count2);
 
-							MultiDimensionalArray(writer, arrType, arrPtr, refLook, env, count, count1, count2);
+							MultiDimensionalArray(writer, arrType, arrPtr, env, refLook, count, count1, count2);
 
 						case typeof(Array4<>):
 							let count1 = GetValField!<int_cosize>(val, "mLength1");
@@ -368,15 +367,15 @@ namespace Bon.Integrated
 							count /= (count1 * count2 * count3);
 							writer.MultiSizer((.)count,(.)count1,(.)count2,(.)count3);
 
-							MultiDimensionalArray(writer, arrType, arrPtr, refLook, env, count, count1, count2, count3);
+							MultiDimensionalArray(writer, arrType, arrPtr, env, refLook, count, count1, count2, count3);
 
 						default:
 							Debug.FatalError();
 						}
 					}
 					else if (GetCustomHandler(polyType, env, let func))
-						func(writer, ref val, refLook, env);
-					else Class(writer, ref val, refLook, env);
+						func(writer, val, env, refLook);
+					else Class(writer, val, env, refLook);
 				}
 			}
 			else if (valType.IsPointer)
@@ -423,17 +422,16 @@ namespace Bon.Integrated
 			return false;
 		}
 
-		public static void Class(BonWriter writer, ref ValueView classVal, ReferenceLookup refLook, BonEnvironment env)
+		public static void Class(BonWriter writer, ValueView classVal, BonEnvironment env, ReferenceLookup refLook = null)
 		{
 			let classType = classVal.type;
 
 			Debug.Assert(classType.IsObject);
 
-			var classDataVal = ValueView(classType, *(void**)classVal.dataPtr);
-			Struct(writer, ref classDataVal, refLook, env);
+			Struct(writer, ValueView(classType, *(void**)classVal.dataPtr), env, refLook);
 		}
 
-		public static void Struct(BonWriter writer, ref ValueView structVal, ReferenceLookup refLook, BonEnvironment env)
+		public static void Struct(BonWriter writer, ValueView structVal, BonEnvironment env, ReferenceLookup refLook = null)
 		{
 			let structType = structVal.type;
 
@@ -452,7 +450,7 @@ namespace Bon.Integrated
 
 						var val = ValueView(m.FieldType, ((uint8*)structVal.dataPtr) + m.MemberOffset);
 
-						if (!DoInclude!(ref val, flags))
+						if (!DoInclude!(val, flags))
 							continue;
 
 						if (flags.HasFlag(.Verbose) && uint64.Parse(m.Name) case .Ok)
@@ -468,7 +466,7 @@ namespace Bon.Integrated
 						}
 
 						writer.Identifier(m.Name);
-						Value(writer, ref val, refLook, env);
+						Value(writer, val, env, refLook);
 
 						if (refLook != null)
 							refLook.currPath.RemoveFromEnd(refLook.currPath.Length - currPathEnd);
@@ -488,13 +486,12 @@ namespace Bon.Integrated
 
 		public static bool IsArrayFilled(Type arrType, void* arrPtr, int count, BonEnvironment env)
 		{
-			var lastVal = ValueView(arrType, (uint8*)arrPtr + arrType.Stride * (count - 1));
-			if (DoInclude!(ref lastVal, env.serializeFlags))
+			if (DoInclude!(ValueView(arrType, (uint8*)arrPtr + arrType.Stride * (count - 1)), env.serializeFlags))
 				return true;
 			return false;
 		}
 
-		public static void Array(BonWriter writer, Type arrType, void* arrPtr, int count, ReferenceLookup refLook, BonEnvironment env)
+		public static void Array(BonWriter writer, Type arrType, void* arrPtr, int count, BonEnvironment env, ReferenceLookup refLook)
 		{
 			let doArrayOneLine = DoTypeOneLine!(arrType, env.serializeFlags);
 			using (writer.ArrayBlock(doArrayOneLine))
@@ -507,10 +504,8 @@ namespace Bon.Integrated
 						var ptr = (uint8*)arrPtr + arrType.Stride * (count - 1);
 						for (var i = count - 1; i >= 0; i--)
 						{
-							var arrVal = ValueView(arrType, ptr);
-
 							// If this gets included, we'll have to include everything until here!
-							if (DoInclude!(ref arrVal, env.serializeFlags))
+							if (DoInclude!(ValueView(arrType, ptr), env.serializeFlags))
 							{
 								includeCount = i + 1;
 								break;
@@ -534,8 +529,8 @@ namespace Bon.Integrated
 						}
 
 						var arrVal = ValueView(arrType, ptr);
-						if (DoInclude!(ref arrVal, env.serializeFlags))
-							Value(writer, ref arrVal, refLook, env, doArrayOneLine);
+						if (DoInclude!(arrVal, env.serializeFlags))
+							Value(writer, arrVal, env, refLook, doArrayOneLine);
 						else
 						{
 							// Shorten this... as mentioned in Entry() we don't automatically place default, but ?
@@ -551,7 +546,7 @@ namespace Bon.Integrated
 			}
 		}
 
-		public static void MultiDimensionalArray(BonWriter writer, Type arrType, void* arrPtr, ReferenceLookup refLook, BonEnvironment env, params int[] counts)
+		public static void MultiDimensionalArray(BonWriter writer, Type arrType, void* arrPtr, BonEnvironment env, ReferenceLookup refLook, params int[] counts)
 		{
 			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
 
@@ -612,9 +607,9 @@ namespace Bon.Integrated
 								for (let j < inner)
 									innerCounts[j] = counts[j + 1];
 
-								MultiDimensionalArray(writer, arrType, ptr, refLook, env, params innerCounts);
+								MultiDimensionalArray(writer, arrType, ptr, env, refLook, params innerCounts);
 							}
-							else Array(writer, arrType, ptr, counts[1], refLook, env);
+							else Array(writer, arrType, ptr, counts[1], env, refLook);
 
 							if (refLook != null)
 								refLook.currPath.RemoveFromEnd(refLook.currPath.Length - currPathEnd);
@@ -634,6 +629,12 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
+		public static void Type(BonWriter writer, Type type)
+		{
+			writer.Type(type.GetFullName(.. scope .()));
+		}
+
+		[Inline]
 		public static void Irrelevant(BonWriter writer)
 		{
 			writer.EntryStart();
@@ -641,35 +642,35 @@ namespace Bon.Integrated
 			writer.EntryEnd();
 		}
 
-		static mixin AsThingToString<T>(BonWriter writer, ref ValueView val)
+		static mixin AsThingToString<T>(BonWriter writer, ValueView val)
 		{
 			T thing = *(T*)val.dataPtr;
 			thing.ToString(writer.outStr);
 		}
 
 		[Inline]
-		static void Integer(Type type, BonWriter writer, ref ValueView val)
+		static void Integer(Type type, BonWriter writer, ValueView val)
 		{
 			switch (type)
 			{
-			case typeof(int8): AsThingToString!<int8>(writer, ref val);
-			case typeof(int16): AsThingToString!<int16>(writer, ref val);
-			case typeof(int32): AsThingToString!<int32>(writer, ref val);
-			case typeof(int64): AsThingToString!<int64>(writer, ref val);
-			case typeof(int): AsThingToString!<int>(writer, ref val);
+			case typeof(int8): AsThingToString!<int8>(writer, val);
+			case typeof(int16): AsThingToString!<int16>(writer, val);
+			case typeof(int32): AsThingToString!<int32>(writer, val);
+			case typeof(int64): AsThingToString!<int64>(writer, val);
+			case typeof(int): AsThingToString!<int>(writer, val);
 
-			case typeof(uint8): AsThingToString!<uint8>(writer, ref val);
-			case typeof(uint16): AsThingToString!<uint16>(writer, ref val);
-			case typeof(uint32): AsThingToString!<uint32>(writer, ref val);
-			case typeof(uint64): AsThingToString!<uint64>(writer, ref val);
-			case typeof(uint): AsThingToString!<uint>(writer, ref val);
+			case typeof(uint8): AsThingToString!<uint8>(writer, val);
+			case typeof(uint16): AsThingToString!<uint16>(writer, val);
+			case typeof(uint32): AsThingToString!<uint32>(writer, val);
+			case typeof(uint64): AsThingToString!<uint64>(writer, val);
+			case typeof(uint): AsThingToString!<uint>(writer, val);
 
 			default: Debug.FatalError(); // Should be unreachable
 			}
 		}
 
 		[Inline]
-		static void Char(Type type, BonWriter writer, ref ValueView val)
+		static void Char(Type type, BonWriter writer, ValueView val)
 		{
 			char32 char = 0;
 			switch (type)
@@ -682,19 +683,19 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
-		static void Float(Type type, BonWriter writer, ref ValueView val)
+		static void Float(Type type, BonWriter writer, ValueView val)
 		{
 			switch (type)
 			{
-			case typeof(float): AsThingToString!<float>(writer, ref val);
-			case typeof(double): AsThingToString!<double>(writer, ref val);
+			case typeof(float): AsThingToString!<float>(writer, val);
+			case typeof(double): AsThingToString!<double>(writer, val);
 
 			default: Debug.FatalError(); // Should be unreachable
 			}
 		}
 
 		[Inline]
-		static void Bool(BonWriter writer, ref ValueView val, BonSerializeFlags flags)
+		static void Bool(BonWriter writer, ValueView val, BonSerializeFlags flags)
 		{
 			bool boolean = *(bool*)val.dataPtr;
 			if (flags.HasFlag(.Verbose))

@@ -25,18 +25,16 @@ namespace Bon
 		{
 			let writer = scope BonWriter(into, env.serializeFlags.HasFlag(.Verbose));
 			var value;
-			var variant = ValueView(typeof(T), &value);
 
-			Serialize.Entry(writer, ref variant, env);
+			Serialize.Entry(writer, ValueView(typeof(T), &value), env);
 		}
 
 		public static Result<BonContext> Deserialize<T>(ref T value, BonContext from, BonEnvironment env = gBonEnv)
 		{
 			let reader = scope BonReader();
 			Try!(reader.Setup(from));
-			var variant = ValueView(typeof(T), &value);
 
-			return Deserialize.Entry(reader, ref variant, env);
+			return Deserialize.Entry(reader, ValueView(typeof(T), &value), env);
 		}
 
 		public static Result<void> SerializeIntoFile<T>(T value, StringView path, BonEnvironment env = gBonEnv)

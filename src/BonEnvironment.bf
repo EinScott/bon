@@ -48,8 +48,8 @@ namespace Bon
 	
 	public delegate void MakeThingFunc(ValueView refIntoVal);
 
-	public static function void HandleSerializeFunc(BonWriter writer, ref ValueView val, Serialize.ReferenceLookup refLook, BonEnvironment env);
-	public static function Result<void> HandleDeserializeFunc(BonReader reader, ref ValueView val, BonEnvironment env);
+	public static function void HandleSerializeFunc(BonWriter writer, ValueView val, BonEnvironment env, Serialize.ReferenceLookup refLook);
+	public static function Result<void> HandleDeserializeFunc(BonReader reader, ValueView val, BonEnvironment env);
 
 	/// Defines the behavior of bon.
 	class BonEnvironment
