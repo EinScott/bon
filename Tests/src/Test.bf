@@ -51,6 +51,7 @@ namespace Bon.Tests
 			return view.Intern();
 		}
 
+		static delegate StringView(StringView) stringViewHandler = new => HandleStringView;
 		static List<String> strings = new .() ~ DeleteContainerAndItems!(_);
 
 		static void MakeString(ValueView val)
@@ -63,7 +64,7 @@ namespace Bon.Tests
 
 		static mixin SetupStringHandler()
 		{
-			gBonEnv.stringViewHandler = => HandleStringView;
+			gBonEnv.stringViewHandler = stringViewHandler;
 
 			if (!gBonEnv.allocHandlers.ContainsKey(typeof(String)))
 				gBonEnv.allocHandlers.Add(typeof(String), (.)new => MakeString);
@@ -71,7 +72,7 @@ namespace Bon.Tests
 
 		static mixin NoStringHandler()
 		{
-			gBonEnv.stringViewHandler = => HandleStringView;
+			gBonEnv.stringViewHandler = stringViewHandler;
 			gBonEnv.allocHandlers.Remove(typeof(String));
 		}
 
@@ -1428,29 +1429,6 @@ namespace Bon.Tests
 		}
 
 		[BonTarget]
-		class Number
-		{
-			public int64 num;
-		}
-
-		[BonTarget,Ordered]
-		struct NumLook
-		{
-			public Number one;
-			public Number other;
-			public Number current;
-
-			public Inner inner;
-			public Number refInner;
-
-			[BonTarget]
-			public struct Inner
-			{
-				public Number innerNum;
-			}
-		}
-
-		[BonTarget]
 		struct Compat
 		{
 			public uint version;
@@ -1644,6 +1622,9 @@ namespace Bon.Tests
 		[Test]
 		static void Trash()
 		{
+			// Just... make sure the constructor doesnt crash
+			scope BonEnvironment();
+
 			int i = ?;
 			char16 c = ?;
 			StringView s = ?;

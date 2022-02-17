@@ -8,17 +8,19 @@ namespace Bon.Integrated
 		public struct ArrayBlockEnd : IDisposable
 		{
 			BonWriter w;
+			bool oneLine;
 
 			[Inline]
-			public this(BonWriter format)
+			public this(BonWriter format, bool doOneLine)
 			{
 				w = format;
+				oneLine = doOneLine;
 			}
 
 			[Inline]
 			public void Dispose()
 			{
-				w.ArrayBlockEnd();
+				w.ArrayBlockEnd(oneLine);
 			}
 		}
 
@@ -222,7 +224,7 @@ namespace Bon.Integrated
 
 			arrDepth++;
 
-			return .(this);
+			return .(this, doOneLine);
 		}
 
 		public ObjectBlockEnd ObjectBlock()
@@ -239,7 +241,7 @@ namespace Bon.Integrated
 			return .(this);
 		}
 
-		void ArrayBlockEnd()
+		void ArrayBlockEnd(bool doOneLine)
 		{
 			Debug.Assert(arrDepth > 0);
 			arrDepth--;
@@ -252,7 +254,8 @@ namespace Bon.Integrated
 					outStr..RemoveFromEnd(2).Append('\n');
 
 				f.TabPop();
-				f.DoTabs(outStr);
+				if (!doOneLine)
+					f.DoTabs(outStr);
 			}
 
 			outStr.Append(']');
@@ -285,12 +288,22 @@ namespace Bon.Integrated
 			outStr.Append('}');
 		}
 		
-		[Inline]
 		public void EntryEnd(bool doOneLine = false)
 		{
-			outStr.Append(',');
-			if (doFormatting && !doOneLine)
-				f.NewLine(outStr);
+			if (!doFormatting)
+			{
+				if (!outStr.EndsWith(','))
+					outStr.Append(',');
+			}
+			else
+			{
+				if (!outStr.EndsWith(",\n"))
+				{
+					outStr.Append(',');
+					if (!doOneLine)
+						f.NewLine(outStr);
+				}
+			}
 		}
 
 		public void End()

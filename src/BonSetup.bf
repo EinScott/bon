@@ -29,8 +29,8 @@ namespace Bon
 			env.RegisterPolyType!(typeof(Float));
 			env.RegisterPolyType!(typeof(Double));
 
-			env.typeHandlers.Add(typeof(String), ((.)=> StringSerialize, (.)=> StringDeserialize));
-			env.typeHandlers.Add(typeof(List<>), ((.)=> ListSerialize, (.)=> ListDeserialize));
+			env.typeHandlers.Add(typeof(String), ((.)new => StringSerialize, (.)new => StringDeserialize));
+			env.typeHandlers.Add(typeof(List<>), ((.)new => ListSerialize, (.)new => ListDeserialize));
 #endif
 		}
 

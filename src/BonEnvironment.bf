@@ -44,8 +44,8 @@ namespace Bon
 	
 	public delegate void MakeThingFunc(ValueView refIntoVal);
 
-	public static function void HandleSerializeFunc(BonWriter writer, ValueView val, BonEnvironment env);
-	public static function Result<void> HandleDeserializeFunc(BonReader reader, ValueView val, BonEnvironment env);
+	public delegate void HandleSerializeFunc(BonWriter writer, ValueView val, BonEnvironment env);
+	public delegate Result<void> HandleDeserializeFunc(BonReader reader, ValueView val, BonEnvironment env);
 
 	/// Defines the behavior of bon.
 	class BonEnvironment
@@ -56,7 +56,14 @@ namespace Bon
 		/// When bon serializes or deserializes an unknown type, it checks this to see if there are custom
 		/// functions to handle this type. Functions can be registered by type or by unspecialized generic
 		/// type, like List<>. For examples, see TypeHandlers.bf
-		public Dictionary<Type, (HandleSerializeFunc serialize, HandleDeserializeFunc deserialize)> typeHandlers = new .() ~ delete _;
+		public Dictionary<Type, (HandleSerializeFunc serialize, HandleDeserializeFunc deserialize)> typeHandlers = new .() ~ {
+			for (let pair in _)
+			{
+				delete pair.value.serialize;
+				delete pair.value.deserialize;
+			}
+			delete _;
+		}
 
 		/// When bon needs to allocate a reference type, a handler is called for it when possible
 		/// instead of allocating with new. This can be used to gain more control over the allocation
@@ -69,7 +76,7 @@ namespace Bon
 
 		/// Will be called for every deserialized StringView string. Must return a valid string view
 		/// of the passed-in string.
-		public function StringView(StringView view) stringViewHandler;
+		public delegate StringView(StringView view) stringViewHandler ~ if (_ != null) delete _;
 
 		// Collection of registered types used in polymorphism.
 		// Required to get a type info from a serialized name.
@@ -97,17 +104,33 @@ namespace Bon
 
 			serializeFlags = gBonEnv.serializeFlags;
 			deserializeFlags = gBonEnv.deserializeFlags;
-			
+
+			mixin CopyDelegate(var target, Delegate del)
+			{
+				// Shady delegate cloning
+				var clone = del == null ? null : new Delegate()..SetFuncPtr(del.[Friend]mFuncPtr, del.[Friend]mTarget);
+				target = *(decltype(target)*)((void**)&clone);
+			}
+
 			for (let pair in gBonEnv.typeHandlers)
-				typeHandlers.Add(pair);
+			{
+				HandleSerializeFunc ser = null;
+				HandleDeserializeFunc de = null;
+				CopyDelegate!(ref ser, pair.value.serialize);
+				CopyDelegate!(ref de, pair.value.deserialize);
+
+				typeHandlers.Add(pair.key, (ser, de));
+			}
 
 			for (let pair in gBonEnv.allocHandlers)
 			{
-				Delegate make = pair.value == null ? null : new Delegate()..SetFuncPtr(pair.value.[Friend]mFuncPtr, pair.value.[Friend]mTarget);
-				allocHandlers.Add(pair.key, (.)make);
+				MakeThingFunc make = null;
+				CopyDelegate!(ref make, pair.value);
+
+				allocHandlers.Add(pair.key, make);
 			}
 
-			stringViewHandler = gBonEnv.stringViewHandler;
+			CopyDelegate!(ref stringViewHandler, gBonEnv.stringViewHandler);
 
 			for (let pair in gBonEnv.polyTypes)
 				polyTypes.Add(new .(pair.key), pair.value);

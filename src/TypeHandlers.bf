@@ -96,8 +96,7 @@ namespace Bon.Integrated
 		// - for the last two, can we use a generic template that relies on ToString and Parse ?
 		// handle type? we have polyType info...?
 
-		// "!somethingName" are a way to make the deserializer call a function with this string as the key (also member type, type member is on), which then is expected to provide a variant to put there!
-		// this could be a templated handler that calls a function? i guess... would do the parsing & being called in the first place part automatically then?
+		// "&somethingName" example use
 		// -> for example, for types like Asset<> registered, then can retrieve asset with name
 	}
 }

@@ -316,8 +316,7 @@ namespace Bon.Integrated
 						// polyType already is the type in the box
 						Value(writer, ValueView(polyType, boxedPtr), env);
 
-						// After this we only end the line but the Value call
-						// above has already done that.
+						// Don't call EndEntry twice
 						return;
 					}
 					else if (polyType.IsArray)
@@ -506,7 +505,7 @@ namespace Bon.Integrated
 						else
 						{
 							// Shorten this... as mentioned in Entry() we don't automatically place default, but ?
-							Irrelevant(writer);
+							Irrelevant(writer, doArrayOneLine);
 						}
 
 						ptr += arrType.Stride;
@@ -587,15 +586,16 @@ namespace Bon.Integrated
 		[Inline]
 		public static void Type(BonWriter writer, Type type)
 		{
+			writer.EntryStart();
 			writer.Type(type.GetFullName(.. scope .()));
 		}
 
 		[Inline]
-		public static void Irrelevant(BonWriter writer)
+		public static void Irrelevant(BonWriter writer, bool doOneLine = false)
 		{
-			writer.EntryStart();
+			writer.EntryStart(doOneLine);
 			writer.IrrelevantEntry();
-			writer.EntryEnd();
+			writer.EntryEnd(doOneLine);
 		}
 
 		static mixin AsThingToString<T>(BonWriter writer, ValueView val)
