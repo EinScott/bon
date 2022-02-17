@@ -554,17 +554,25 @@ namespace Bon.Integrated
 		public Result<bool> Bool()
 		{
 			if (Check('1'))
+			{
+				Try!(ConsumeEmpty());
 				return true;
+			}
 			else if (Check('0'))
+			{
+				Try!(ConsumeEmpty());
 				return false;
+			}
 			else if (inStr.StartsWith(bool.TrueString, .OrdinalIgnoreCase))
 			{
 				inStr.RemoveFromStart(4);
+				Try!(ConsumeEmpty());
 				return true;
 			}
 			else if (inStr.StartsWith(bool.FalseString, .OrdinalIgnoreCase))
 			{
-				inStr.RemoveFromStart(4);
+				inStr.RemoveFromStart(5);
+				Try!(ConsumeEmpty());
 				return false;
 			}
 
