@@ -346,19 +346,6 @@ For this to work with deserialization, bon needs to look up the types by name. T
 (System.Collections.List<int>)[55555, 6666]
 ```
 
-#### References
-
-References start with ``&`` and are an absolute path to another non-reference value within the structure. As such, values are only valid on reference types and are meant to preserve references to objects. This is an optional feature and has to be enabled on the used [bon environment](#bon-environment).
-
-```
-// Note: of course references are not actually valid on their own,
-// as they need to point to a value within the same file-level entry.
-
-& // References the entry value
-&attributes[1].description,
-&[0].name
-```
-
 ### Type setup
 
 For a type from your code to be used with bon, you simply have to place ``[BonTarget]`` on it. Fields with ``[BonIgnore]`` will never (except with ``.IgnoreAttributes``) be serialized and can never be deserialized into. Fields with ``[BonInclude]`` will be treated like other public fields. Private/Forbidden fields cannot be accessed in deserialization.
@@ -391,7 +378,7 @@ On deserialization,
 
 #### Polymorphism
 
-If the structure you want to serialize references this type polymorphically, for example as an ``Object`` reference, you also need to place ``[BonPolyRegister]`` on it as well.
+If the structure you want to serialize polymorphed references to this type, for example as an ``Object``, you also need to place ``[BonPolyRegister]`` on it as well.
 
 polymorphism handling
 

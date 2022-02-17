@@ -463,13 +463,6 @@ namespace Bon.Integrated
 
 					Try!(reader.ConsumeEmpty());
 				}
-				else if (reader.IsReference())
-				{
-					let reference = Try!(reader.Reference());
-
-					// TODO: put reference in some lookup along with ValueView for later?
-					// later check if field is already occupied with that exact reference... or if we need to CheckInstanceNull here (and then set)
-				}
 				else
 				{
 					// We may set val's type to polytype for further calls

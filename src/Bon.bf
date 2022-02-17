@@ -1,16 +1,11 @@
 using System;
-using System.Diagnostics;
 using System.IO;
-using System.Collections;
 using Bon.Integrated;
 
 namespace Bon
 {
 	// integrated serialize / deserialize
 	// - demo with scene stuff?
-
-	// TODO: & as a general token for retrieving references... maybe must be enabled with flag YAH- would be a serialize AND deserialize flag though
-	// - deserial: put refs into list (current path + given relative ? + target variant), resolve path and handle at end
 
 	// TODO: something like... @property = dd to call the property setter for deserialize? maybe?
 

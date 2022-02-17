@@ -17,10 +17,6 @@ namespace Bon
 		/// Whether or not to include fields default values (e.g. null, etc)
 		case IncludeDefault = 1 << 1;
 
-		/// If two fields referenced the same class, this relationship will be preserved. Only the
-		/// first occurrence will be serialized, the following ones will reference the first one.
-		case KeepInnerReferences = 1 << 2;
-
 		/// Ignore field attributes (only recommended for debugging / complete structure dumping)
 		case IgnoreAttributes = 1 << 3;
 
@@ -48,7 +44,7 @@ namespace Bon
 	
 	public delegate void MakeThingFunc(ValueView refIntoVal);
 
-	public static function void HandleSerializeFunc(BonWriter writer, ValueView val, BonEnvironment env, Serialize.ReferenceLookup refLook);
+	public static function void HandleSerializeFunc(BonWriter writer, ValueView val, BonEnvironment env);
 	public static function Result<void> HandleDeserializeFunc(BonReader reader, ValueView val, BonEnvironment env);
 
 	/// Defines the behavior of bon.
