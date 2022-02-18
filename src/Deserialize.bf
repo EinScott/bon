@@ -53,17 +53,17 @@ namespace Bon.Integrated
 			let valType = val.type;
 			if (valType.IsStruct)
 			{
-				// TODO: scan for reftype fields we maybe can't just default!
-				// also do this in structs we contain
+				if (!env.deserializeFlags.HasFlag(.AllowReferenceNulling))
+					Try!(CheckStructForRef(reader, val, env));
 			}
 			else if (valType is SizedArrayType)
 			{
 				let t = (SizedArrayType)valType;
 				Try!(DefaultArray(reader, t.UnderlyingType, val.dataPtr, t.ElementCount, env));
 			}
-			else if (valType.IsObject)
+			else if (TypeHoldsObject!(valType))
 			{
-				Try!(NullInstanceRef(reader, val, env));
+				return NullInstanceRef(reader, val, env);
 			}
 			else if (valType.IsPointer)
 			{
@@ -134,15 +134,35 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
+		public static Result<void> CheckStructForRef(BonReader reader, ValueView val, BonEnvironment env)
+		{
+			let allowNulling = env.deserializeFlags.HasFlag(.AllowReferenceNulling);
+			Debug.Assert(!allowNulling);
+
+			for (let f in val.type.GetFields(.Instance))
+			{
+				let fieldType = f.FieldType;
+				if (fieldType.IsStruct)
+					Try!(CheckStructForRef(reader, ValueView(fieldType, (uint8*)val.dataPtr + f.MemberOffset), env));
+				else if (TypeHoldsObject!(fieldType) && !allowNulling)
+					Error!("Cannot null reference nested in struct. Set the .AllowReferenceNulling flag if bon can null them without leaking anything, clear them or make bon ignore the field", reader, fieldType);
+			}
+
+			return .Ok;
+		}
+
 		[Inline]
 		public static Result<void> NullInstanceRef(BonReader reader, ValueView val, BonEnvironment env)
 		{
 			if (*(void**)val.dataPtr != null)
 			{
-				// TODO: when field is marked as allow to null, then do
-				// Try!(MakeDefault(ref val, env)); instead
+				if (env.deserializeFlags.HasFlag(.AllowReferenceNulling))
+				{
+					*(void**)val.dataPtr = null;
+					return .Ok;
+				}
 
-				Error!("Cannot null reference. Put [BonNullable] on this field if bon can safely null it without leaking anything", reader, val.type);
+				Error!("Cannot null reference. Set the .AllowReferenceNulling flag if bon can null them without leaking anything, clear them or make bon ignore the field", reader, val.type);
 			}
 
 			return .Ok;

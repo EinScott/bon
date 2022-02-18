@@ -702,6 +702,12 @@ namespace Bon.Tests
 				s.[Friend]important = 32656;
 
 				{
+					SomeThings so = default;
+					so.str = scope .();
+					Test.Assert(Bon.Deserialize(ref so, "default") case .Err);
+				}
+
+				{
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",important=32656}");
 
@@ -1193,6 +1199,13 @@ namespace Bon.Tests
 			equal
 		}
 
+		[Align(8),CRepr,BonTarget]
+		struct AlignStruct
+		{
+			public uint16 a;
+			public uint8 b;
+		}
+
 		[Test]
 		static void Arrays()
 		{
@@ -1274,6 +1287,16 @@ namespace Bon.Tests
 				Test.Assert(str == "<2,2>[[532,332],[224,2896]]");
 
 				uint16[,] so = null;
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
+				delete so;
+			}
+
+			{
+				AlignStruct[,] s = scope .[2,2]((.{a=5,b=16}, .{a=10,b=64}), (default, .{a=100,b=255}));
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "<2,2>[[{a=5,b=16},{a=10,b=64}],[?,{a=100,b=255}]]");
+
+				AlignStruct[,] so = null;
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
 				delete so;
 			}
@@ -1408,6 +1431,33 @@ namespace Bon.Tests
 					{
 						2, 3, 4, 5, 6, 100, 200, 300, 400, 500, 1000, 2500, 8000, 10000 // oops, already in use
 					};
+				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && ArrayEqual!(l, lo));
+			}
+
+			{
+				let l = scope List<AlignStruct>()
+					{
+						AlignStruct{a=1,b=2}, .{}, .{a=12,b=150}
+					};
+				let str = Bon.Serialize(l, .. scope .());
+				Test.Assert(str == "[{a=1,b=2},?,{a=12,b=150}]");
+
+				List<AlignStruct> lo = scope List<AlignStruct>()
+					{
+						AlignStruct{}, .{}, .{}, .{a=10,b=12} // oops, already in use
+					};
+				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && ArrayEqual!(l, lo));
+			}
+
+			{
+				let l = scope List<AlignStruct>()
+					{
+						AlignStruct{a=1,b=2}, .{}, .{a=12,b=150}
+					};
+				let str = Bon.Serialize(l, .. scope .());
+				Test.Assert(str == "[{a=1,b=2},?,{a=12,b=150}]");
+
+				List<AlignStruct> lo = scope List<AlignStruct>();
 				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && ArrayEqual!(l, lo));
 			}
 
@@ -1560,8 +1610,6 @@ namespace Bon.Tests
 				Test.Assert(c.SkipEntry(1) case .Err);
 			}
 		}
-
-		// TODO: test arrays & collections for [Align()]
 
 		[Test]
 		static void Pointers()

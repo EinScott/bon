@@ -40,6 +40,9 @@ namespace Bon
 
 		/// Allows bon strings to access non-public fields.
 		case AccessNonPublic = 1 << 2;
+
+		/// Allow bon to null existing references in fields it has to write to.
+		case AllowReferenceNulling = 1 << 3;
 	}
 	
 	public delegate void MakeThingFunc(ValueView refIntoVal);

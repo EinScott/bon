@@ -8,6 +8,7 @@ namespace Bon
 	// - demo with scene stuff?
 
 	// TODO: something like... @property = dd to call the property setter for deserialize? maybe?
+	// TODO: explain errors on how do i?, shorten their messages here. also document unused symbols that may be used like & and :
 
 	static class Bon
 	{
