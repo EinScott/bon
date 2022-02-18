@@ -373,19 +373,6 @@ namespace Bon.Integrated
 			}
 			else if (valType.IsPointer)
 			{
-				// 1) underlying pointer value could be serialized if not void
-				//    - but allocating on de-serialize is weird
-				//    - especially nulling/dealloc of ptrs is weird since they may not be
-				//      heap pointers at all or point to something else in this struct
-				// 2) we could de-serialize ptr references
-				//    - but cant serialize references...
-				// I guess we could, if configured to do so, collect a mem span of where every Value() call went to
-				// and then look that up to see if we know the pointer and could serialize a reference to the other
-				// element... but that just sounds like lots and lots of data to track.
-
-				// TODO: maybe limited ptr support: serialize underlying value if its a value type
-				//       deserialize into already pointed to value type...
-				
 				if (env.serializeFlags.HasFlag(.Verbose))
 					writer.outStr.Append("/* Cannot handle pointer values. Put [NoSerialize] on this field */");
 			}
@@ -465,14 +452,14 @@ namespace Bon.Integrated
 			}
 		}
 
-		public static bool IsArrayFilled(Type arrType, void* arrPtr, int count, BonEnvironment env)
+		public static bool IsArrayFilled(Type arrType, void* arrPtr, int64 count, BonEnvironment env)
 		{
 			if (DoInclude!(ValueView(arrType, (uint8*)arrPtr + arrType.Stride * (count - 1)), env.serializeFlags))
 				return true;
 			return false;
 		}
 
-		public static void Array(BonWriter writer, Type arrType, void* arrPtr, int count, BonEnvironment env)
+		public static void Array(BonWriter writer, Type arrType, void* arrPtr, int64 count, BonEnvironment env)
 		{
 			let doArrayOneLine = DoTypeOneLine!(arrType, env.serializeFlags);
 			using (writer.ArrayBlock(doArrayOneLine))
@@ -514,7 +501,7 @@ namespace Bon.Integrated
 			}
 		}
 
-		public static void MultiDimensionalArray(BonWriter writer, Type arrType, void* arrPtr, BonEnvironment env, params int[] counts)
+		public static void MultiDimensionalArray(BonWriter writer, Type arrType, void* arrPtr, BonEnvironment env, params int64[] counts)
 		{
 			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
 
@@ -561,7 +548,7 @@ namespace Bon.Integrated
 							let inner = counts.Count - 1;
 							if (inner > 1)
 							{
-								int[] innerCounts = scope .[inner];
+								int64[] innerCounts = scope .[inner];
 								for (let j < inner)
 									innerCounts[j] = counts[j + 1];
 

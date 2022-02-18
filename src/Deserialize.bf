@@ -640,8 +640,6 @@ namespace Bon.Integrated
 			}
 			else if (valType.IsPointer)
 			{
-				// See this case in Serialize.bf
-
 				Error!("Cannot handle pointer values", reader, valType);
 			}
 			else

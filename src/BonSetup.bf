@@ -31,6 +31,7 @@ namespace Bon
 
 			env.typeHandlers.Add(typeof(String), ((.)new => StringSerialize, (.)new => StringDeserialize));
 			env.typeHandlers.Add(typeof(List<>), ((.)new => ListSerialize, (.)new => ListDeserialize));
+			env.typeHandlers.Add(typeof(Dictionary<,>), ((.)new => DictionarySerialize, (.)new => DictionaryDeserialize));
 #endif
 		}
 
@@ -74,6 +75,13 @@ namespace System
 		// EnsureCapacity is forced to be included through build settings.
 		[BonTarget,Reflect(.Methods)] // .Methods is needed to call EnsureCapacity
 		extension List<T> {}
+
+		[BonTarget,Reflect(.Methods)]
+		extension Dictionary<T1,T2>
+		{
+			[Reflect(.NonStaticFields)]
+			extension Entry {}
+		}
 	}
 }
 #endif

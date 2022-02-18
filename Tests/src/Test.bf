@@ -1479,6 +1479,86 @@ namespace Bon.Tests
 		}
 
 		[BonTarget]
+		struct HashStruct : IHashable
+		{
+			public int a;
+			public int b;
+
+			public int GetHashCode()
+			{
+				return a + b;
+			}
+		}
+
+		[Test]
+		static void Dictionary()
+		{
+			{
+				Dictionary<int,uint8> d = scope .();
+				d.Add(150, 2);
+				d.Add(24, 23);
+
+				{
+					let str = Bon.Serialize(d, .. scope .());
+					Test.Assert(str == "[150:2,24:23]");
+				}
+
+				using (PushFlags(.Verbose))
+				{
+					let str = Bon.Serialize(d, .. scope .());
+					Test.Assert(str == """
+						[
+							150: 2,
+							24: 23
+						]
+						""");
+				}
+			}
+
+			{
+				Dictionary<String,SomeData> d = scope .();
+				d.Add("oneThing", SomeData{ value = 5, time = 0 });
+				d.Add("a_string", SomeData{ value = 1700, time = 2f});
+
+				let str = Bon.Serialize(d, .. scope .());
+				Test.Assert(str == "[\"oneThing\":{value=5},\"a_string\":{time=2,value=1700}]");
+			}
+
+			{
+				Dictionary<HashStruct,SomeData> d = scope .();
+				d.Add(HashStruct{ a = 120, b = 6000 }, SomeData{ value = 5, time = 0 });
+				d.Add(HashStruct{ a = 155, b = 240 }, SomeData{ value = 1700, time = 2f});
+
+				{
+					let str = Bon.Serialize(d, .. scope .());
+					Test.Assert(str == "[{a=120,b=6000}:{value=5},{a=155,b=240}:{time=2,value=1700}]");
+				}
+
+				using (PushFlags(.Verbose))
+				{
+					let str = Bon.Serialize(d, .. scope .());
+					Test.Assert(str == """
+						[
+							{
+								a = 120,
+								b = 6000
+							}: {
+								value = 5
+							},
+							{
+								a = 155,
+								b = 240
+							}: {
+								time = 2,
+								value = 1700
+							}
+						]
+						""");
+				}
+			}
+		}
+
+		[BonTarget]
 		struct Compat
 		{
 			public uint version;

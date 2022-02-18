@@ -67,9 +67,9 @@ namespace Bon.Integrated
 			}
 			else if (currCount < count)
 			{
-				if (((t.GetMethod("EnsureCapacity", .NonPublic|.Instance) case .Ok(let method))
+				if ((t.GetMethod("EnsureCapacity", .NonPublic|.Instance) case .Ok(let method))
 					// Keep in mind, strictly speaking val.DataPtr is pointing to the field which references this list!
-					&& method.Invoke(*(Object*)val.dataPtr, (int)count, true) case .Ok)) // returns T*, which is sizeof(int), so Variant doesnt alloc
+					&& method.Invoke(*(Object*)val.dataPtr, (int)count, true) case .Ok) // returns T*, which is sizeof(int), so Variant doesnt alloc
 				{
 					// Null the new chunk
 					Internal.MemSet(*(uint8**)itemsFieldPtr + currCount * arrType.Stride, 0, (count - currCount) * arrType.Stride);
@@ -86,17 +86,68 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		// TODO: we could do this for ICollection, but on ICollection
-		// we'd have to call... Add... and also deserialize ever element
-		// outselves before... which is kind of weird?
-		// SerializeCollection<T>(..) where T : ICollection
-		// demo with SizedList<> or something!
+		public static void DictionarySerialize(BonWriter writer, ValueView val, BonEnvironment env)
+		{
+			let t = (SpecializedGenericType)val.type;
 
-		// support Variant ... Guid,Version and some other useful stuff?
-		// - for the last two, can we use a generic template that relies on ToString and Parse ?
-		// handle type? we have polyType info...?
+			Debug.Assert(t.UnspecializedType == typeof(Dictionary<,>));
+			Debug.Assert(t.GetField("mCount") case .Ok, Serialize.CompNoReflectionError!("Dictionary<,>", "Dictionary<T1,T2>"));
 
-		// "&somethingName" example use
-		// -> for example, for types like Asset<> registered, then can retrieve asset with name
+			let keyType = t.GetGenericArg(0);
+			let valueType = t.GetGenericArg(1);
+			var count = GetValField!<int_cosize>(val, "mCount");
+
+			let classData = *(uint8**)val.dataPtr;
+			let entriesField = val.type.GetField("mEntries").Get();
+			var entriesPtr = *(uint8**)(classData + entriesField.[Inline]MemberOffset); // *(Entry**)
+			let entryType = entriesField.[Inline]FieldType.UnderlyingType;
+			let entryStride = entryType.Stride;
+			let entryHashCodeOffset = entryType.GetField("mHashCode").Get().[Inline]MemberOffset;
+			let entryKeyOffset = entryType.GetField("mKey").Get().[Inline]MemberOffset;
+			let entryValueOffset = entryType.GetField("mValue").Get().[Inline]MemberOffset;
+
+			using (writer.ArrayBlock())
+			{
+				int64 index = 0;
+				int64 currentIndex = -1;
+
+				ENTRIES:while (true)
+				{
+					MOVENEXT:do
+					{
+						// This is basically stolen from Dictionary.Enumerator.MoveNext()
+						// -> go through the dict entries, break if we're done
+
+						while ((uint)index < (uint)count)
+						{
+							// mEntries[mIndex].mHashCode
+							if (*(int_cosize*)(entriesPtr + (index * entryStride) + entryHashCodeOffset) >= 0)
+							{
+								currentIndex = index;
+								index++;
+								break MOVENEXT;
+							}
+							index++;
+						}
+
+						break ENTRIES;
+					}
+
+					let keyVal = ValueView(keyType, entriesPtr + (currentIndex * entryStride) + entryKeyOffset);
+					let valueVal = ValueView(valueType, entriesPtr + (currentIndex * entryStride) + entryValueOffset);
+
+					Serialize.Value(writer, keyVal, env);
+					writer.Pair();
+					Serialize.Value(writer, valueVal, env);
+				}
+			}
+		}
+
+		public static Result<void> DictionaryDeserialize(BonReader reader, ValueView val, BonEnvironment env)
+		{
+			return .Err;
+		}
+
+		// We *could* add handlers for stuff like Guid, Version, Type, Sha256, md5,... here
 	}
 }
