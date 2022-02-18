@@ -5,11 +5,9 @@ bon is a **serialization library** for the [Beef programming language](https://g
 ## Basics
 
 Bon is reflection based. (De-) Serialization of a value is done in one call to ``Bon.Serialize`` or ``Bon.Deserialize``.
-Any value (though pointer support is limited) can be passed into these calls to produce a valid result (or, in the case of Deserialization, a precise error).
+Any (properly [marked](#type-setup)) structure can be passed into these calls to produce a valid result or, in the case of Deserialization, a precise [error](#errors).
 
-Primitives and strings (as well as [some common corlib types](#supported-types), such as ``List<T>``) are supported by default. To support other custom types, reflection data for them simply needs to be included in the build.
-
-For example, assuming that all types used below use the build settings or the ``[BonTarget]`` attribute to include reflection data for them, this structure results in the following serialized bon output.
+For example, assuming that all types used below use the build settings or the ``[BonTarget]`` attribute to include reflection data for them and all fields set below are public or explicitly included, this structure results in the following serialized bon output.
 
 ```bf
 let structure = new State() {
@@ -56,39 +54,61 @@ Content of ``serialized``:
 }
 ```
 
-As you can see, the output omits default values but without loosing information in the process. This, among other behaviors, is configurable just like we added the ``.Verbose`` flag above to receive a formatted and more extensive output. Bon's [configuration](#bon-environment) is contained in a ``BonEnvironment`` object, that is passed into every call. By default, the global environment ``gBonEnv`` is used.
+The output omits default values by default (the deserializer will try to default unmentioned values accordingly). This, among other behaviors, is configurable just like with the ``.Verbose`` flag set above to produce a formatted and more extensive output. Bon's [configuration](#bon-environment) is contained in a ``BonEnvironment`` object, that is passed into every call. By default, the global environment ``gBonEnv`` is used.
 
 For an extensive overview of bon's capabilites, see [Documentation](#documentation) and [Tests](https://github.com/EinScott/bon/blob/main/Tests/src/Test.bf).
 
-## How do i..?
+## Documentation
 
-all common errors or things that go wrong in usage "why it says reflection missing" "how to use polyTypes" "custom handlers?" "manage memory?"
+- [Serialization](#serialization)
+- [Deserialization](#deserialization)
+	- [how to handle reference nulling](#nulling-refrences)
+- [Errors](#errors)
+- [Syntax](#syntax)
+- [Type setup](#type-setup)
+	- how to ex-/include fields from being serialized
+- [Bon environment](#bon-environment)
+	- [how to control the allocation of certain types](#alloc-handlers)
+	- [how to serialize polymorphed references](#poly-types)
+- [Supported types](#supported-types)
+	- [how to make bon ignore pointer values](#pointers)
+- [Extension](#extension)
+	- how to write custom handlers for certain types
+- [Integrated usage](#integrated-usage)
+	- how to process arbitrary structures
 
-## Serialization
+TODO add links to other sub-categories
+
+### Serialization
+
+Any properly [set up](#type-setup) (and [supported](#supported-types)) value can be passed into ``Serialize``.
 
 ```bf
 int i = 15;
 Bon.Serialize(i, outStr); // outStr: "15"
 ```
 
-## Deserialization
+### Deserialization
 
-mention what it can and can't do
--> no dealloc of stuff...etc
+Any value passed into ``Deserialize`` will be set to the state defined in the bon string, with a few restrictions. Bon will allocate appropriate instances into empty references but [can not null used references](#nulling-references) unless specifically configured to do so. Ideally, references point to instances of the right type or are cleared beforehand.
 
-## Documentation
+```bf
+int i = ?;
+Try!(Bon.Deserialize(ref i, "15"));
 
-- [Errors](#errors)
-- [Syntax](#syntax)
-- [Type setup](#type-setup)
-- [Bon environment](#bon-environment)
-- [Supported types](#supported-types)
-- [Extension](#extension)
-- [Integrated usage](#integrated-usage)
+SomeClass c = null;
+Try!(Bon.Deserialize(ref c, "{member=120}"));
+```
+
+#### Nulling references
+
+Set the .AllowReferenceNulling flag if bon can null them without leaking anything, clear them or make bon ignore the field
+
+TODO
 
 ### Errors
 
-Serializing does not produce errors and always outputs a valid bon entry. With ``.Verbose`` configured for serialize in the used [bon environment](#bon-environment), the serializer might output comments with "warnings", for example when a type doesn't have reflection info.
+Serializing does not produce errors and always outputs a valid bon entry. With ``.Verbose`` configured for serialize in the used [bon environment](#serialize-flags), the serializer might output comments with "warnings", for example when a type doesn't have reflection info.
 
 Deserializing might error when encountering syntax errors or types that are not properly set up for use with bon - in the way that the parsed string demands (for example, polymorphism usage). These are, by default, printed to the console (or debug output for tests). The call returns ``.Err`` after encountering an error.
 
@@ -154,7 +174,7 @@ Similarly, multiple ``Bon.Serialize(...)`` calls can be performed on the same st
 
 #### Special values
 
-- ``?`` **Irrelevant value**: Means default or ignored value based on [bon environment](#bon-environment) configuration. Is only valid in arrays, as otherwise the entry could just be omitted to achieve the same result.
+- ``?`` **Irrelevant value**: Means default or ignored value based on [bon environment](#deserialize-flags) configuration. Is only valid in arrays, as otherwise the entry could just be omitted to achieve the same result.
 - ``default`` **Zero value** Value is explicitly zero.
 - ``null`` **Null reference**: Only valid on reference types.
 
@@ -330,7 +350,7 @@ The package builder does not know what options the individual importers might ta
 
 Type markers are enclosed by type brackets ``()``. They contain the full name of a beef type and are a prefix to a value. If the mentioned type is a struct, it must mean that the value is boxed. Type markers are necessary for polymorphed values (especially if the target type is abstract or an interface), optional on reference types if they are of the expected type already, and invalid on value types.
 
-For this to work with deserialization, bon needs to look up the types by name. Thus, a type that need to be serialized with polymorphism like this must be registered on the used [bon environment](#bon-environment) with ``env.RegisterPolyType(typeof(x))`` or by placing ``[BonPolyRegister]`` on the type.
+For this to work with deserialization, bon needs to look up the types by name. Thus, a type that need to be serialized with polymorphism like this must be registered on the used [bon environment](#poly-types) with ``env.RegisterPolyType(typeof(x))`` or by placing ``[BonPolyRegister]`` on the type.
 
 ```
 (System.Int)357,
@@ -346,9 +366,11 @@ For this to work with deserialization, bon needs to look up the types by name. T
 (System.Collections.List<int>)[55555, 6666]
 ```
 
+TODO document &(references) and :(pairs)
+
 ### Type setup
 
-For a type from your code to be used with bon, you simply have to place ``[BonTarget]`` on it. Fields with ``[BonIgnore]`` will never (except with ``.IgnoreAttributes``) be serialized and can never be deserialized into. Fields with ``[BonInclude]`` will be treated like other public fields. Private/Forbidden fields cannot be accessed in deserialization.
+In order to use a type with bon, ``[BonTarget]`` simply needs to be placed on it. By default, only public fields are serialized. Fields with ``[BonIgnore]`` will never (except with ``.IgnoreAttributes``) be serialized and can never be deserialized into. Fields with ``[BonInclude]`` will be treated like other public fields. Forbidden fields cannot be accessed in deserialization.
 
 ```bf
 [BonTarget]
@@ -367,24 +389,22 @@ class State
 	[BonIgnore]
 	public Scene gameScene;
 	
-	// Will not be serialized
+	// Will not be serialized (unless .IncludeNonPublic is set)
 	TimeSpan sessionPlaytime;
 }
 ```
-
-#### Allocation
-
-On deserialization,
 
 #### Polymorphism
 
 If the structure you want to serialize polymorphed references to this type, for example as an ``Object``, you also need to place ``[BonPolyRegister]`` on it as well.
 
-polymorphism handling
+TODO: polymorphism handling
 
 #### Manual setup
 
-If you 
+For bon to use a type, reflection data for them simply needs to be included in the build. Fields may be [marked](#type-setup) to affect bon's behaviour, for example excluding them.
+
+TODO
 
 the attributes BonTarget and BonPolyRegister don't need to be used
 
@@ -400,12 +420,45 @@ Newly created environments are independent from the global environment ``gBonEnv
 
 flags & handlers, how to reset default config
 
+TODO
+
+#### Serialize flags
+
+#### Deserialize flags
+
+#### Alloc handlers
+
+#### Type handlers
+
+#### Poly types
+
 ### Supported types
 
+Primitives and strings (as well as [some common corlib types](#supported-types), such as ``List<T>``) are supported by default.
+
+TODO
+
+#### Pointers
+
+Pointers are not supported.
+
+set .IgnorePointer or .IngnoreUnmentioned values to make bon ignore those fields (or all unmentioned fields) instead of defaulting them.
+
+explain + link to #type-setup & #deserialize-flags
+
 ### Extension
+
+TODO
 
 basically some pointers on writing handlers
 ..?
 -> serialize can never error. it either must be forced by default by the lib to be always present, or, if info is not provided, a valid "empty" value should be printed, like ``{}`` for objects without reflection info.
 
+example for "&somethingName" handler
+-> for example, for types like Asset<> registered, then can retrieve asset with name
+
 ### Integrated usage
+
+TODO
+
+integrated serialize / deserialize - demo with scene stuff?

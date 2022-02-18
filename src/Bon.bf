@@ -4,15 +4,6 @@ using Bon.Integrated;
 
 namespace Bon
 {
-	// integrated serialize / deserialize
-	// - demo with scene stuff?
-
-	// "&somethingName" example use
-	// -> for example, for types like Asset<> registered, then can retrieve asset with name
-
-	// TODO: something like... @property = dd to call the property setter in deserialize? maybe?
-	// TODO: explain errors on how do i?, shorten their messages here. also document unused symbols that may be used like & and :
-
 	static class Bon
 	{
 #if BON_PROVIDE_ERROR_MESSAGE

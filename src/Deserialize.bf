@@ -68,7 +68,7 @@ namespace Bon.Integrated
 			else if (valType.IsPointer)
 			{
 				if (!env.deserializeFlags.HasFlag(.IgnorePointers))
-					Error!("Cannot handle pointer values. Set .IgnorePointers or .IgnoreUnmentionedValues if are aware of this", reader, valType);
+					Error!("Cannot handle pointer values", reader, valType);
 				return .Ok;
 			}
 
@@ -145,7 +145,7 @@ namespace Bon.Integrated
 				if (fieldType.IsStruct)
 					Try!(CheckStructForRef(reader, ValueView(fieldType, (uint8*)val.dataPtr + f.MemberOffset), env));
 				else if (TypeHoldsObject!(fieldType) && !allowNulling)
-					Error!("Cannot null reference nested in struct. Set the .AllowReferenceNulling flag if bon can null them without leaking anything, clear them or make bon ignore the field", reader, fieldType);
+					Error!("Cannot null reference nested in struct", reader, fieldType);
 			}
 
 			return .Ok;
@@ -162,7 +162,7 @@ namespace Bon.Integrated
 					return .Ok;
 				}
 
-				Error!("Cannot null reference. Set the .AllowReferenceNulling flag if bon can null them without leaking anything, clear them or make bon ignore the field", reader, val.type);
+				Error!("Cannot null reference", reader, val.type);
 			}
 
 			return .Ok;
