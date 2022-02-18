@@ -195,7 +195,13 @@ namespace Bon.Integrated
 			outStr..Append(String.QuoteString(&string[[Unchecked]0], len, .. string)[(len + 1)...^2])
 				.Append('\'');
 		}
-		
+
+		[Inline]
+		public void Bool(bool bool)
+		{
+			outStr.Append(bool ? "true" : "false");
+		}
+
 		[Inline]
 		public void IrrelevantEntry()
 		{

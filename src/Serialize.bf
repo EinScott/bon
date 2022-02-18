@@ -642,7 +642,7 @@ namespace Bon.Integrated
 		{
 			bool boolean = *(bool*)val.dataPtr;
 			if (flags.HasFlag(.Verbose))
-				boolean.ToString(writer.outStr);
+				writer.Bool(boolean);
 			else (boolean ? 1 : 0).ToString(writer.outStr);
 		}
 	}
