@@ -8,3 +8,8 @@ DefaultNamespace = "Bon"
 Filter = "System.Collections.List<*>"
 ReflectAlwaysInclude = "IncludeFiltered"
 ReflectMethodFilter = "EnsureCapacity"
+
+[[Project.DistinctOptions]]
+Filter = "System.Collections.Dictionary<*,*>"
+ReflectAlwaysInclude = "IncludeAll"
+ReflectMethodFilter = "TryAdd"

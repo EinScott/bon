@@ -74,7 +74,7 @@ namespace Bon.Integrated
 					// Null the new chunk
 					Internal.MemSet(*(uint8**)itemsFieldPtr + currCount * arrType.Stride, 0, (count - currCount) * arrType.Stride);
 				}
-				else Deserialize.Error!("Method reflection data needed to enlargen List<> size. Include with [Reflect(.Methods)] extension List<T> {} or in build settings", null, t);
+				else Deserialize.Error!("EnsureCapacity method needs to be included & reflected to enlargen List<> size", null, t);
 			}
 			
 			SetValField!<int_cosize>(val, "mSize", (int_cosize)count);
@@ -145,9 +145,146 @@ namespace Bon.Integrated
 
 		public static Result<void> DictionaryDeserialize(BonReader reader, ValueView val, BonEnvironment env)
 		{
-			// TODO
+			let t = (SpecializedGenericType)val.type;
 
-			return .Err;
+			Debug.Assert(t.UnspecializedType == typeof(Dictionary<,>));
+
+			if (t.GetField("mCount") case .Err)
+				Deserialize.Error!("No reflection data for type!", null, t);
+
+			let keyType = t.GetGenericArg(0);
+			let valueType = t.GetGenericArg(1);
+			var count = GetValField!<int_cosize>(val, "mCount");
+
+			let classData = *(uint8**)val.dataPtr;
+			let entriesField = t.GetField("mEntries").Get();
+			var entriesPtr = *(uint8**)(classData + entriesField.[Inline]MemberOffset); // *(Entry**)
+			let entryType = entriesField.[Inline]FieldType.UnderlyingType;
+			let entryStride = entryType.Stride;
+			let entryHashCodeOffset = entryType.GetField("mHashCode").Get().[Inline]MemberOffset;
+			let entryKeyOffset = entryType.GetField("mKey").Get().[Inline]MemberOffset;
+			let entryValueOffset = entryType.GetField("mValue").Get().[Inline]MemberOffset;
+
+			MethodInfo tryAdd = default;
+			for (let m in t.GetMethods(.Instance))
+			{
+				if (m.Name == "TryAdd"
+					&& m.ParamCount == 3)
+				{
+					tryAdd = m;
+					break;
+				}
+			}
+
+			if (tryAdd == default)
+				Deserialize.Error!("TryAdd method needs to be included & reflected to deserialize Dictionary<,>", null, t);
+
+			List<(ValueView keyVal, ValueView valueVal, bool found)> current = null;
+
+			// get current dict cases to look up from
+			if (count > 0)
+			{
+				current = scope:: .(count);
+
+				// Copy from DictionarySerialize()
+
+				int64 index = 0;
+				int64 currentIndex = -1;
+
+				ENTRIES:while (true)
+				{
+					MOVENEXT:do
+					{
+						// This is basically stolen from Dictionary.Enumerator.MoveNext()
+						// -> go through the dict entries, break if we're done
+
+						while ((uint)index < (uint)count)
+						{
+							// mEntries[mIndex].mHashCode
+							if (*(int_cosize*)(entriesPtr + (index * entryStride) + entryHashCodeOffset) >= 0)
+							{
+								currentIndex = index;
+								index++;
+								break MOVENEXT;
+							}
+							index++;
+						}
+
+						break ENTRIES;
+					}
+
+					let keyVal = ValueView(keyType, entriesPtr + (currentIndex * entryStride) + entryKeyOffset);
+					let valueVal = ValueView(valueType, entriesPtr + (currentIndex * entryStride) + entryValueOffset);
+
+					current.Add((keyVal, valueVal, false));
+				}
+			}
+
+			Try!(reader.ArrayBlock());
+
+			ARRAY:while (reader.ArrayHasMore())
+			{
+				// We don't know where this goes yet... is this an
+				// existing entry we can set the value of? or a new one?
+				uint8[] keyData;
+				if (keyType.Size < 1024)
+					keyData = scope:ARRAY uint8[keyType.Size];
+				else
+				{
+					keyData = new uint8[keyType.Size];
+					defer:ARRAY delete keyData;
+				}
+				let keyVal = ValueView(keyType, &keyData[0]);
+
+				Try!(Deserialize.Value(reader, keyVal, env));
+				Try!(reader.Pair());
+
+				// TODO: sicne this passes... the error with mBuckets not being null in dict must be a bug in Invoke!!
+				Debug.Assert(*(int_cosize**)(classData + t.GetField("mBuckets").Get().MemberOffset) == null);
+				Debug.Assert(*(int_cosize**)((*(uint8**)val.ToVariantRefence().DataPtr) + t.GetField("mBuckets").Get().MemberOffset) == null);
+
+				uint8* keyPtr, valuePtr;
+				uint8** keyOutPtr = &keyPtr, valueOutPtr = &valuePtr;
+				if (tryAdd.Invoke(val.ToVariantRefence(), keyVal.ToVariantRefence(),
+					.CreateReference(tryAdd.GetParamType(1), &keyOutPtr),
+					.CreateReference(tryAdd.GetParamType(2), &valueOutPtr)) case .Ok(var boolRet))
+				{
+					// !TypeHoldsObject!(keyType)
+
+					Debug.FatalError();
+
+					if (*((bool*)boolRet.DataPtr))
+					{
+						
+					}
+					else
+					{
+
+					}
+
+					boolRet.Dispose();
+				}
+				else Deserialize.Error!("Failed to invoke TryAdd on Dictionary<,>!", null, t);
+
+				// is that key already in the dictionary? OR if the value is something we just allocated, just go for it. We can't dealloc it anyways
+				// -> get entry & store val loc
+				// -> mark entry as added (should keep track of those as well to prevent duplicates?)
+				// else
+				// -> add new entry, store val loc
+
+				//let valueVal = ValueView(valueType, valuePtr);
+				Try!(Deserialize.Value(reader, keyVal, env));
+
+				if (reader.ArrayHasMore())
+					Try!(reader.EntryEnd());
+			}
+
+			Try!(reader.ArrayBlockEnd());
+
+			// remove all current non-found entries (if that's possible)
+			Debug.FatalError();
+
+			return .Ok;
 		}
 
 		// We *could* add handlers for stuff like Guid, Version, Type, Sha256, md5,... here

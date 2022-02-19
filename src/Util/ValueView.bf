@@ -33,5 +33,8 @@ namespace Bon
 
 			return thing;
 		}
+
+		[Inline]
+		public Variant ToVariantRefence() => Variant.CreateReference(type, dataPtr);
 	}
 }

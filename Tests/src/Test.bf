@@ -156,7 +156,7 @@ namespace Bon.Tests
 			{
 				bool b = true;
 				let str = Bon.Serialize(b, .. scope .());
-				Test.Assert(str == bool.TrueString);
+				Test.Assert(str == "true");
 
 				bool ob = ?;
 				Test.Assert((Bon.Deserialize(ref ob, str) case .Ok) && ob == b);
@@ -1501,6 +1501,10 @@ namespace Bon.Tests
 				{
 					let str = Bon.Serialize(d, .. scope .());
 					Test.Assert(str == "[150:2,24:23]");
+
+					/*Dictionary<int,uint8> o = scope .();
+					Test.Assert((Bon.Deserialize(ref o, str) case .Ok)
+						&& d[150] == o[150] && d[24] == o[24]);*/
 				}
 
 				using (PushFlags(.Verbose))

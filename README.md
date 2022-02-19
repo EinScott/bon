@@ -1,6 +1,6 @@
 # bon
 
-bon is a **serialization library** for the [Beef programming language](https://github.com/beefytech/Beef) and is designed to easily serialize and deserialize beef data structures.
+Bon is a **serialization library** for the [Beef programming language](https://github.com/beefytech/Beef) and is designed to easily serialize and deserialize beef data structures.
 
 ## Basics
 
@@ -102,9 +102,7 @@ Try!(Bon.Deserialize(ref c, "{member=120}"));
 
 #### Nulling references
 
-Set the .AllowReferenceNulling flag if bon can null them without leaking anything, clear them or make bon ignore the field
-
-TODO
+By default, bon will not null references (as far as it can know). When getting an error from this, it is recommended that you clear structures manually. If bon is always deserializing into empty structures, this case will never occur. Alternatively, the ``.AllowReferenceNulling`` [serialize flag](#serialize-flags) will make bon blindly null references where necessary. This could be useful if the structure is not responsible for managing the object anyway.
 
 ### Errors
 
@@ -348,9 +346,7 @@ The package builder does not know what options the individual importers might ta
 
 #### Type markers
 
-Type markers are enclosed by type brackets ``()``. They contain the full name of a beef type and are a prefix to a value. If the mentioned type is a struct, it must mean that the value is boxed. Type markers are necessary for polymorphed values (especially if the target type is abstract or an interface), optional on reference types if they are of the expected type already, and invalid on value types.
-
-For this to work with deserialization, bon needs to look up the types by name. Thus, a type that need to be serialized with polymorphism like this must be registered on the used [bon environment](#poly-types) with ``env.RegisterPolyType(typeof(x))`` or by placing ``[BonPolyRegister]`` on the type.
+Type markers are enclosed by type brackets ``()``. They contain the full name of a beef type and are a prefix to a value. If the mentioned type is a struct, it must mean that the value is boxed. Type markers are necessary for [polymorphed](#polymorphism) values (especially if the target type is abstract or an interface), optional on reference types if they are of the expected type already, and invalid on value types.
 
 ```
 (System.Int)357,
@@ -366,7 +362,32 @@ For this to work with deserialization, bon needs to look up the types by name. T
 (System.Collections.List<int>)[55555, 6666]
 ```
 
-TODO document &(references) and :(pairs)
+#### Pairs
+
+A pair are two values seperated by a ``:``. The ``Dictionary`` [type handler](#type-handlers) expresses them as an array of pairs, for example.
+
+```
+[
+	.KilledPlayer: "Player was killed",
+	.PlayeWon: "You won!"
+],
+[
+	"swamp_enemy": {
+		hitPoints = 15,
+		meleeDamage = 3,
+		meleeInterval = 2f,
+	}
+]
+```
+
+#### References
+
+A pair starts with ``&`` and is followed by a string of characters made up of digits, numbers or underscores. References are unused by default but are available for custom [type handlers](#type-handlers) to use.
+
+```
+&tree_image,
+&0
+```
 
 ### Type setup
 
@@ -396,13 +417,35 @@ class State
 
 #### Polymorphism
 
-If the structure you want to serialize polymorphed references to this type, for example as an ``Object``, you also need to place ``[BonPolyRegister]`` on it as well.
+Polymorphed values denote their actual type as part of the serialized value in order to be deserialized properly. For this to be possible, bon needs to look up the types by name. So a type that need to be serialized with polymorphism like this must be registered on the used [bon environment](#poly-types) with ``env.RegisterPolyType(typeof(x))`` or by placing ``[BonPolyRegister]`` on the type.
 
-TODO: polymorphism handling
+For example, assuming that ``UIButton`` and ``UITextField`` are registered properly:
+```bf
+let l = new List<UIElement>() {
+	new UIButton() {
+		clickable = true
+	},
+	new UITextField() {
+		allowChars = .OnlyNumbers
+	}
+}
+```
+
+Will serialize into:
+```
+[
+	(UILib.UIButton){
+		clickable = true
+	}
+	(UILib.UITextField){
+		allowChars = .OnlyNumbers
+	}
+]
+```
 
 #### Manual setup
 
-For bon to use a type, reflection data for them simply needs to be included in the build. Fields may be [marked](#type-setup) to affect bon's behaviour, for example excluding them.
+For bon to use a type, reflection data for them simply needs to be included in the build.
 
 TODO
 

@@ -690,7 +690,7 @@ namespace Bon.Integrated
 			for (; refLen < inStr.Length; refLen++)
 			{
 				let char = inStr[refLen];
-				if (!char.IsLetterOrDigit && char != '_' && char != '.' && char != '[' && char != ']')
+				if (!char.IsLetterOrDigit && char != '_')
 					break;
 			}
 
