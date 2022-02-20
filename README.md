@@ -581,7 +581,8 @@ static Result<void> ResourceDeserialize(BonReader reader, ValueView val, BonEnvi
 	else Deserialize.Error!("Invalid resource path", reader, t);
 }
 
-gBonEnv.typeHandlers.Add(typeof(Resource<>), ((.)new => ResourceSerialize, (.)new => ResourceDeserialize));
+gBonEnv.typeHandlers.Add(typeof(Resource<>),
+	((.)new => ResourceSerialize, (.)new => ResourceDeserialize));
 ```
 
 ### Integrated usage
