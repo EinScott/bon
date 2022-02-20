@@ -418,7 +418,7 @@ A pair are two values separated by a ``:``. The ``Dictionary`` [type handler](#t
 
 #### References
 
-A pair starts with ``&`` and is followed by a string of characters made up of digits, numbers or underscores. References are unused by default but are available for custom [type handlers](#type-handlers) to use.
+A references starts with ``&`` and is followed by a string of characters made up of digits, numbers or underscores. References are unused by default but are available for custom [type handlers](#type-handlers) to use.
 
 ```
 &tree_image,
