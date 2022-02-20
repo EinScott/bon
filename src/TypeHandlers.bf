@@ -63,7 +63,7 @@ namespace Bon.Integrated
 			{
 				// The error handling here.. is a bit hacky..
 				if (Deserialize.DefaultArray(reader, arrType, *(uint8**)itemsFieldPtr + count * arrType.Stride, currCount - count, env) case .Err)
-					Deserialize.Error!("Couldn't shrink List (linked with previous error). Values in the back of the list that were to be defaulted likely couldn't be handled.", null, t);
+					Deserialize.Error!("Couldn't shrink List (linked with previous error). Values in the back of the list that were to be removed likely couldn't be handled.", null, t);
 
 				// Here we only set it if we ignore the unmentioned stuff
 				SetValField!<int_cosize>(val, "mSize", (int_cosize)count);
@@ -264,7 +264,6 @@ namespace Bon.Integrated
 				let keyVal = ValueView(keyType, &keyData[0]);
 
 				Try!(Deserialize.Value(reader, keyVal, env));
-				Try!(reader.Pair());
 
 				uint8* keyPtr = null, valuePtr = null;
 				uint8** keyOutPtr = &keyPtr, valueOutPtr = &valuePtr;
@@ -303,6 +302,7 @@ namespace Bon.Integrated
 				else Deserialize.Error!("Failed to invoke TryAdd on Dictionary<,>!", null, t);
 
 				let valueVal = ValueView(valueType, valuePtr);
+				Try!(reader.Pair());
 				Try!(Deserialize.Value(reader, valueVal, env));
 
 				if (reader.ArrayHasMore())
@@ -318,10 +318,11 @@ namespace Bon.Integrated
 					if (!e.found)
 					{
 						let entriesPtr = *(uint8**)(entriesFieldPtr);
-
-						Try!(Deserialize.MakeDefault(reader, ValueView(valueType, entriesPtr + e.valueOffset), env));
+						
 						let keyVal = ValueView(keyType, entriesPtr + e.keyOffset);
-						Try!(Deserialize.CheckCanDefault(reader, keyVal, env));
+						if ((Deserialize.MakeDefault(reader, ValueView(valueType, entriesPtr + e.valueOffset), env) case .Err)
+							|| Deserialize.CheckCanDefault(reader, keyVal, env) case .Err)
+							Deserialize.Error!("Couldn't shrink Dictionary (linked with previous error). Unmentioned pairs that were to be removed from the dictioanry likely couldn't be handled.", null, t);
 
 						if (remove.Invoke(.CreateReference(val.type, classData), keyVal.ToInvokeVariant()) case .Ok(var boolRet))
 							Debug.Assert(*((bool*)boolRet.DataPtr));
