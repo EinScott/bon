@@ -12,23 +12,6 @@ namespace Bon
 			let env = gBonEnv = new BonEnvironment();
 
 #if !BON_NO_DEFAULT_SETUP
-			env.RegisterPolyType!(typeof(Boolean));
-			env.RegisterPolyType!(typeof(Int));
-			env.RegisterPolyType!(typeof(Int64));
-			env.RegisterPolyType!(typeof(Int32));
-			env.RegisterPolyType!(typeof(Int16));
-			env.RegisterPolyType!(typeof(Int8));
-			env.RegisterPolyType!(typeof(UInt));
-			env.RegisterPolyType!(typeof(UInt64));
-			env.RegisterPolyType!(typeof(UInt32));
-			env.RegisterPolyType!(typeof(UInt16));
-			env.RegisterPolyType!(typeof(UInt8));
-			env.RegisterPolyType!(typeof(Char8));
-			env.RegisterPolyType!(typeof(Char16));
-			env.RegisterPolyType!(typeof(Char32));
-			env.RegisterPolyType!(typeof(Float));
-			env.RegisterPolyType!(typeof(Double));
-
 			env.typeHandlers.Add(typeof(String), ((.)new => StringSerialize, (.)new => StringDeserialize));
 			env.typeHandlers.Add(typeof(List<>), ((.)new => ListSerialize, (.)new => ListDeserialize));
 			env.typeHandlers.Add(typeof(Dictionary<,>), ((.)new => DictionarySerialize, (.)new => DictionaryDeserialize));

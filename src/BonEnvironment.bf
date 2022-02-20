@@ -29,7 +29,7 @@ namespace Bon
 		/// Fully set the state of the target structure based on the given string.
 		case Default = 0;
 
-		/// Values not mentioned in the given string will be ignored  instead of being nulled
+		/// Values not mentioned in the given string will be ignored instead of being nulled
 		/// (or causing erros for reference types). As a result, a successful deserialize
 		/// call does not necessarily mean that the target value is set exactly.
 		case IgnoreUnmentionedValues = 1 | IgnorePointers;
@@ -73,8 +73,7 @@ namespace Bon
 		/// or specific types, for example to reference existing ones or register allocated instances
 		/// elsewhere as well.
 		/// Functions can be registered by type or by unspecialized generic type, like List<> but keep in mind
-		/// that you need to deal with any specialized type indicated by the Variant. So you will probably still
-		/// have to use CreateObject reflection, but you can manage the reference at least
+		/// that you need to deal with any specialized type indicated by the ValueView.
 		public Dictionary<Type, MakeThingFunc> allocHandlers = new .() ~ DeleteDictionaryAndValues!(_);
 
 		/// Will be called for every deserialized StringView string. Must return a valid string view

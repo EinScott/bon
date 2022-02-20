@@ -56,28 +56,40 @@ Content of ``serialized``:
 
 The output omits default values by default (the deserializer will try to default unmentioned values accordingly). This, among other behaviors, is configurable just like with the ``.Verbose`` flag set above to produce a formatted and more extensive output. Bon's [configuration](#bon-environment) is contained in a ``BonEnvironment`` object, that is passed into every call. By default, the global environment ``gBonEnv`` is used.
 
-For an extensive overview of bon's capabilites, see [Documentation](#documentation) and [Tests](https://github.com/EinScott/bon/blob/main/Tests/src/Test.bf).
+For an extensive overview of bon's capabilities, see [Documentation](#documentation) and [Tests](https://github.com/EinScott/bon/blob/main/Tests/src/Test.bf).
 
 ## Documentation
 
 - [Serialization](#serialization)
 - [Deserialization](#deserialization)
-	- [how to handle reference nulling](#nulling-refrences)
+	- [Nulling references](#nulling-references)
+- [Supported types](#supported-types)
+	- [Pointers](#pointers)
 - [Errors](#errors)
 - [Syntax](#syntax)
+	- [Comments](#comments)
+	- [File-level](#file-level)
+	- [Special values](#special-values)
+	- [Primitives](#integer-numbers)
+	- [Enums](#enums)
+	- [Strings](#strings),
+	- [Object & Array bodies](#object-bodies)
+	- [Enum unions](#enum-unions)
+	- [Sub-file strings](#sub-file-strings)
+	- [Type markers](#type-markers)
+	- [Pairs](#pairs)
+	- [(References)](#references)
 - [Type setup](#type-setup)
-	- how to ex-/include fields from being serialized
+	- [Polymorphism](#polymorphism)
+	- [Manual setup](#manual-setup)
 - [Bon environment](#bon-environment)
-	- [how to control the allocation of certain types](#alloc-handlers)
-	- [how to serialize polymorphed references](#poly-types)
-- [Supported types](#supported-types)
-	- [how to make bon ignore pointer values](#pointers)
+	- [Serialize flags](#serialize-flags)
+	- [Deserialize flags](#deserialize-flags)
+	- [Allocate handlers](#allocate-handlers)
+	- [Type handlers](#type-handlers)
+	- [Poly types](#poly-types)
 - [Extension](#extension)
-	- how to write custom handlers for certain types
 - [Integrated usage](#integrated-usage)
-	- how to process arbitrary structures
-
-TODO add links to other sub-categories
 
 ### Serialization
 
@@ -103,6 +115,19 @@ Try!(Bon.Deserialize(ref c, "{member=120}"));
 #### Nulling references
 
 By default, bon will not null references (as far as it can know). When getting an error from this, it is recommended that you clear structures manually. If bon is always deserializing into empty structures, this case will never occur. Alternatively, the ``.AllowReferenceNulling`` [serialize flag](#serialize-flags) will make bon blindly null references where necessary. This could be useful if the structure is not responsible for managing the object anyway. In some cases, like re-sizing of collections, unintended nulling of entries when trying to shrink the collection to the defined size, another option would be to set the ``.IgnoreUnmentionedValues`` flag to just keep existing entries.
+
+### Supported types
+
+- Primitives (integers, floats, booleans, characters - and typed primitives)
+- Enums & Enum unions
+- String & StringView (though StringView requires some [setup](#allocate-handlers))
+- List
+- Dictionary
+- Custom structs/classes (if [marked](#type-setup) properly, may be processed through [type handlers](#type-handlers))
+
+#### Pointers
+
+Pointers are not supported. The ``.IgnorePointers`` or ``.IngnoreUnmentionedValues`` [deserialize flags](#deserialize-flags) can be set to make bon ignore those fields (or all unmentioned fields) instead of defaulting/trying to handle them. The field can also be [excluded](#type-setup) by putting ``[BonIgnore]`` on it.
 
 ### Errors
 
@@ -199,6 +224,17 @@ Integers are range-checked and can be denoted in decimal, hexadecimal, binary or
 0o270
 ```
 
+#### Floating point numbers
+
+Floating point numbers can be denoted in decimal. The ``f`` and ``d`` suffix is valid but ignored.
+
+```
+1,
+-1.59f,
+.3,
+1.57e-3
+```
+
 #### Chars
 
 Chars start and end with ``'`` and their contents are size- and range-checked. Escape sequences ``\', \", \\, \0, \a, \b, \f, \n, \r, \t, \v, \xFF, \u{10FFFF}`` are supported (based on the char size).
@@ -211,7 +247,7 @@ Chars start and end with ``'`` and their contents are size- and range-checked. E
 
 #### Enums
 
-Enums can be represented by integer numbers or the type's named cases. Named cases are preceeded by a ``.``, multiple cases can be combined with ``|``.
+Enums can be represented by integer numbers or the type's named cases. Named cases are preceded by a ``.``, multiple cases can be combined with ``|``.
 
 ```
 24,
@@ -364,7 +400,7 @@ Type markers are enclosed by type brackets ``()``. They contain the full name of
 
 #### Pairs
 
-A pair are two values seperated by a ``:``. The ``Dictionary`` [type handler](#type-handlers) expresses a dictionary as an array of pairs, for example.
+A pair are two values separated by a ``:``. The ``Dictionary`` [type handler](#type-handlers) expresses a dictionary as an array of pairs, for example.
 
 ```
 [
@@ -399,25 +435,32 @@ class State
 {
 	public GameMode currentMode;
 	public GameRules gameRules;
-	
+
 	public List<PlayerInfo> playerInfo ~ if (_ != null) delete _;
-	
-	// Will be serialized, allthough it's not public
+
+	// Will be serialized, although it's not public
 	[BonInclude]
 	String partyName ~ if (_ != null) delete _;
-	
-	// Will not be serialized, allthough it's public
+
+	// Will not be serialized, although it's public
 	[BonIgnore]
 	public Scene gameScene;
-	
+
 	// Will not be serialized (unless .IncludeNonPublic is set)
 	TimeSpan sessionPlaytime;
+}
+
+namespace System
+{
+	// We can no serialize Version!
+	[BonTarget]
+	extension Version {}
 }
 ```
 
 #### Polymorphism
 
-Polymorphed values denote their actual type as part of the serialized value in order to be deserialized properly. For this to be possible, bon needs to look up the types by name. So a type that need to be serialized with polymorphism like this must be registered on the used [bon environment](#poly-types) with ``env.RegisterPolyType(typeof(x))`` or by placing ``[BonPolyRegister]`` on the type.
+Polymorphed values denote their actual type as part of the serialized value in order to be deserialized properly. For this to be possible, bon needs to look up the types by name. So a type that need to be serialized with polymorphism like this must be registered on the used [bon environment](#poly-types) with ``env.RegisterPolyType(typeof(x))`` or by placing ``[BonPolyRegister]`` on the type. The first of the two options is especially useful for boxed struct types, which also need to be registered like this in case they should be serialized.
 
 For example, assuming that ``UIButton`` and ``UITextField`` are registered properly:
 ```bf
@@ -445,63 +488,204 @@ Will serialize into:
 
 #### Manual setup
 
-For bon to use a type, reflection data for them simply needs to be included in the build.
-
-TODO
-
-the attributes BonTarget and BonPolyRegister don't need to be used
-
-how to force reflection data in the IDE...
-
-BonTarget -> just does reflection force for you, can also be done in build settings
-BonPolyRegister -> types can also be registered into BonEnv manually by calling RegisterPolyType!(type)
+For bon to use a type, reflection data for them simply needs to be included in the build. That means using ``[BonTarget]`` and ``[BonPolyRegister]`` are merely convenience options. In some situations, using the project's or workspace's build settings to force reflection data might be easier.
 
 ### Bon environment
 
-editing a bon environment while a bon call on another thread is using it may lead to undefined behaviour. apart from that, bon is thread safe.
-Newly created environments are independent from the global environment ``gBonEnv``, but start out with a copy of its state.
+``BonEnvironment`` holds bon's configuration. The output behavior of a ``Bon.Serialize`` or ``Bon.Deserialize`` call is only dependent on the value or bon string as well as the bon environment passed in. By default, the global environment ``gBonEnv`` is used. Newly created environments are independent from the it, but start out with a copy of its state.
 
-flags & handlers, how to reset default config
+Bon doesn't mutate the state of bon environments over the course of serialize or deserialize calls, so using bon with the same environment on multiple threads is possible. But outside code editing a bon environment while a bon call on another thread is using it may lead to undefined behavior.
 
-TODO
+By default, ``gBonEnv`` contains the built-in [type handlers](#type-handlers). Starting out with an empty global bon environment is possible by defining ``BON_NO_DEFAULT_SETUP``. Types with ``[BonPolyRegister]`` on them are also registered on ``gBonEnv`` (in their static constructor).
 
 #### Serialize flags
 
+- **.Default** (0) None of the below flags is set.
+- **.IncludeNonPublic** Serialize non-public fields.
+- **.IncludeDefault** Serialize default values anyway. Fully prints the entire structure.
+- **.IgnoreAttributes** Ignore field attributes ``BonInclude`` and ``BonExclude``. Only recommended for debugging / print-only.
+- **.Verbose** Output intended for manual editing (or human reading). Will properly format the output, include annotations as comments in special cases (for example: this object body is empty because there is no reflection data for this type), and some things are less compressed for more clarity (like SizedArray const sizer, boolean as "true" or "false", enum as (combination of) cases when possible).
+
 #### Deserialize flags
 
-#### Alloc handlers
+- **.Default** (0) None of the below flags is set.
+- **.IgnoreUnmentionedValues** Values not mentioned (or denoted as irrelevant ``?``) in the bon string will be left as they are. Normally these values are nulled, as a value not being in included in serialization is normally zero, to replicate the exact state defined by the bon string.
+- **.IgnorePointers** Pointer values cannot be handled by bon. Setting this makes bon ignore the value instead of erroring. This flag is included in ``.IncludeUnmentionedValues``.
+- **.AllowReferenceNulling** Allows bon to null references, in case the an unmentioned value needs to set to default or a reference is occupied but points to an object of the wrong type. By default, bon errors as it avoids possibly leaking objects. See [nulling references](#nulling-references).
+
+#### Allocate handlers
+
+Allocate handlers are intended to give control about the allocation of reference types. By default, bon just allocates new instances where it needs to. These handlers can be registered by type directly, or as an unspeicalized generic type.
+
+```bf
+static void MakeString(ValueView refIntoVal)
+{
+	var str = new String();
+
+	// make stuff with string!
+
+	val.Assign(str);
+}
+
+gBonEnv.allocHandlers.Add(typeof(String), new => MakeString);
+```
+
+In order to deserialize ``StringView``, a ``stringViewHandler`` needs to be set. It needs to store the string contents somewhere and return a different valid string view to use.
+
+```bf
+static StringView HandleStringView(StringView view)
+{
+	return tempStrings.Add(.. new String(view));
+}
+
+gBonEnv.stringViewHandler = new => HandleStringView;
+```
 
 #### Type handlers
 
+Type handlers are called as part of the (de-) serialization process. They are responsible for writing a vale to or reconstructing it from a given string. For example, List and Dictionary support is implemented through type handlers. Handlers can be registered by type or unspecialized generic type, if the handler can support any specialized types of it. See [extension](#extension).
+
 #### Poly types
 
-### Supported types
-
-Primitives and strings (as well as [some common corlib types](#supported-types), such as ``List<T>``) are supported by default.
-
-TODO
-
-#### Pointers
-
-Pointers are not supported.
-
-set .IgnorePointer or .IngnoreUnmentioned values to make bon ignore those fields (or all unmentioned fields) instead of defaulting them.
-
-explain + link to #type-setup & #deserialize-flags
+``polyTypes`` is a lookup of type by its name. It's used to enable [polymorphism](#polymorphism). Use ``RegisterPolyType!(type)`` and ``TryGetPolyType(typeName, let type)`` to interact with it.
 
 ### Extension
 
-TODO
+Bon can be extended to support serialization and serialization of certain types through custom methods. The deserialize method should consume whatever the serialize method can emit at the very least. Various pieces of existing functionality in bon can aid in this process, normally hidden in the ``Bon.Integrated`` namespace. See the ``Serialize`` and ``Deserialize`` classes for exact functionality and available methods. Importantly, the serialize call can not fail, so custom handlers need to either crash entirely or emit a valid value before exiting. At the very least through something like ``{}``, ``[]`` or ``default``.
 
-basically some pointers on writing handlers
-..?
--> serialize can never error. it either must be forced by default by the lib to be always present, or, if info is not provided, a valid "empty" value should be printed, like ``{}`` for objects without reflection info.
+These methods can also be non-static, if bon were to be used very tightly with some system. In this simple example, Resource<> is some wrapper class for centrally managed resources that can be acquired by string, so it makes sense to just serialize that.
 
-example for "&somethingName" handler
--> for example, for types like Asset<> registered, then can retrieve asset with name
+```bf
+static void ResourceSerialize(BonWriter writer, ValueView val, BonEnvironment env)
+{
+	let t = (SpecializedGenericType)val.type;
+	Debug.Assert(t.UnspecializedType == typeof(Resource<>));
+
+	let name = val.Get<ResourceBase>().resourcePath;
+	writer.Reference(name);
+}
+
+static Result<void> ResourceDeserialize(BonReader reader, ValueView val, BonEnvironment env)
+{
+	let t = (SpecializedGenericType)val.type;
+	Debug.Assert(t.UnspecializedType == typeof(Resource<>));
+
+	let name = Try!(reader.Reference());
+
+	if (ResourceManager.TryGetResource(name) case .Ok(ResourceBase resource))
+	{
+		val.Assign(resource);
+
+		return .Ok;
+	}
+	else Deserialize.Error!("Invalid resource path", reader, t);
+}
+
+gBonEnv.typeHandlers.Add(typeof(Resource<>), ((.)new => ResourceSerialize, (.)new => ResourceDeserialize));
+```
 
 ### Integrated usage
 
-TODO
+Using the ``Bon.Integrated`` namespace, bon methods may be called directly to read *rather* arbitrary structures. It's a similar process to [extending](#extension) bon with a [type handler](#type-handlers) but the process starts with a custom method, instead of a custom method being called by bon.
 
-integrated serialize / deserialize - demo with scene stuff?
+For example, a method that serializes and deserializes a scene with entity IDs and their components, where a scene is represented as an array block with ``<entityId>:<componentArray>`` pairs that contain ``<type>-<componentBody>`` pairs, which are then handled as normal bon structs.
+
+```bf
+// For special usage, a separate env is often nice to have.
+BonEnvironment env = new .() ~ delete _;
+
+public void SerializeScene(String buffer)
+{
+	let writer = scope BonWriter(buffer, env.serializeFlags.HasFlag(.Verbose));
+	Serialize.Start(writer);
+
+	using (writer.ArrayBlock())
+	{
+		EntityId[] ent = null;
+
+		for (let entity in scene.EnumerateEntities())
+		{
+			SerializeEntity(writer, entity, buffer);
+		}
+	}
+
+	Serialize.End(writer);
+}
+
+void SerializeEntity(BonWriter writer, EntityId e, String buffer)
+{
+	var e;
+	Serialize.Value(writer, ValueView(typeof(EntityId), &e), env);
+	writer.Pair();
+
+	using (writer.ArrayBlock())
+	{
+		for (let entry in scene.GetComponentArrays())
+			if (entry.array.GetSerializeData(e, let data))
+			{
+				// Abuse of type markers to denote type... well it works!
+				Serialize.Type(writer, entry.type);
+				writer.Pair();
+				Serialize.Value(writer, ValueView(entry.type, data.Ptr), env);
+			}
+	}
+
+	writer.EntryEnd();
+}
+
+public Result<void> Deserialize(StringView buffer)
+{
+	let reader = scope BonReader();
+	Try!(reader.Setup(buffer));
+	Try!(Deserialize.Start(reader));
+
+	Try!(reader.ArrayBlock());
+	while (reader.ArrayHasMore())
+	{
+		Try!(DeserializeEntity(reader));
+
+		if (reader.ArrayHasMore())
+			Try!(reader.EntryEnd());
+	}
+	Try!(reader.ArrayBlockEnd());
+	Try!(Deserialize.End(reader));
+
+	return .Ok;
+}
+
+Result<void> DeserializeEntity(BonReader reader)
+{
+	EntityId e;
+	Try!(Deserialize.Value(reader, ValueView(typeof(EntityId), &e), env));
+
+	if (e >= MAX_ENTITIES)
+		Deserialize.Error!("EntityId out of range");
+
+	if (scene.CreateSpecificEntitiy(e) case .Err)
+		Deserialize.Error!("Requested entity already exists");
+
+	Try!(reader.Pair());
+
+	Try!(reader.ArrayBlock());
+	while (reader.ArrayHasMore())
+	{
+		// Get type from name
+		let typeName = Try!(reader.Type());
+		if (!env.TryGetPolyType(typeName, let componentType))
+			Deserialize.Error!("Failed to find component type in bonEnv.polyTypes");
+
+		let structMemory = scene.ReserveComponent(e, componentType);
+
+		Try!(reader.Pair());
+		Try!(Deserialize.Struct(reader, ValueView(componentType, structMemory.Ptr), env));
+
+		if (reader.ArrayHasMore())
+			Try!(reader.EntryEnd());
+	}
+	Try!(reader.ArrayBlockEnd());
+
+	return .Ok;
+}
+```
+
+Happy coding!

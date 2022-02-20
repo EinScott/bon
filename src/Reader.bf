@@ -401,7 +401,7 @@ namespace Bon.Integrated
 			var numLen = 0;
 			while (inStr.Length > numLen && {
 				let char = inStr[numLen];
-				char.IsNumber || char == '.' || char == '-' || char == 'e'
+				char.IsNumber || char == '.' || char == '-' || char == '+' || char == 'e'
 			})
 				numLen++;
 

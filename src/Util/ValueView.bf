@@ -21,7 +21,7 @@ namespace Bon
 
 		public void Assign<T>(T value)
 		{
-			Debug.Assert(type == typeof(T));
+			Debug.Assert(type.IsSubtypeOf(typeof(T)));
 			*(T*)dataPtr = value;
 		}
 
@@ -30,7 +30,7 @@ namespace Bon
 			var thing = *(T*)dataPtr;
 
 			if (typeof(T).IsObject)
-				Debug.Assert(thing.GetType().IsSubtypeOf(type));
+				Debug.Assert(thing.GetType().IsSubtypeOf(typeof(T)));
 
 			return thing;
 		}

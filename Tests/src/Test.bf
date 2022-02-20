@@ -56,7 +56,6 @@ namespace Bon.Tests
 
 		static void MakeString(ValueView val)
 		{
-			var val;
 			var str = strings.Add(.. new .());
 
 			val.Assign(str);
@@ -945,6 +944,8 @@ namespace Bon.Tests
 			}
 
 			{
+				gBonEnv.RegisterPolyType!(typeof(Int));
+
 				Object i = scope box int(357);
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == "(System.Int)357");
