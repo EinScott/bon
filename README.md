@@ -72,7 +72,7 @@ For an extensive overview of bon's capabilities, see [Documentation](#documentat
 	- [Special values](#special-values)
 	- [Primitives](#integer-numbers)
 	- [Enums](#enums)
-	- [Strings](#strings),
+	- [Strings](#strings)
 	- [Object & Array bodies](#object-bodies)
 	- [Enum unions](#enum-unions)
 	- [Sub-file strings](#sub-file-strings)
@@ -498,6 +498,8 @@ Bon doesn't mutate the state of bon environments over the course of serialize or
 
 By default, ``gBonEnv`` contains the built-in [type handlers](#type-handlers). Starting out with an empty global bon environment is possible by defining ``BON_NO_DEFAULT_SETUP``. Types with ``[BonPolyRegister]`` on them are also registered on ``gBonEnv`` (in their static constructor).
 
+See [BonEnvironment](https://github.com/EinScott/bon/blob/main/src/BonEnvironment.bf) for more details.
+
 #### Serialize flags
 
 - **.Default** (0) None of the below flags is set.
@@ -551,7 +553,7 @@ Type handlers are called as part of the (de-) serialization process. They are re
 
 ### Extension
 
-Bon can be extended to support serialization and serialization of certain types through custom methods. The deserialize method should consume whatever the serialize method can emit at the very least. Various pieces of existing functionality in bon can aid in this process, normally hidden in the ``Bon.Integrated`` namespace. See the ``Serialize`` and ``Deserialize`` classes for exact functionality and available methods. Importantly, the serialize call can not fail, so custom handlers need to either crash entirely or emit a valid value before exiting. At the very least through something like ``{}``, ``[]`` or ``default``.
+Bon can be extended to support serialization and serialization of certain types through custom methods. The deserialize method should consume whatever the serialize method can emit at the very least. Various pieces of existing functionality in bon can aid in this process, normally hidden in the ``Bon.Integrated`` namespace. See the [Serialize](https://github.com/EinScott/bon/blob/main/src/Serialize.bf) and [Deserialize](https://github.com/EinScott/bon/blob/main/src/Deserialize.bf) classes for exact functionality and available methods. Importantly, the serialize call can not fail, so custom handlers need to either crash entirely or emit a valid value before exiting. At the very least through something like ``{}``, ``[]`` or ``default``.
 
 These methods can also be non-static if bon were to be used very tightly with some system. In this simple example, Resource<> is some wrapper class for centrally managed resources that can be acquired by string, so it makes sense to just serialize that.
 
