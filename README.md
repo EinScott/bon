@@ -11,23 +11,23 @@ For example, assuming that all types used below use the build settings or the ``
 
 ```bf
 let structure = new State() {
-		currentMode = .Battle(5),
-		gameRules = .FriendlyFire | .RandomDrops,
-		playerInfo = new List<PlayerInfo>() {
-			.() {
-				gold = 231,
-				level = 2,
-				dead = false
-			},
-			.() {
-				gold = 0,
-				level = 1,
-				dead = true
-			},
-			default
-		},
-		partyName = new String("ChaosCrew")
-	};
+    currentMode = .Battle(5),
+    gameRules = .FriendlyFire | .RandomDrops,
+    playerInfo = new List<PlayerInfo>() {
+      .() {
+        gold = 231,
+        level = 2,
+        dead = false
+      },
+      .() {
+        gold = 0,
+        level = 1,
+        dead = true
+      },
+      default
+    },
+    partyName = new String("ChaosCrew")
+  };
 
 gBonEnv.serializeFlags |= .Verbose; // Output is formatted for editing & readability
 let serialized = Bon.Serialize(structure, .. scope String());
@@ -36,21 +36,21 @@ let serialized = Bon.Serialize(structure, .. scope String());
 Content of ``serialized``:
 ```
 {
-	gameRules = .FriendlyFire|.RandomDrops,
-	partyName = "ChaosCrew",
-	currentMode = .Battle{
-		stage = 5
-	},
-	playerInfo = <3>[
-		{
-			level = 2,
-			gold = 231
-		},
-		{
-			level = 1
-			dead = true,
-		}
-	]
+  gameRules = .FriendlyFire|.RandomDrops,
+  partyName = "ChaosCrew",
+  currentMode = .Battle{
+    stage = 5
+  },
+  playerInfo = <3>[
+    {
+      level = 2,
+      gold = 231
+    },
+    {
+      level = 1
+      dead = true,
+    }
+  ]
 }
 ```
 
@@ -62,32 +62,32 @@ For an extensive overview of bon's capabilities, see [Documentation](#documentat
 
 - [Serialization](#serialization)
 - [Deserialization](#deserialization)
-	- [Nulling references](#nulling-references)
+  - [Nulling references](#nulling-references)
 - [Supported types](#supported-types)
-	- [Pointers](#pointers)
+  - [Pointers](#pointers)
 - [Errors](#errors)
 - [Syntax](#syntax)
-	- [Comments](#comments)
-	- [File-level](#file-level)
-	- [Special values](#special-values)
-	- [Primitives](#integer-numbers)
-	- [Enums](#enums)
-	- [Strings](#strings)
-	- [Object & Array bodies](#object-bodies)
-	- [Enum unions](#enum-unions)
-	- [Sub-file strings](#sub-file-strings)
-	- [Type markers](#type-markers)
-	- [Pairs](#pairs)
-	- [(References)](#references)
+  - [Comments](#comments)
+  - [File-level](#file-level)
+  - [Special values](#special-values)
+  - [Primitives](#integer-numbers)
+  - [Enums](#enums)
+  - [Strings](#strings)
+  - [Object & Array bodies](#object-bodies)
+  - [Enum unions](#enum-unions)
+  - [Sub-file strings](#sub-file-strings)
+  - [Type markers](#type-markers)
+  - [Pairs](#pairs)
+  - [(References)](#references)
 - [Type setup](#type-setup)
-	- [Polymorphism](#polymorphism)
-	- [Manual setup](#manual-setup)
+  - [Polymorphism](#polymorphism)
+  - [Manual setup](#manual-setup)
 - [Bon environment](#bon-environment)
-	- [Serialize flags](#serialize-flags)
-	- [Deserialize flags](#deserialize-flags)
-	- [Allocate handlers](#allocate-handlers)
-	- [Type handlers](#type-handlers)
-	- [Poly types](#poly-types)
+  - [Serialize flags](#serialize-flags)
+  - [Deserialize flags](#deserialize-flags)
+  - [Allocate handlers](#allocate-handlers)
+  - [Type handlers](#type-handlers)
+  - [Poly types](#poly-types)
 - [Extension](#extension)
 - [Integrated usage](#integrated-usage)
 
@@ -171,8 +171,8 @@ Every file is a list of values. Most commonly, a file is only made up of one ele
 ```
 2,
 {
-	name = "Gustav",
-	profession = .Cook
+  name = "Gustav",
+  profession = .Cook
 }
 ```
 
@@ -184,9 +184,9 @@ CharacterInfo char = null;
 var context = Try!(Bon.Deserialize(ref version, bonString));
 if (version == 1)
 {
-	CharacterInfoLegacy old = null;
-	context = Try!(Bon.Deserialize(ref old, context));
-	char = old.ToNewFormat(.. new .());
+  CharacterInfoLegacy old = null;
+  context = Try!(Bon.Deserialize(ref old, context));
+  char = old.ToNewFormat(.. new .());
 }
 else context = Bon.Deserialize(ref char, context);
 
@@ -274,15 +274,15 @@ Object bodies are enclosed by object brackets ``{}``. They contain a sequence of
 
 ```
 {
-	dontCareArray = default,
-	name = "dave",
-	gameEntity = null,
-	stats = {
-		strength = 17,
-		dexterity = 10,
-		wisdom = 14,
-		charisma = 6
-	}
+  dontCareArray = default,
+  name = "dave",
+  gameEntity = null,
+  stats = {
+    strength = 17,
+    dexterity = 10,
+    wisdom = 14,
+    charisma = 6
+  }
 }
 ```
 
@@ -294,16 +294,16 @@ Array bodies are enclosed by array brackets ``[]``. They contain a list of ``<va
 [],
 [1, 2, 3],
 <1>[
-	{
-		event = .EncounterStart,
-		say = "hello there!"
-	}
+  {
+    event = .EncounterStart,
+    say = "hello there!"
+  }
 ],
 <15>[],
 <const 8>[
-	3,
-	2,
-	1
+  3,
+  2,
+  1
 ]
 ```
 
@@ -322,25 +322,25 @@ Bon sub-file strings start with ``$`` and are enclosed in array brackets ``[]``.
 
 ```
 {
-	packageName = "default",
-	importers = [
-		{
-			name = "image",
-			target = "sprites/*",
-			configStr = $[
-				// The importer's config file. In this case
-				// it only has this one entry.
-				{
-					compileAtlas = true,
-					atlas = {
-						padding = 2,
-						maxPageSize = 1024
-					}
-				}
-			]
-		},
-		// ...
-	]
+  packageName = "default",
+  importers = [
+    {
+      name = "image",
+      target = "sprites/*",
+      configStr = $[
+        // The importer's config file. In this case
+        // it only has this one entry.
+        {
+          compileAtlas = true,
+          atlas = {
+            padding = 2,
+            maxPageSize = 1024
+          }
+        }
+      ]
+    },
+    // ...
+  ]
 }
 ```
 
@@ -348,11 +348,11 @@ Here, ``importers[0].configStr`` will be equivalent to:
 
 ```
 {
-	compileAtlas = true,
-	atlas = {
-		padding = 2,
-		maxPageSize = 1024
-	}
+  compileAtlas = true,
+  atlas = {
+    padding = 2,
+    maxPageSize = 1024
+  }
 }
 ```
 
@@ -362,19 +362,19 @@ A structure like that might be used like this:
 PackageConfig config = null;
 defer
 {
-	// Deserialize might fail even before allocating our type
-	if (config != null)
-		delete config;
+  // Deserialize might fail even before allocating our type
+  if (config != null)
+    delete config;
 }
 Try!(Bon.Deserialize(ref config, bonString));
 
 for (let importStatement in config.importers)
 {
-	let importer = Try!(GetImporterByName(importStatement.name));
+  let importer = Try!(GetImporterByName(importStatement.name));
 
-	// Each importer has its own config structure, so we
-	// just pass the sub-file string in for it to do its thing.
-	Try!(importer.Run(importStatement.target, importStatement.configStr));
+  // Each importer has its own config structure, so we
+  // just pass the sub-file string in for it to do its thing.
+  Try!(importer.Run(importStatement.target, importStatement.configStr));
 }
 ```
 
@@ -387,11 +387,11 @@ Type markers are enclosed by type brackets ``()``. They contain the full name of
 ```
 (System.Int)357,
 (Something.Shape).Circle{
-	pos = {
-		x = 20,
-		y = 50
-	},
-	radius = 1
+  pos = {
+    x = 20,
+    y = 50
+  },
+  radius = 1
 },
 (Something.AClass){},
 (uint8[])<5>[1, 12, 63, 2, 52],
@@ -404,15 +404,15 @@ A pair are two values separated by a ``:``. The ``Dictionary`` [type handler](#t
 
 ```
 [
-	.KilledPlayer: "Player was killed",
-	.PlayeWon: "You won!"
+  .KilledPlayer: "Player was killed",
+  .PlayeWon: "You won!"
 ],
 [
-	"swamp_enemy": {
-		hitPoints = 15,
-		meleeDamage = 3,
-		meleeInterval = 2f,
-	}
+  "swamp_enemy": {
+    hitPoints = 15,
+    meleeDamage = 3,
+    meleeInterval = 2f,
+  }
 ]
 ```
 
@@ -433,28 +433,28 @@ In order to use a type with bon, ``[BonTarget]`` simply needs to be placed on it
 [BonTarget]
 class State
 {
-	public GameMode currentMode;
-	public GameRules gameRules;
+  public GameMode currentMode;
+  public GameRules gameRules;
 
-	public List<PlayerInfo> playerInfo ~ if (_ != null) delete _;
+  public List<PlayerInfo> playerInfo ~ if (_ != null) delete _;
 
-	// Will be serialized, although it's not public
-	[BonInclude]
-	String partyName ~ if (_ != null) delete _;
+  // Will be serialized, although it's not public
+  [BonInclude]
+  String partyName ~ if (_ != null) delete _;
 
-	// Will not be serialized, although it's public
-	[BonIgnore]
-	public Scene gameScene;
+  // Will not be serialized, although it's public
+  [BonIgnore]
+  public Scene gameScene;
 
-	// Will not be serialized (unless .IncludeNonPublic is set)
-	TimeSpan sessionPlaytime;
+  // Will not be serialized (unless .IncludeNonPublic is set)
+  TimeSpan sessionPlaytime;
 }
 
 namespace System
 {
-	// We can no serialize Version!
-	[BonTarget]
-	extension Version {}
+  // We can no serialize Version!
+  [BonTarget]
+  extension Version {}
 }
 ```
 
@@ -465,24 +465,24 @@ Polymorphed values denote their actual type as part of the serialized value in o
 For example, assuming that ``UIButton`` and ``UITextField`` are registered properly:
 ```bf
 let l = new List<UIElement>() {
-	new UIButton() {
-		clickable = true
-	},
-	new UITextField() {
-		allowChars = .OnlyNumbers
-	}
+  new UIButton() {
+    clickable = true
+  },
+  new UITextField() {
+    allowChars = .OnlyNumbers
+  }
 }
 ```
 
 Will serialize into:
 ```
 [
-	(UILib.UIButton){
-		clickable = true
-	}
-	(UILib.UITextField){
-		allowChars = .OnlyNumbers
-	}
+  (UILib.UIButton){
+    clickable = true
+  }
+  (UILib.UITextField){
+    allowChars = .OnlyNumbers
+  }
 ]
 ```
 
@@ -522,11 +522,11 @@ Allocate handlers are intended to give control about the allocation of reference
 ```bf
 static void MakeString(ValueView refIntoVal)
 {
-	var str = new String();
+  var str = new String();
 
-	// make stuff with string!
+  // make stuff with string!
 
-	val.Assign(str);
+  val.Assign(str);
 }
 
 gBonEnv.allocHandlers.Add(typeof(String), new => MakeString);
@@ -537,7 +537,7 @@ In order to deserialize ``StringView``, a ``stringViewHandler`` needs to be set.
 ```bf
 static StringView HandleStringView(StringView view)
 {
-	return tempStrings.Add(.. new String(view));
+  return tempStrings.Add(.. new String(view));
 }
 
 gBonEnv.stringViewHandler = new => HandleStringView;
@@ -560,31 +560,31 @@ These methods can also be non-static if bon were to be used very tightly with so
 ```bf
 static void ResourceSerialize(BonWriter writer, ValueView val, BonEnvironment env)
 {
-	let t = (SpecializedGenericType)val.type;
-	Debug.Assert(t.UnspecializedType == typeof(Resource<>));
+  let t = (SpecializedGenericType)val.type;
+  Debug.Assert(t.UnspecializedType == typeof(Resource<>));
 
-	let name = val.Get<ResourceBase>().resourcePath;
-	writer.Reference(name);
+  let name = val.Get<ResourceBase>().resourcePath;
+  writer.Reference(name);
 }
 
 static Result<void> ResourceDeserialize(BonReader reader, ValueView val, BonEnvironment env)
 {
-	let t = (SpecializedGenericType)val.type;
-	Debug.Assert(t.UnspecializedType == typeof(Resource<>));
+  let t = (SpecializedGenericType)val.type;
+  Debug.Assert(t.UnspecializedType == typeof(Resource<>));
 
-	let name = Try!(reader.Reference());
+  let name = Try!(reader.Reference());
 
-	if (ResourceManager.TryGetResource(name) case .Ok(ResourceBase resource))
-	{
-		val.Assign(resource);
+  if (ResourceManager.TryGetResource(name) case .Ok(ResourceBase resource))
+  {
+    val.Assign(resource);
 
-		return .Ok;
-	}
-	else Deserialize.Error!("Invalid resource path", reader, t);
+    return .Ok;
+  }
+  else Deserialize.Error!("Invalid resource path", reader, t);
 }
 
 gBonEnv.typeHandlers.Add(typeof(Resource<>),
-	((.)new => ResourceSerialize, (.)new => ResourceDeserialize));
+  ((.)new => ResourceSerialize, (.)new => ResourceDeserialize));
 ```
 
 ### Integrated usage
@@ -599,95 +599,95 @@ BonEnvironment env = new .() ~ delete _;
 
 public void SerializeScene(String buffer)
 {
-	let writer = scope BonWriter(buffer, env.serializeFlags.HasFlag(.Verbose));
-	Serialize.Start(writer);
+  let writer = scope BonWriter(buffer, env.serializeFlags.HasFlag(.Verbose));
+  Serialize.Start(writer);
 
-	using (writer.ArrayBlock())
-	{
-		EntityId[] ent = null;
+  using (writer.ArrayBlock())
+  {
+    EntityId[] ent = null;
 
-		for (let entity in scene.EnumerateEntities())
-		{
-			SerializeEntity(writer, entity, buffer);
-		}
-	}
+    for (let entity in scene.EnumerateEntities())
+    {
+      SerializeEntity(writer, entity, buffer);
+    }
+  }
 
-	Serialize.End(writer);
+  Serialize.End(writer);
 }
 
 void SerializeEntity(BonWriter writer, EntityId e, String buffer)
 {
-	var e;
-	Serialize.Value(writer, ValueView(typeof(EntityId), &e), env);
-	writer.Pair();
+  var e;
+  Serialize.Value(writer, ValueView(typeof(EntityId), &e), env);
+  writer.Pair();
 
-	using (writer.ArrayBlock())
-	{
-		for (let entry in scene.GetComponentArrays())
-			if (entry.array.GetSerializeData(e, let data))
-			{
-				// Abuse of type markers to denote type... well it works!
-				Serialize.Type(writer, entry.type);
-				writer.Pair();
-				Serialize.Value(writer, ValueView(entry.type, data.Ptr), env);
-			}
-	}
+  using (writer.ArrayBlock())
+  {
+    for (let entry in scene.GetComponentArrays())
+      if (entry.array.GetSerializeData(e, let data))
+      {
+        // Abuse of type markers to denote type... well it works!
+        Serialize.Type(writer, entry.type);
+        writer.Pair();
+        Serialize.Value(writer, ValueView(entry.type, data.Ptr), env);
+      }
+  }
 
-	writer.EntryEnd();
+  writer.EntryEnd();
 }
 
 public Result<void> Deserialize(StringView buffer)
 {
-	let reader = scope BonReader();
-	Try!(reader.Setup(buffer));
-	Try!(Deserialize.Start(reader));
+  let reader = scope BonReader();
+  Try!(reader.Setup(buffer));
+  Try!(Deserialize.Start(reader));
 
-	Try!(reader.ArrayBlock());
-	while (reader.ArrayHasMore())
-	{
-		Try!(DeserializeEntity(reader));
+  Try!(reader.ArrayBlock());
+  while (reader.ArrayHasMore())
+  {
+    Try!(DeserializeEntity(reader));
 
-		if (reader.ArrayHasMore())
-			Try!(reader.EntryEnd());
-	}
-	Try!(reader.ArrayBlockEnd());
-	Try!(Deserialize.End(reader));
+    if (reader.ArrayHasMore())
+      Try!(reader.EntryEnd());
+  }
+  Try!(reader.ArrayBlockEnd());
+  Try!(Deserialize.End(reader));
 
-	return .Ok;
+  return .Ok;
 }
 
 Result<void> DeserializeEntity(BonReader reader)
 {
-	EntityId e;
-	Try!(Deserialize.Value(reader, ValueView(typeof(EntityId), &e), env));
+  EntityId e;
+  Try!(Deserialize.Value(reader, ValueView(typeof(EntityId), &e), env));
 
-	if (e >= MAX_ENTITIES)
-		Deserialize.Error!("EntityId out of range");
+  if (e >= MAX_ENTITIES)
+    Deserialize.Error!("EntityId out of range");
 
-	if (scene.CreateSpecificEntitiy(e) case .Err)
-		Deserialize.Error!("Requested entity already exists");
+  if (scene.CreateSpecificEntitiy(e) case .Err)
+    Deserialize.Error!("Requested entity already exists");
 
-	Try!(reader.Pair());
+  Try!(reader.Pair());
 
-	Try!(reader.ArrayBlock());
-	while (reader.ArrayHasMore())
-	{
-		// Get type from name
-		let typeName = Try!(reader.Type());
-		if (!env.TryGetPolyType(typeName, let componentType))
-			Deserialize.Error!("Failed to find component type in bonEnv.polyTypes");
+  Try!(reader.ArrayBlock());
+  while (reader.ArrayHasMore())
+  {
+    // Get type from name
+    let typeName = Try!(reader.Type());
+    if (!env.TryGetPolyType(typeName, let componentType))
+      Deserialize.Error!("Failed to find component type in bonEnv.polyTypes");
 
-		let structMemory = scene.ReserveComponent(e, componentType);
+    let structMemory = scene.ReserveComponent(e, componentType);
 
-		Try!(reader.Pair());
-		Try!(Deserialize.Struct(reader, ValueView(componentType, structMemory.Ptr), env));
+    Try!(reader.Pair());
+    Try!(Deserialize.Struct(reader, ValueView(componentType, structMemory.Ptr), env));
 
-		if (reader.ArrayHasMore())
-			Try!(reader.EntryEnd());
-	}
-	Try!(reader.ArrayBlockEnd());
+    if (reader.ArrayHasMore())
+      Try!(reader.EntryEnd());
+  }
+  Try!(reader.ArrayBlockEnd());
 
-	return .Ok;
+  return .Ok;
 }
 ```
 
