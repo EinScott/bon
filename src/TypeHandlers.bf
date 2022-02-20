@@ -313,8 +313,6 @@ namespace Bon.Integrated
 
 			if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
 			{
-				let holdsObject = TypeHoldsObject!(keyType);
-
 				for (let e in current)
 				{
 					if (!e.found)
@@ -323,13 +321,7 @@ namespace Bon.Integrated
 
 						Try!(Deserialize.MakeDefault(reader, ValueView(valueType, entriesPtr + e.valueOffset), env));
 						let keyVal = ValueView(keyType, entriesPtr + e.keyOffset);
-						if (!env.deserializeFlags.HasFlag(.AllowReferenceNulling))
-						{
-							// Basically the check that MakeDefault does... but we still need the key value in Remove()
-							if (holdsObject)
-								Deserialize.Error!("Cannot null reference", null, keyType);
-							else Try!(Deserialize.CheckStructForRef(reader, keyVal, env));
-						}
+						Try!(Deserialize.CheckCanDefault(reader, keyVal, env));
 
 						if (remove.Invoke(.CreateReference(val.type, classData), keyVal.ToInvokeVariant()) case .Ok(var boolRet))
 							Debug.Assert(*((bool*)boolRet.DataPtr));

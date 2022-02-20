@@ -49,28 +49,8 @@ namespace Bon.Integrated
 		{
 			if (ValueDataIsZero!(val))
 				return .Ok;
-			
-			let valType = val.type;
-			if (valType.IsStruct)
-			{
-				if (!env.deserializeFlags.HasFlag(.AllowReferenceNulling))
-					Try!(CheckStructForRef(reader, val, env));
-			}
-			else if (valType is SizedArrayType)
-			{
-				let t = (SizedArrayType)valType;
-				Try!(DefaultArray(reader, t.UnderlyingType, val.dataPtr, t.ElementCount, env));
-			}
-			else if (TypeHoldsObject!(valType))
-			{
-				return NullInstanceRef(reader, val, env);
-			}
-			else if (valType.IsPointer)
-			{
-				if (!env.deserializeFlags.HasFlag(.IgnorePointers))
-					Error!("Cannot handle pointer values", reader, valType);
-				return .Ok;
-			}
+
+			Try!(CheckCanDefault(reader, val, env));
 
 			let ptr = val.dataPtr;
 			let size = val.type.Size;
@@ -134,6 +114,46 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
+		public static Result<void> CheckCanDefault(BonReader reader, ValueView val, BonEnvironment env)
+		{
+			if (ValueDataIsZero!(val))
+				return .Ok;
+
+			let valType = val.type;
+			if (valType.IsStruct)
+			{
+				if (!env.deserializeFlags.HasFlag(.AllowReferenceNulling))
+					Try!(CheckStructForRef(reader, val, env));
+			}
+			else if (valType is SizedArrayType)
+			{
+				let t = (SizedArrayType)valType;
+				let arrType = t.UnderlyingType;
+				let count = t.ElementCount;
+				var ptr = (uint8*)val.dataPtr;
+
+				for (let j < count)
+				{
+					Try!(CheckCanDefault(reader, ValueView(arrType, ptr), env));
+
+					ptr += arrType.Stride;
+				}
+				return .Ok;
+			}
+			else if (TypeHoldsObject!(valType))
+			{
+				if (!env.deserializeFlags.HasFlag(.AllowReferenceNulling))
+					Error!("Cannot null reference", reader, valType);
+			}
+			else if (valType.IsPointer)
+			{
+				if (!env.deserializeFlags.HasFlag(.IgnorePointers))
+					Error!("Cannot handle pointer values", reader, valType);
+			}
+
+			return .Ok;
+		}
+
 		public static Result<void> CheckStructForRef(BonReader reader, ValueView val, BonEnvironment env)
 		{
 			let allowNulling = env.deserializeFlags.HasFlag(.AllowReferenceNulling);
@@ -146,6 +166,8 @@ namespace Bon.Integrated
 					Try!(CheckStructForRef(reader, ValueView(fieldType, (uint8*)val.dataPtr + f.MemberOffset), env));
 				else if (TypeHoldsObject!(fieldType) && !allowNulling)
 					Error!("Cannot null reference nested in struct", reader, fieldType);
+				else if (val.type.IsPointer)
+					Error!("Cannot handle pointer values nested in struct", reader, fieldType);
 			}
 
 			return .Ok;
