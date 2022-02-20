@@ -102,7 +102,7 @@ Try!(Bon.Deserialize(ref c, "{member=120}"));
 
 #### Nulling references
 
-By default, bon will not null references (as far as it can know). When getting an error from this, it is recommended that you clear structures manually. If bon is always deserializing into empty structures, this case will never occur. Alternatively, the ``.AllowReferenceNulling`` [serialize flag](#serialize-flags) will make bon blindly null references where necessary. This could be useful if the structure is not responsible for managing the object anyway.
+By default, bon will not null references (as far as it can know). When getting an error from this, it is recommended that you clear structures manually. If bon is always deserializing into empty structures, this case will never occur. Alternatively, the ``.AllowReferenceNulling`` [serialize flag](#serialize-flags) will make bon blindly null references where necessary. This could be useful if the structure is not responsible for managing the object anyway. In some cases, like re-sizing of collections, unintended nulling of entries when trying to shrink the collection to the defined size, another option would be to set the ``.IgnoreUnmentionedValues`` flag to just keep existing entries.
 
 ### Errors
 
@@ -364,7 +364,7 @@ Type markers are enclosed by type brackets ``()``. They contain the full name of
 
 #### Pairs
 
-A pair are two values seperated by a ``:``. The ``Dictionary`` [type handler](#type-handlers) expresses them as an array of pairs, for example.
+A pair are two values seperated by a ``:``. The ``Dictionary`` [type handler](#type-handlers) expresses a dictionary as an array of pairs, for example.
 
 ```
 [

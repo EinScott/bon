@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using Bon.Integrated;
 
 namespace Bon
 {
@@ -35,6 +36,7 @@ namespace Bon
 		}
 
 		[Inline]
-		public Variant ToVariantRefence() => Variant.CreateReference(type, dataPtr);
+		// Invoke expects a pointer to the data, not the "field"/pointer to it. So for objects, we need to lower by one level.
+		public Variant ToInvokeVariant() => Variant.CreateReference(type, TypeHoldsObject!(type) ? *(void**)dataPtr : dataPtr);
 	}
 }

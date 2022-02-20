@@ -59,11 +59,14 @@ namespace Bon.Integrated
 			let arrType = t.GetGenericArg(0);
 			let itemsFieldPtr = GetValFieldPtr!(val, "mItems");
 
-			if (currCount > count)
+			if (currCount > count && !env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
 			{
 				// The error handling here.. is a bit hacky..
 				if (Deserialize.DefaultArray(reader, arrType, *(uint8**)itemsFieldPtr + count * arrType.Stride, currCount - count, env) case .Err)
 					Deserialize.Error!("Couldn't shrink List (linked with previous error). Values in the back of the list that were to be defaulted likely couldn't be handled.", null, t);
+
+				// Here we only set it if we ignore the unmentioned stuff
+				SetValField!<int_cosize>(val, "mSize", (int_cosize)count);
 			}
 			else if (currCount < count)
 			{
@@ -75,10 +78,10 @@ namespace Bon.Integrated
 					Internal.MemSet(*(uint8**)itemsFieldPtr + currCount * arrType.Stride, 0, (count - currCount) * arrType.Stride);
 				}
 				else Deserialize.Error!("EnsureCapacity method needs to be included & reflected to enlargen List<> size", null, t);
+
+				SetValField!<int_cosize>(val, "mSize", (int_cosize)count);
 			}
 			
-			SetValField!<int_cosize>(val, "mSize", (int_cosize)count);
-
 			// Since mItems is a pointer...
 			let arrPtr = *(void**)itemsFieldPtr;
 			Try!(Deserialize.Array(reader, arrType, arrPtr, count, env));
@@ -102,9 +105,20 @@ namespace Bon.Integrated
 			var entriesPtr = *(uint8**)(classData + entriesField.[Inline]MemberOffset); // *(Entry**)
 			let entryType = entriesField.[Inline]FieldType.UnderlyingType;
 			let entryStride = entryType.Stride;
-			let entryHashCodeOffset = entryType.GetField("mHashCode").Get().[Inline]MemberOffset;
-			let entryKeyOffset = entryType.GetField("mKey").Get().[Inline]MemberOffset;
-			let entryValueOffset = entryType.GetField("mValue").Get().[Inline]MemberOffset;
+			int entryHashCodeOffset = -1, entryKeyOffset = -1, entryValueOffset = -1;
+			for (let f in entryType.GetFields(.Instance))
+			{
+				switch (f.[Inline]Name)
+				{
+				case "mHashCode":
+					entryHashCodeOffset = f.[Inline]MemberOffset;
+				case "mKey":
+					entryKeyOffset = f.[Inline]MemberOffset;
+				case "mValue":
+					entryValueOffset = f.[Inline]MemberOffset;
+				}
+			}
+			Runtime.Assert(entryHashCodeOffset != -1 && entryKeyOffset != -1 && entryValueOffset != -1);
 
 			using (writer.ArrayBlock())
 			{
@@ -157,36 +171,52 @@ namespace Bon.Integrated
 			var count = GetValField!<int_cosize>(val, "mCount");
 
 			let classData = *(uint8**)val.dataPtr;
-			let entriesField = t.GetField("mEntries").Get();
-			var entriesPtr = *(uint8**)(classData + entriesField.[Inline]MemberOffset); // *(Entry**)
-			let entryType = entriesField.[Inline]FieldType.UnderlyingType;
-			let entryStride = entryType.Stride;
-			let entryHashCodeOffset = entryType.GetField("mHashCode").Get().[Inline]MemberOffset;
-			let entryKeyOffset = entryType.GetField("mKey").Get().[Inline]MemberOffset;
-			let entryValueOffset = entryType.GetField("mValue").Get().[Inline]MemberOffset;
 
 			MethodInfo tryAdd = default;
+			MethodInfo remove = default;
 			for (let m in t.GetMethods(.Instance))
 			{
 				if (m.Name == "TryAdd"
 					&& m.ParamCount == 3)
-				{
 					tryAdd = m;
+				else if (m.Name == "Remove"
+					&& m.ParamCount == 1 && m.GetParamType(0) == keyType)
+					remove = m;
+
+				if (tryAdd != default && remove != default)
 					break;
-				}
 			}
 
-			if (tryAdd == default)
-				Deserialize.Error!("TryAdd method needs to be included & reflected to deserialize Dictionary<,>", null, t);
+			if (tryAdd == default || remove == default)
+				Deserialize.Error!("TryAdd and Remove methods need to be included & reflected to deserialize Dictionary<,>", null, t);
 
-			List<(ValueView keyVal, ValueView valueVal, bool found)> current = null;
+			// Relative positions of entries stay the same regardless of realloc
+			List<(int keyOffset, int valueOffset, bool found)> current = scope .(Math.Max(count, 16));
+			
+			let entriesField = t.GetField("mEntries").Get();
+			var entriesFieldPtr = classData + entriesField.[Inline]MemberOffset; // Entry**
 
-			// get current dict cases to look up from
 			if (count > 0)
 			{
-				current = scope:: .(count);
+				// Copy from DictionarySerialize()... mostly
 
-				// Copy from DictionarySerialize()
+				let entriesPtr = *(uint8**)(entriesFieldPtr); // *(Entry**)
+				let entryType = entriesField.[Inline]FieldType.UnderlyingType;
+				let entryStride = entryType.Stride;
+				int entryHashCodeOffset = -1, entryKeyOffset = -1, entryValueOffset = -1;
+				for (let f in entryType.GetFields(.Instance))
+				{
+					switch (f.[Inline]Name)
+					{
+					case "mHashCode":
+						entryHashCodeOffset = f.[Inline]MemberOffset;
+					case "mKey":
+						entryKeyOffset = f.[Inline]MemberOffset;
+					case "mValue":
+						entryValueOffset = f.[Inline]MemberOffset;
+					}
+				}
+				Runtime.Assert(entryHashCodeOffset != -1 && entryKeyOffset != -1 && entryValueOffset != -1);
 
 				int64 index = 0;
 				int64 currentIndex = -1;
@@ -213,10 +243,7 @@ namespace Bon.Integrated
 						break ENTRIES;
 					}
 
-					let keyVal = ValueView(keyType, entriesPtr + (currentIndex * entryStride) + entryKeyOffset);
-					let valueVal = ValueView(valueType, entriesPtr + (currentIndex * entryStride) + entryValueOffset);
-
-					current.Add((keyVal, valueVal, false));
+					current.Add(((currentIndex * entryStride) + entryKeyOffset, (currentIndex * entryStride) + entryValueOffset, false));
 				}
 			}
 
@@ -239,41 +266,44 @@ namespace Bon.Integrated
 				Try!(Deserialize.Value(reader, keyVal, env));
 				Try!(reader.Pair());
 
-				// TODO: sicne this passes... the error with mBuckets not being null in dict must be a bug in Invoke!!
-				Debug.Assert(*(int_cosize**)(classData + t.GetField("mBuckets").Get().MemberOffset) == null);
-				Debug.Assert(*(int_cosize**)((*(uint8**)val.ToVariantRefence().DataPtr) + t.GetField("mBuckets").Get().MemberOffset) == null);
-
-				uint8* keyPtr, valuePtr;
+				uint8* keyPtr = null, valuePtr = null;
 				uint8** keyOutPtr = &keyPtr, valueOutPtr = &valuePtr;
-				if (tryAdd.Invoke(val.ToVariantRefence(), keyVal.ToVariantRefence(),
+				if (tryAdd.Invoke(.CreateReference(val.type, classData), keyVal.ToInvokeVariant(),
 					.CreateReference(tryAdd.GetParamType(1), &keyOutPtr),
 					.CreateReference(tryAdd.GetParamType(2), &valueOutPtr)) case .Ok(var boolRet))
 				{
-					// !TypeHoldsObject!(keyType)
+					let entriesPtr = *(uint8**)(entriesFieldPtr);
 
-					Debug.FatalError();
-
-					if (*((bool*)boolRet.DataPtr))
+					for (var e in ref current)
 					{
-						
+						if (keyPtr == entriesPtr + e.keyOffset)
+						{
+							if (!e.found)
+							{
+								e.found = true;
+								break;
+							}
+							else Deserialize.Error!("Dictionary key was already added", reader, t);
+						}
 					}
-					else
+
+					// Returns is a bool. No need to dispose of that Variant explicitly either
+					if (!*((bool*)boolRet.DataPtr))
 					{
+						// This is definitely not very ideal. But we cannot try to deserialize directly into
+						// an existing key, because we only get it with the hash. So we need to try to clear
+						// it here in case it's something we can't null.
+						Try!(Deserialize.MakeDefault(reader, ValueView(keyType, keyPtr), env));
 
+						// Copy key data into there just in case (maybe not everything affects the hash)
+						Internal.MemCpy(keyPtr, &keyData[0], keyData.Count);
 					}
-
-					boolRet.Dispose();
+					else current.Add((keyPtr - entriesPtr, valuePtr - entriesPtr, true));
 				}
 				else Deserialize.Error!("Failed to invoke TryAdd on Dictionary<,>!", null, t);
 
-				// is that key already in the dictionary? OR if the value is something we just allocated, just go for it. We can't dealloc it anyways
-				// -> get entry & store val loc
-				// -> mark entry as added (should keep track of those as well to prevent duplicates?)
-				// else
-				// -> add new entry, store val loc
-
-				//let valueVal = ValueView(valueType, valuePtr);
-				Try!(Deserialize.Value(reader, keyVal, env));
+				let valueVal = ValueView(valueType, valuePtr);
+				Try!(Deserialize.Value(reader, valueVal, env));
 
 				if (reader.ArrayHasMore())
 					Try!(reader.EntryEnd());
@@ -281,8 +311,35 @@ namespace Bon.Integrated
 
 			Try!(reader.ArrayBlockEnd());
 
-			// remove all current non-found entries (if that's possible)
-			Debug.FatalError();
+			if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+			{
+				let holdsObject = TypeHoldsObject!(keyType);
+
+				for (let e in current)
+				{
+					if (!e.found)
+					{
+						let entriesPtr = *(uint8**)(entriesFieldPtr);
+
+						Try!(Deserialize.MakeDefault(reader, ValueView(valueType, entriesPtr + e.valueOffset), env));
+						let keyVal = ValueView(keyType, entriesPtr + e.keyOffset);
+						if (!env.deserializeFlags.HasFlag(.AllowReferenceNulling))
+						{
+							// Basically the check that MakeDefault does... but we still need the key value in Remove()
+							if (holdsObject)
+								Deserialize.Error!("Cannot null reference", null, keyType);
+							else Try!(Deserialize.CheckStructForRef(reader, keyVal, env));
+						}
+
+						if (remove.Invoke(.CreateReference(val.type, classData), keyVal.ToInvokeVariant()) case .Ok(var boolRet))
+							Debug.Assert(*((bool*)boolRet.DataPtr));
+						else Deserialize.Error!("Failed to invoke Remove on Dictionary<,>!", null, t);
+
+						// Null it, we checked before
+						Internal.MemSet(keyVal.dataPtr, 0, keyVal.type.Size);
+					}
+				}
+			}
 
 			return .Ok;
 		}

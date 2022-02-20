@@ -1434,6 +1434,22 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && ArrayEqual!(l, lo));
 			}
 
+			using (PushDeFlags(.IgnoreUnmentionedValues))
+			{
+				let l = scope List<int32>()
+					{
+						1, 2, 3, 8, 9, 10, 100, 1000, 10000, 0, 0
+					};
+				let str = Bon.Serialize(l, .. scope .());
+				Test.Assert(str == "<11>[1,2,3,8,9,10,100,1000,10000]");
+
+				List<int32> lo = scope List<int32>()
+					{
+						2, 3, 4, 5, 6, 100, 200, 300, 400, 500, 1000, 2500, 8000, 10000 // oops, already in use
+					};
+				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && lo.Count == 14 && lo[5] == l[5] && lo[10] == 1000);
+			}
+
 			{
 				let l = scope List<AlignStruct>()
 					{
@@ -1450,27 +1466,27 @@ namespace Bon.Tests
 			}
 
 			{
-				let l = scope List<AlignStruct>()
+				let l = scope List<AlignStruct>(3)
 					{
 						AlignStruct{a=1,b=2}, .{}, .{a=12,b=150}
 					};
 				let str = Bon.Serialize(l, .. scope .());
 				Test.Assert(str == "[{a=1,b=2},?,{a=12,b=150}]");
 
-				List<AlignStruct> lo = scope List<AlignStruct>();
+				List<AlignStruct> lo = scope List<AlignStruct>(3);
 				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && ArrayEqual!(l, lo));
 			}
 
 			{
 				gBonEnv.RegisterPolyType!(typeof(List<int32>));
-				Object l = scope List<int32>()
+				Object l = scope List<int32>(11)
 					{
 						1, 2, 3, 8, 9, 10, 100, 1000, 10000, 0, 0
 					};
 				let str = Bon.Serialize(l, .. scope .());
 				Test.Assert(str == "(System.Collections.List<int32>)<11>[1,2,3,8,9,10,100,1000,10000]");
 
-				Object lo = scope List<int32>()
+				Object lo = scope List<int32>(14)
 					{
 						2, 3, 4, 5, 6, 100, 200, 300, 400, 500, 1000, 2500, 8000, 10000 // oops, already in use
 					};
@@ -1493,8 +1509,10 @@ namespace Bon.Tests
 		[Test]
 		static void Dictionary()
 		{
+			SetupStringHandler!();
+
 			{
-				Dictionary<int,uint8> d = scope .();
+				Dictionary<int,uint8> d = scope .(2);
 				d.Add(150, 2);
 				d.Add(24, 23);
 
@@ -1502,9 +1520,40 @@ namespace Bon.Tests
 					let str = Bon.Serialize(d, .. scope .());
 					Test.Assert(str == "[150:2,24:23]");
 
-					/*Dictionary<int,uint8> o = scope .();
-					Test.Assert((Bon.Deserialize(ref o, str) case .Ok)
-						&& d[150] == o[150] && d[24] == o[24]);*/
+					{
+						Dictionary<int,uint8> o = scope .();
+						Test.Assert((Bon.Deserialize(ref o, str) case .Ok)
+							&& d[150] == o[150] && d[24] == o[24]);
+					}
+
+					{
+						Dictionary<int,uint8> o = null;
+						Test.Assert((Bon.Deserialize(ref o, str) case .Ok)
+							&& d[150] == o[150] && d[24] == o[24]);
+						delete o;
+					}
+
+					{
+						Dictionary<int,uint8> o = scope .(3);
+						o.Add(150, 200);
+						o.Add(234, 1);
+						o.Add(6000, 1);
+
+						Test.Assert((Bon.Deserialize(ref o, str) case .Ok)
+							&& d[150] == o[150] && d[24] == o[24] && o.Count == 2);
+					}
+
+					using (PushDeFlags(.IgnoreUnmentionedValues))
+					{
+						Dictionary<int,uint8> o = scope .(3);
+						o.Add(150, 200);
+						o.Add(234, 1);
+						o.Add(6000, 1);
+
+						Test.Assert((Bon.Deserialize(ref o, str) case .Ok)
+							&& d[150] == o[150] && d[24] == o[24]
+							&& o[234] == 1 && o[6000] == 1 && o.Count == 4);
+					}
 				}
 
 				using (PushFlags(.Verbose))
@@ -1516,26 +1565,67 @@ namespace Bon.Tests
 							24: 23
 						]
 						""");
+
+					Dictionary<int,uint8> o = scope .(2);
+					Test.Assert((Bon.Deserialize(ref o, str) case .Ok)
+						&& d[150] == o[150] && d[24] == o[24]);
 				}
 			}
 
 			{
-				Dictionary<String,SomeData> d = scope .();
+				Dictionary<String,SomeData> d = scope .(2);
 				d.Add("oneThing", SomeData{ value = 5, time = 0 });
 				d.Add("a_string", SomeData{ value = 1700, time = 2f});
 
 				let str = Bon.Serialize(d, .. scope .());
 				Test.Assert(str == "[\"oneThing\":{value=5},\"a_string\":{time=2,value=1700}]");
+
+				{
+					Dictionary<String,SomeData> o = scope .(2);
+					Test.Assert((Bon.Deserialize(ref o, str) case .Ok) && d["oneThing"] == o["oneThing"] && d["a_string"] == o["a_string"] && o.Count == 2);
+				}
+
+				{
+					Dictionary<String,SomeData> o = scope .(2);
+					o.Add("b", default);
+
+					Test.Assert(Bon.Deserialize(ref o, str) case .Err);
+				}
+
+				using (PushDeFlags(.AllowReferenceNulling))
+				{
+					Dictionary<String,SomeData> o = scope .(2);
+					o.Add("b", default);
+
+					Test.Assert((Bon.Deserialize(ref o, str) case .Ok) && o.Count == 2);
+				}
 			}
 
 			{
-				Dictionary<HashStruct,SomeData> d = scope .();
+				Dictionary<String,SomeData> o = scope .(2);
+
+				Test.Assert(Bon.Deserialize(ref o, """
+					[
+						"SomeSTRING!": default,
+						"other": {},
+						"SomeSTRING!": {}
+					]
+					""") case .Err);
+			}
+
+			{
+				Dictionary<HashStruct,SomeData> d = scope .(2);
 				d.Add(HashStruct{ a = 120, b = 6000 }, SomeData{ value = 5, time = 0 });
 				d.Add(HashStruct{ a = 155, b = 240 }, SomeData{ value = 1700, time = 2f});
 
 				{
 					let str = Bon.Serialize(d, .. scope .());
 					Test.Assert(str == "[{a=120,b=6000}:{value=5},{a=155,b=240}:{time=2,value=1700}]");
+
+					Dictionary<HashStruct,SomeData> o = scope .(2);
+					Test.Assert((Bon.Deserialize(ref o, str) case .Ok) && o.Count == 2
+						&& o[HashStruct{ a = 120, b = 6000 }] == SomeData{ value = 5, time = 0 }
+						&& o[HashStruct{ a = 155, b = 240 }] == SomeData{ value = 1700, time = 2f});
 				}
 
 				using (PushFlags(.Verbose))
