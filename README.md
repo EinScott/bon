@@ -543,7 +543,7 @@ gBonEnv.stringViewHandler = new => HandleStringView;
 
 #### Type handlers
 
-Type handlers are called as part of the (de-) serialization process. They are responsible for writing a vale to or reconstructing it from a given string. For example, List and Dictionary support is implemented through type handlers. Handlers can be registered by type or unspecialized generic type, if the handler can support any specialized types of it. See [extension](#extension).
+Type handlers are called as part of the (de-) serialization process. They are responsible for writing a value to a bon string or reconstructing it from one. For example, List and Dictionary support is implemented through type handlers. Handlers can be registered by type or unspecialized generic type if the handler can support any specialized types of it. See [extension](#extension).
 
 #### Poly types
 
@@ -553,7 +553,7 @@ Type handlers are called as part of the (de-) serialization process. They are re
 
 Bon can be extended to support serialization and serialization of certain types through custom methods. The deserialize method should consume whatever the serialize method can emit at the very least. Various pieces of existing functionality in bon can aid in this process, normally hidden in the ``Bon.Integrated`` namespace. See the ``Serialize`` and ``Deserialize`` classes for exact functionality and available methods. Importantly, the serialize call can not fail, so custom handlers need to either crash entirely or emit a valid value before exiting. At the very least through something like ``{}``, ``[]`` or ``default``.
 
-These methods can also be non-static, if bon were to be used very tightly with some system. In this simple example, Resource<> is some wrapper class for centrally managed resources that can be acquired by string, so it makes sense to just serialize that.
+These methods can also be non-static if bon were to be used very tightly with some system. In this simple example, Resource<> is some wrapper class for centrally managed resources that can be acquired by string, so it makes sense to just serialize that.
 
 ```bf
 static void ResourceSerialize(BonWriter writer, ValueView val, BonEnvironment env)
