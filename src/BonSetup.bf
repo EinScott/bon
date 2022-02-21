@@ -55,11 +55,12 @@ namespace System
 
 	namespace Collections
 	{
-		// EnsureCapacity is forced to be included through build settings.
-		[BonTarget,Reflect(.Methods)] // .Methods is needed to call EnsureCapacity
+		// EnsureCapacity is forced to be included & reflected through build settings.
+		[BonTarget]
 		extension List<T> {}
 
-		[BonTarget,Reflect(.Methods)]
+		// TryAdd and Remove are forced to be included & reflected through build settings.
+		[BonTarget]
 		extension Dictionary<T1,T2>
 		{
 			[Reflect(.NonStaticFields)]
