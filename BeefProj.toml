@@ -11,5 +11,5 @@ ReflectMethodFilter = "EnsureCapacity"
 
 [[Project.DistinctOptions]]
 Filter = "System.Collections.Dictionary<*,*>"
-ReflectAlwaysInclude = "IncludeAll"
+ReflectAlwaysInclude = "IncludeFiltered"
 ReflectMethodFilter = "TryAdd;Remove"
