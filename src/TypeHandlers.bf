@@ -75,7 +75,7 @@ namespace Bon.Integrated
 					&& method.Invoke(*(Object*)val.dataPtr, (int)count, true) case .Ok) // returns T*, which is sizeof(int), so Variant doesnt alloc
 				{
 					// Null the new chunk
-					Internal.MemSet(*(uint8**)itemsFieldPtr + currCount * arrType.Stride, 0, (count - currCount) * arrType.Stride);
+					Internal.MemSet(*(uint8**)itemsFieldPtr + currCount * arrType.Stride, 0, (.)(count - currCount) * arrType.Stride);
 				}
 				else Deserialize.Error!("EnsureCapacity method needs to be included & reflected to enlargen List<> size", null, t);
 
@@ -243,7 +243,7 @@ namespace Bon.Integrated
 						break ENTRIES;
 					}
 
-					current.Add(((currentIndex * entryStride) + entryKeyOffset, (currentIndex * entryStride) + entryValueOffset, false));
+					current.Add(((.)(currentIndex * entryStride) + entryKeyOffset, (.)(currentIndex * entryStride) + entryValueOffset, false));
 				}
 			}
 

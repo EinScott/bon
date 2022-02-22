@@ -806,10 +806,10 @@ namespace Bon.Integrated
 			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
 
 			let count = counts[0];
-			var stride = counts[1];
+			int stride = (.)counts[1];
 			if (counts.Count > 2)
 				for (let i < counts.Count - 2)
-					stride *= counts[i + 2];
+					stride *= (.)counts[i + 2];
 			stride *= arrType.Stride;
 
 			mixin DefaultArray(void* ptr)
@@ -871,7 +871,7 @@ namespace Bon.Integrated
 				if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
 				{
 					if (arrType.IsValueType)
-						Internal.MemSet(ptr, 0, stride * (count - i), arrType.Align); // MakeDefault would just do the same here
+						Internal.MemSet(ptr, 0, stride * (.)(count - i), arrType.Align); // MakeDefault would just do the same here
 					else
 					{
 						// Default unaffected entries (since they aren't serialized)
