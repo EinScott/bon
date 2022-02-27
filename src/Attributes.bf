@@ -6,8 +6,14 @@ namespace Bon
 	// info is force included some other way (other attribute or build settings).
 	// This makes it easier to work with types from other libraries (where you can
 	// only retroactively force reflection in the build settings)
-	[AttributeUsage(.Class|.Struct|.Enum, .AlwaysIncludeTarget, ReflectUser = .NonStaticFields | .StaticFields | .DefaultConstructor, AlwaysIncludeUser = .AssumeInstantiated)]
+	[AttributeUsage(.Class|.Struct|.Enum, ReflectUser = .NonStaticFields | .DefaultConstructor)]
 	struct BonTargetAttribute : Attribute {}
+
+	// The same as BonTarget, except this one forces the inclusion of the target type as well.
+	// This is not needed for most uses (as the fields are known and the types most likely also explicitly constructed
+	// somewhere). May be useful for polymorphed usage or other edge cases though.
+	[AttributeUsage(.Class|.Struct|.Enum, .AlwaysIncludeTarget, ReflectUser = .NonStaticFields | .DefaultConstructor, AlwaysIncludeUser = .AssumeInstantiated)]
+	struct BonForcedTargetAttribute : Attribute {}
 
 	// In order to deserialize polymorphed values, the original type needs to be looked up by type name from bon string,
 	// so we need some sort of central lookup for them. That's why they need to be specifically registered with this.

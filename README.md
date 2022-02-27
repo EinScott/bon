@@ -90,6 +90,7 @@ For an extensive overview of bon's capabilities, see [Documentation](#documentat
     - [Poly types](#poly-types)
 - [Extension](#extension)
 - [Integrated usage](#integrated-usage)
+- [Preprocessor defines](#preprocessor-defines)
 
 ### Serialization
 
@@ -123,6 +124,7 @@ By default, bon will not null references (as far as it can know). When getting a
 - String & StringView (though StringView requires some [setup](#allocate-handlers))
 - List
 - Dictionary
+- Nullable structs
 - Custom structs/classes (if [marked](#type-setup) properly, may be processed through [type handlers](#type-handlers))
 
 #### Pointers
@@ -156,7 +158,7 @@ BON ERROR: Cannot handle pointer values. (line 1)
 > On type: uint8*
 ```
 
-Printing of errors is disabled in non-DEBUG configurations and can be forced off by defining ``BON_NO_PRINT`` in the workspace settings. Optionally, defining ``BON_PROVIDE_ERROR_MESSAGE`` always makes bon call the ``Bon.onDeserializeError`` event with the error message before returning (in case you want to want to properly report it somehow).
+Printing of errors is disabled in non-DEBUG configurations and can be forced off by [defining](#preprocessor-defines) ``BON_NO_PRINT`` in the workspace settings. Optionally, [defining](#preprocessor-defines) ``BON_PROVIDE_ERROR_MESSAGE`` always makes bon call the ``Bon.onDeserializeError`` event with the error message before returning (in case you want to want to properly report it somehow).
 
 ### Syntax
 
@@ -452,11 +454,13 @@ class State
 
 namespace System
 {
-    // We can no serialize Version!
+    // We can now serialize Version!
     [BonTarget]
     extension Version {}
 }
 ```
+
+In the rare case where the value that needs to be deserialized isn't actually mentioned anywhere in the code, ``[BonForcedTarget]`` can be used instead to make sure it's also always included in builds correctly.
 
 #### Polymorphism
 
@@ -496,7 +500,7 @@ For bon to use a type, reflection data for them simply needs to be included in t
 
 Bon doesn't mutate the state of bon environments over the course of serialize or deserialize calls, so using bon with the same environment on multiple threads is possible. But outside code editing a bon environment while a bon call on another thread is using it may lead to undefined behavior.
 
-By default, ``gBonEnv`` contains the built-in [type handlers](#type-handlers). Starting out with an empty global bon environment is possible by defining ``BON_NO_DEFAULT_SETUP``. Types with ``[BonPolyRegister]`` on them are also registered on ``gBonEnv`` (in their static constructor).
+By default, ``gBonEnv`` contains the built-in [type handlers](#type-handlers). Starting out with an empty global bon environment is possible by [defining](#preprocessor-defines) ``BON_NO_DEFAULT_SETUP``. Types with ``[BonPolyRegister]`` on them are also registered on ``gBonEnv`` (in their static constructor).
 
 See [BonEnvironment](https://github.com/EinScott/bon/blob/main/src/BonEnvironment.bf) for more details.
 
@@ -586,6 +590,8 @@ static Result<void> ResourceDeserialize(BonReader reader, ValueView val, BonEnvi
 gBonEnv.typeHandlers.Add(typeof(Resource<>),
     ((.)new => ResourceSerialize, (.)new => ResourceDeserialize));
 ```
+
+For further reference, see [builtin type handlers](https://github.com/EinScott/bon/blob/main/src/TypeHandlers.bf).
 
 ### Integrated usage
 
@@ -690,5 +696,12 @@ Result<void> DeserializeEntity(BonReader reader)
     return .Ok;
 }
 ```
+
+### Preprocessor defines
+
+- ``BON_NO_DEFAULT_SETUP`` - The global [bon environment](#bon-environment) is not filled with the builtin [type handlers](#type-handlers) and reflection info need for them is not included either (on List, Dictionary...).
+- ``BON_NO_PRINT`` - bon [errors](#errors) are never printed.
+- ``BON_PRINT`` - bon [errors](#errors) are always printed (even in non-DEBUG).
+- ``BON_PROVIDE_ERROR_MESSAGE`` - bon provides the [error](#errors) messages through the ``Bon.onDeserializeError`` event.
 
 Happy coding!

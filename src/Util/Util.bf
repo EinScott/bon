@@ -36,17 +36,22 @@ namespace Bon.Integrated
 		// These are specifically for when we know that these fields exist (otherwise we crash because they should)
 		// We're not doing many checks here like the reflection functions do.
 
-		public static mixin GetValField<T>(ValueView val, String field)
+		static mixin GetBodyPtr(ValueView val)
+		{
+			(TypeHoldsObject!(val.type) ? *(uint8**)val.dataPtr : (uint8*)val.dataPtr)
+		}
+
+		public static mixin GetClassValField<T>(ValueView val, String field)
 		{
 			let f = val.type.GetField(field).Get();
 			Debug.Assert(f.FieldType == typeof(T));
 
-			*(T*)(*(uint8**)val.dataPtr + f.[Inline]MemberOffset)
+			*(T*)(GetBodyPtr!(val) + f.[Inline]MemberOffset)
 		}
 
 		public static mixin GetValFieldPtr(ValueView val, String field)
 		{
-			*(uint8**)val.dataPtr + val.type.GetField(field).Get().[Inline]MemberOffset
+			GetBodyPtr!(val) + val.type.GetField(field).Get().[Inline]MemberOffset
 		}
 
 		public static mixin SetValField<T>(ValueView val, String field, T thing)
@@ -54,7 +59,7 @@ namespace Bon.Integrated
 			let f = val.type.GetField(field).Get();
 			Debug.Assert(f.FieldType == typeof(T));
 
-			*(T*)(*(uint8**)val.dataPtr + f.[Inline]MemberOffset) = thing;
+			*(T*)(GetBodyPtr!(val) + f.[Inline]MemberOffset) = thing;
 		}
 	}
 }

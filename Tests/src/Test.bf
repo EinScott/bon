@@ -1026,10 +1026,31 @@ namespace Bon.Tests
 			T tThingLook;
 		}
 
+		[BonTarget,BonPolyRegister]
+		class Unmentioned
+		{
+			public int a;
+		}
+
+		[BonForcedTarget,BonPolyRegister]
+		class UnmentionedForced
+		{
+			public int a;
+		}
+
 		[Test]
 		static void Classes()
 		{
 			NoStringHandler!();
+
+			{
+				// This is a (rare) use case for when BonForcedTarget would be needed... which is basically never!
+
+				Object co = null;
+				Test.Assert(Bon.Deserialize(ref co, "(Bon.Tests.Unmentioned){a=15}") case .Err);
+				Test.Assert(Bon.Deserialize(ref co, "(Bon.Tests.UnmentionedForced){a=15}") case .Ok);
+				delete co;
+			}
 
 			{
 				let c = scope AClass() { thing = uint8.MaxValue, data = .{ value = 10, time = 1 }, aStringThing = new .("A STRING THING yes") };
@@ -1839,6 +1860,38 @@ namespace Bon.Tests
 				uint8*[4] poc = po;
 				Test.Assert((Bon.Deserialize(ref po, "[]") case .Ok)
 					&& po == poc); // But nothing actually changed
+			}
+		}
+
+		[Test]
+		static void Nullable()
+		{
+			{
+				uint8? number = 44;
+				let str = Bon.Serialize(number, .. scope .());
+				Test.Assert(str == "44");
+
+				uint8? po = null;
+				Test.Assert((Bon.Deserialize(ref po, str) case .Ok) && po == number);
+			}
+
+			using (PushFlags(.IncludeDefault))
+			{
+				uint8? number = null;
+				let str = Bon.Serialize(number, .. scope .());
+				Test.Assert(str == "null");
+
+				uint8? po = 44;
+				Test.Assert((Bon.Deserialize(ref po, str) case .Ok) && po == number);
+			}
+
+			{
+				SomeData? number = SomeData{ value = 2222 };
+				let str = Bon.Serialize(number, .. scope .());
+				Test.Assert(str == "{value=2222}");
+
+				SomeData? po = null;
+				Test.Assert((Bon.Deserialize(ref po, str) case .Ok) && po == number);
 			}
 		}
 

@@ -31,7 +31,7 @@ namespace Bon.Integrated
 
 			let arrType = t.GetGenericArg(0);
 			var arrPtr = *(void**)GetValFieldPtr!(val, "mItems"); // *(T**)
-			var count = GetValField!<int_cosize>(val, "mSize");
+			var count = GetClassValField!<int_cosize>(val, "mSize");
 
 			if (count != 0 && !Serialize.IsArrayFilled(arrType, arrPtr, count, env))
 				writer.Sizer((.)count);
@@ -54,7 +54,7 @@ namespace Bon.Integrated
 
 			if (t.GetField("mSize") case .Err)
 				Deserialize.Error!("No reflection data for type!", null, t);
-			let currCount = GetValField!<int_cosize>(val, "mSize");
+			let currCount = GetClassValField!<int_cosize>(val, "mSize");
 			
 			let arrType = t.GetGenericArg(0);
 			let itemsFieldPtr = GetValFieldPtr!(val, "mItems");
@@ -98,7 +98,7 @@ namespace Bon.Integrated
 
 			let keyType = t.GetGenericArg(0);
 			let valueType = t.GetGenericArg(1);
-			var count = GetValField!<int_cosize>(val, "mCount");
+			var count = GetClassValField!<int_cosize>(val, "mCount");
 
 			let classData = *(uint8**)val.dataPtr;
 			let entriesField = val.type.GetField("mEntries").Get();
@@ -168,7 +168,7 @@ namespace Bon.Integrated
 
 			let keyType = t.GetGenericArg(0);
 			let valueType = t.GetGenericArg(1);
-			var count = GetValField!<int_cosize>(val, "mCount");
+			var count = GetClassValField!<int_cosize>(val, "mCount");
 
 			let classData = *(uint8**)val.dataPtr;
 
@@ -332,6 +332,52 @@ namespace Bon.Integrated
 						Internal.MemSet(keyVal.dataPtr, 0, keyVal.type.Size);
 					}
 				}
+			}
+
+			return .Ok;
+		}
+
+		public static void NullableSerialize(BonWriter writer, ValueView val, BonEnvironment env)
+		{
+			let t = (SpecializedGenericType)val.type;
+
+			Debug.Assert(t.UnspecializedType == typeof(Nullable<>));
+			Debug.Assert(t.GetField("mValue") case .Ok, Serialize.CompNoReflectionError!("Nullable<>", "Nullable<T>"));
+
+			let hasValue = GetClassValField!<bool>(val, "mHasValue"); // @report stepping into this mixin and hovering over "val" in the last line hard crashes
+			if (!hasValue)
+				writer.Null();
+			else
+			{
+				let valType = t.GetGenericArg(0);
+				let structPtr = GetValFieldPtr!(val, "mValue");
+				Serialize.Value(writer, ValueView(valType, structPtr), env);
+			}
+		}
+
+		public static Result<void> NullableDeserialize(BonReader reader, ValueView val, BonEnvironment env)
+		{
+			let t = (SpecializedGenericType)val.type;
+
+			Debug.Assert(t.UnspecializedType == typeof(Nullable<>));
+
+			if (t.GetField("mValue") case .Err)
+				Deserialize.Error!("No reflection data for type!", null, t);
+
+			let valType = t.GetGenericArg(0);
+			let structPtr = GetValFieldPtr!(val, "mValue");
+			let hasValPtr = GetValFieldPtr!(val, "mHasValue");
+			let structVal = ValueView(valType, structPtr);
+
+			if (reader.IsNull())
+			{
+				*(bool*)hasValPtr = false;
+				Try!(Deserialize.MakeDefault(reader, structVal, env));
+			}
+			else
+			{
+				*(bool*)hasValPtr = true;
+				Try!(Deserialize.Value(reader, structVal, env));
 			}
 
 			return .Ok;

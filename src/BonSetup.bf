@@ -15,6 +15,7 @@ namespace Bon
 			env.typeHandlers.Add(typeof(String), ((.)new => StringSerialize, (.)new => StringDeserialize));
 			env.typeHandlers.Add(typeof(List<>), ((.)new => ListSerialize, (.)new => ListDeserialize));
 			env.typeHandlers.Add(typeof(Dictionary<,>), ((.)new => DictionarySerialize, (.)new => DictionaryDeserialize));
+			env.typeHandlers.Add(typeof(Nullable<>), ((.)new => NullableSerialize, (.)new => NullableDeserialize));
 #endif
 		}
 
@@ -52,6 +53,9 @@ namespace System
 
 	[BonTarget]
 	extension Array4<T> {}
+
+	[BonTarget]
+	extension Nullable<T> {}
 
 	namespace Collections
 	{
