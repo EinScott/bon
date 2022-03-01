@@ -614,7 +614,7 @@ namespace Bon.Integrated
 							// Old array if count doesn't match!
 							if (*(void**)val.dataPtr != null)
 							{
-								let currCount = GetClassValField!<int_arsize>(val, "mLength");
+								let currCount = GetValField!<int_arsize>(val, "mLength");
 								if (fullCount != currCount)
 									Try!(NullInstanceRef(reader, val, env));
 							}
@@ -624,7 +624,7 @@ namespace Bon.Integrated
 								// We're screwed on big collections, but who uses that...? hah
 								Try!(MakeArrayInstanceRef(val, (int32)fullCount));
 							}
-							Debug.Assert(GetClassValField!<int_arsize>(val, "mLength") == fullCount);
+							Debug.Assert(GetValField!<int_arsize>(val, "mLength") == fullCount);
 
 							let arrType = t.GetGenericArg(0); // T
 							let classData = *(uint8**)val.dataPtr;

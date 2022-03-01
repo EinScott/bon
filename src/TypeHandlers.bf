@@ -31,7 +31,7 @@ namespace Bon.Integrated
 
 			let arrType = t.GetGenericArg(0);
 			var arrPtr = *(void**)GetValFieldPtr!(val, "mItems"); // *(T**)
-			var count = GetClassValField!<int_cosize>(val, "mSize");
+			var count = GetValField!<int_cosize>(val, "mSize");
 
 			if (count != 0 && !Serialize.IsArrayFilled(arrType, arrPtr, count, env))
 				writer.Sizer((.)count);
@@ -54,7 +54,7 @@ namespace Bon.Integrated
 
 			if (t.GetField("mSize") case .Err)
 				Deserialize.Error!("No reflection data for type!", null, t);
-			let currCount = GetClassValField!<int_cosize>(val, "mSize");
+			let currCount = GetValField!<int_cosize>(val, "mSize");
 			
 			let arrType = t.GetGenericArg(0);
 			let itemsFieldPtr = GetValFieldPtr!(val, "mItems");
@@ -98,7 +98,7 @@ namespace Bon.Integrated
 
 			let keyType = t.GetGenericArg(0);
 			let valueType = t.GetGenericArg(1);
-			var count = GetClassValField!<int_cosize>(val, "mCount");
+			var count = GetValField!<int_cosize>(val, "mCount");
 
 			let classData = *(uint8**)val.dataPtr;
 			let entriesField = val.type.GetField("mEntries").Get();
@@ -168,7 +168,7 @@ namespace Bon.Integrated
 
 			let keyType = t.GetGenericArg(0);
 			let valueType = t.GetGenericArg(1);
-			var count = GetClassValField!<int_cosize>(val, "mCount");
+			var count = GetValField!<int_cosize>(val, "mCount");
 
 			let classData = *(uint8**)val.dataPtr;
 
@@ -344,7 +344,7 @@ namespace Bon.Integrated
 			Debug.Assert(t.UnspecializedType == typeof(Nullable<>));
 			Debug.Assert(t.GetField("mValue") case .Ok, Serialize.CompNoReflectionError!("Nullable<>", "Nullable<T>"));
 
-			let hasValue = GetClassValField!<bool>(val, "mHasValue"); // @report stepping into this mixin and hovering over "val" in the last line hard crashes
+			let hasValue = GetValField!<bool>(val, "mHasValue"); // @report stepping into this mixin and hovering over "val" in the last line hard crashes
 			if (!hasValue)
 				writer.Null();
 			else

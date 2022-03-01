@@ -329,7 +329,7 @@ namespace Bon.Integrated
 
 						let arrType = t.GetGenericArg(0); // T
 						var arrPtr = GetValFieldPtr!(val, "mFirstElement"); // T*
-						var count = GetClassValField!<int_arsize>(val, "mLength");
+						var count = GetValField!<int_arsize>(val, "mLength");
 						
 						switch (t.UnspecializedType)
 						{
@@ -339,24 +339,24 @@ namespace Bon.Integrated
 							Array(writer, arrType, arrPtr, count, env);
 
 						case typeof(Array2<>):
-							let count1 = GetClassValField!<int_cosize>(val, "mLength1");
+							let count1 = GetValField!<int_cosize>(val, "mLength1");
 							count /= count1;
 							writer.MultiSizer((.)count,(.)count1);
 
 							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1);
 
 						case typeof(Array3<>):
-							let count2 = GetClassValField!<int_cosize>(val, "mLength2");
-							let count1 = GetClassValField!<int_cosize>(val, "mLength1");
+							let count2 = GetValField!<int_cosize>(val, "mLength2");
+							let count1 = GetValField!<int_cosize>(val, "mLength1");
 							count /= (count1 * count2);
 							writer.MultiSizer((.)count,(.)count1,(.)count2);
 
 							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1, count2);
 
 						case typeof(Array4<>):
-							let count1 = GetClassValField!<int_cosize>(val, "mLength1");
-							let count2 = GetClassValField!<int_cosize>(val, "mLength2");
-							let count3 = GetClassValField!<int_cosize>(val, "mLength3");
+							let count1 = GetValField!<int_cosize>(val, "mLength1");
+							let count2 = GetValField!<int_cosize>(val, "mLength2");
+							let count3 = GetValField!<int_cosize>(val, "mLength3");
 							count /= (count1 * count2 * count3);
 							writer.MultiSizer((.)count,(.)count1,(.)count2,(.)count3);
 

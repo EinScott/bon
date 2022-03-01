@@ -41,7 +41,7 @@ namespace Bon.Integrated
 			(TypeHoldsObject!(val.type) ? *(uint8**)val.dataPtr : (uint8*)val.dataPtr)
 		}
 
-		public static mixin GetClassValField<T>(ValueView val, String field)
+		public static mixin GetValField<T>(ValueView val, String field)
 		{
 			let f = val.type.GetField(field).Get();
 			Debug.Assert(f.FieldType == typeof(T));
