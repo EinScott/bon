@@ -302,7 +302,7 @@ namespace Bon.Integrated
 						// select the IsObject case even for boxed structs
 						polyType = type;
 					}
-					else if (typeName != (StringView)valType.GetFullName(.. scope .())) // It's the base type itself, and we got that!
+					else if (typeName != (StringView)valType.GetFullName(.. scope .(256))) // It's the base type itself, and we got that!
 						Error!("Specified type not found in bonEnvironment.polyTypes", reader, valType);
 				}
 				else Error!("Type markers are only valid on reference types and interfaces", reader, valType);

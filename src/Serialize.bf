@@ -574,7 +574,7 @@ namespace Bon.Integrated
 		public static void Type(BonWriter writer, Type type)
 		{
 			writer.EntryStart();
-			writer.Type(type.GetFullName(.. scope .()));
+			writer.Type(type.GetFullName(.. scope .(256)));
 		}
 
 		[Inline]
