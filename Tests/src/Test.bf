@@ -1032,23 +1032,14 @@ namespace Bon.Tests
 			public int a;
 		}
 
-		[BonForcedTarget,BonPolyRegister]
-		class UnmentionedForced
-		{
-			public int a;
-		}
-
 		[Test]
 		static void Classes()
 		{
 			NoStringHandler!();
 
 			{
-				// This is a (rare) use case for when BonForcedTarget would be needed... which is basically never!
-
 				Object co = null;
-				Test.Assert(Bon.Deserialize(ref co, "(Bon.Tests.Unmentioned){a=15}") case .Err);
-				Test.Assert(Bon.Deserialize(ref co, "(Bon.Tests.UnmentionedForced){a=15}") case .Ok);
+				Test.Assert(Bon.Deserialize(ref co, "(Bon.Tests.Unmentioned){a=15}") case .Ok);
 				delete co;
 			}
 

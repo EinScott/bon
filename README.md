@@ -460,8 +460,6 @@ namespace System
 }
 ```
 
-In the cases where the value that needs to be deserialized is never instantiated/constructed anywhere in the code, ``[BonForcedTarget]`` can be used instead to make sure it's also always included in builds correctly. This may be needed for things like config structs that are only ever read and never used for writing.
-
 #### Polymorphism
 
 Polymorphed values denote their actual type as part of the serialized value in order to be deserialized properly. For this to be possible, bon needs to look up the types by name. So a type that need to be serialized with polymorphism like this must be registered on the used [bon environment](#poly-types) with ``env.RegisterPolyType(typeof(x))`` or by placing ``[BonPolyRegister]`` on the type. The first of the two options is especially useful for boxed struct types, which also need to be registered like this in case they should be serialized.
