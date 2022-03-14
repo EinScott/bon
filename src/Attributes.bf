@@ -10,8 +10,8 @@ namespace Bon
 	struct BonTargetAttribute : Attribute {}
 
 	// The same as BonTarget, except this one forces the inclusion of the target type as well.
-	// This is not needed for most uses (as the fields are known and the types most likely also explicitly constructed
-	// somewhere). May be useful for polymorphed usage or other edge cases though.
+	// This is needed when the target type is never actually instantiated anywhere in the program,
+	// as is the case for some config-only structs.
 	[AttributeUsage(.Class|.Struct|.Enum, .AlwaysIncludeTarget, ReflectUser = .NonStaticFields | .DefaultConstructor, AlwaysIncludeUser = .AssumeInstantiated)]
 	struct BonForcedTargetAttribute : Attribute {}
 

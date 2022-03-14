@@ -460,7 +460,7 @@ namespace System
 }
 ```
 
-In the rare case where the value that needs to be deserialized isn't actually mentioned anywhere in the code, ``[BonForcedTarget]`` can be used instead to make sure it's also always included in builds correctly.
+In the cases where the value that needs to be deserialized is never instantiated/constructed anywhere in the code, ``[BonForcedTarget]`` can be used instead to make sure it's also always included in builds correctly. This may be needed for things like config structs that are only ever read and never used for writing.
 
 #### Polymorphism
 
