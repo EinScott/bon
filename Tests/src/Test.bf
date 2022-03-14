@@ -1428,7 +1428,7 @@ namespace Bon.Tests
 
 			{
 				List<AClass> lo = null;
-				Test.Assert((Bon.Deserialize(ref lo, "[{aStringThing=\"uhh\",thing=255,data={time=1,value=10}},{aStringThing=\"Hi, na?\",thing=42}]") case .Ok) && lo.Count == 2);
+				Test.Assert((Bon.Deserialize(ref lo, "[{aStringThing=\"uhh\",thing=255,data={time=1,value=10}},{aStringThing=\"Hi, na?\",thing=42},]") case .Ok) && lo.Count == 2);
 				DeleteContainerAndItems!(lo);
 			}
 

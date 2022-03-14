@@ -877,6 +877,9 @@ namespace Bon.Integrated
 				}
 				else
 				{
+					if (res.isEmpty)
+						count--; // Trailing comma
+
 					Debug.Assert(inStr[[Unchecked]i] ==  ']');
 					break;
 				}
@@ -930,7 +933,12 @@ namespace Bon.Integrated
 				if (!res.isEmpty)
 					wasEmpty = false;
 
-				if (i < len)
+				if (i >= len)
+				{
+					if (res.isEmpty)
+						count--; // Trailing comma
+				}
+				else
 				{
 					if (res.isEmpty)
 						DoErr!("Empty entry");
@@ -983,7 +991,12 @@ namespace Bon.Integrated
 				if (!res.isEmpty)
 					wasEmpty = false;
 
-				if (i < len)
+				if (i >= len)
+				{
+					if (res.isEmpty)
+						count--; // Trailing comma
+				}
+				else
 				{
 					if (res.isEmpty)
 						DoErr!("Empty entry");
