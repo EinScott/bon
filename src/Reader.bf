@@ -869,12 +869,14 @@ namespace Bon.Integrated
 					DoErr!("Unterminated array");
 
 				if (inStr[[Unchecked]i] == ',')
-					i++;
-				else
 				{
-					if (count > 1 && res.isEmpty)
+					if (res.isEmpty)
 						DoErr!("Empty array element");
 
+					i++;
+				}
+				else
+				{
 					Debug.Assert(inStr[[Unchecked]i] ==  ']');
 					break;
 				}
@@ -928,13 +930,11 @@ namespace Bon.Integrated
 				if (!res.isEmpty)
 					wasEmpty = false;
 
-				if (i >= len)
+				if (i < len)
 				{
-					if (count > 1 && res.isEmpty)
+					if (res.isEmpty)
 						DoErr!("Empty entry");
-				}
-				else
-				{
+
 					Debug.Assert(inStr[[Unchecked]i] == ',');
 					i++;
 				}
@@ -983,13 +983,11 @@ namespace Bon.Integrated
 				if (!res.isEmpty)
 					wasEmpty = false;
 
-				if (i >= len)
+				if (i < len)
 				{
-					if (count > 1 && res.isEmpty)
+					if (res.isEmpty)
 						DoErr!("Empty entry");
-				}
-				else
-				{
+
 					Debug.Assert(inStr[[Unchecked]i] == ',');
 					i++;
 				}
