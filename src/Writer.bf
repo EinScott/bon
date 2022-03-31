@@ -165,7 +165,7 @@ namespace Bon.Integrated
 		{
 			if (string.Length == 0)
 				outStr.Append("\"\"");
-			else String.QuoteString(&string[[Unchecked]0], string.Length, outStr);
+			else String.Quote(&string[[Unchecked]0], string.Length, outStr);
 		}
 
 		[Inline]
@@ -192,8 +192,8 @@ namespace Bon.Integrated
 			outStr.Append('\'');
 			let string = scope String()..Append(char);
 			let len = string.Length;
-			outStr..Append(String.QuoteString(&string[[Unchecked]0], len, .. string)[(len + 1)...^2])
-				.Append('\'');
+			String.Escape(&string[[Unchecked]0], len, outStr);
+			outStr.Append('\'');
 		}
 
 		[Inline]
