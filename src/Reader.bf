@@ -406,7 +406,18 @@ namespace Bon.Integrated
 				numLen++;
 
 			if (numLen == 0)
-				Error!("Expected floating point");
+			{
+				let nanSymbol = System.Globalization.NumberFormatInfo.CurrentInfo.NaNSymbol;
+
+				if (inStr.StartsWith(nanSymbol))
+				{
+					numLen = nanSymbol.Length;
+				}	
+				else
+				{
+					Error!("Expected floating point");
+				}
+			}
 
 			let num = inStr.Substring(0, numLen);
 			inStr.RemoveFromStart(numLen);
