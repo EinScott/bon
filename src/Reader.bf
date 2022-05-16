@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Diagnostics;
+using System.Globalization;
 
 using internal Bon;
 
@@ -398,15 +399,31 @@ namespace Bon.Integrated
 
 		public Result<StringView> Floating()
 		{
-			var numLen = 0;
-			while (inStr.Length > numLen && {
-				let char = inStr[numLen];
-				char.IsNumber || char == '.' || char == '-' || char == '+' || char == 'e'
-			})
-				numLen++;
+			let nanSymbol = NumberFormatInfo.CurrentInfo.NaNSymbol;
+			let infSymbol = NumberFormatInfo.CurrentInfo.PositiveInfinitySymbol;
+			let negInfSymbol = NumberFormatInfo.CurrentInfo.NegativeInfinitySymbol;
+
+			int numLen = 0;
+
+			if (inStr.StartsWith(nanSymbol, .OrdinalIgnoreCase))
+				numLen = nanSymbol.Length;
+			else if (inStr.StartsWith(infSymbol, .OrdinalIgnoreCase))
+				numLen = infSymbol.Length;
+			else if (inStr.StartsWith(negInfSymbol, .OrdinalIgnoreCase))
+				numLen = negInfSymbol.Length;
+			else
+			{
+				while (inStr.Length > numLen && {
+					let char = inStr[numLen];
+					char.IsNumber || char == '.' || char == '-' || char == '+' || char == 'e'
+				})
+					numLen++;
+			}
 
 			if (numLen == 0)
+			{
 				Error!("Expected floating point");
+			}
 
 			let num = inStr.Substring(0, numLen);
 			inStr.RemoveFromStart(numLen);
