@@ -344,8 +344,7 @@ namespace Bon.Integrated
 			Debug.Assert(t.UnspecializedType == typeof(Nullable<>));
 			Debug.Assert(t.GetField("mValue") case .Ok, Serialize.CompNoReflectionError!("Nullable<>", "Nullable<T>"));
 
-			let hasValue = GetValField!<bool>(val, "mHasValue"); // @report stepping into this mixin and hovering over "val" in the last line hard crashes
-			if (!hasValue)
+			if (!GetValField!<bool>(val, "mHasValue"))
 				writer.Null();
 			else
 			{

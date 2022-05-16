@@ -912,7 +912,7 @@ namespace Bon.Integrated
 		{
 			var len = val.Length;
 			if (len == 0)
-				return .Err;
+				Debug.FatalError();
 
 			uint64 prevRes = 0;
 			uint64 result = 0;
@@ -921,7 +921,20 @@ namespace Bon.Integrated
 			uint64 radix = 10;
 			int digits = 0;
 
-			for (var i = 0; i < len; i++)
+			var i = 0;
+			let first = val[0];
+			if (first == '-')
+			{
+				if (typeof(T).IsSigned)
+					isNegative = true;
+				else Error!("Integer is unsigned", reader,  typeof(T));
+
+				i++;
+			}
+			else if (first == '+')
+				i++;
+
+			for (; i < len; i++)
 			{
 				let c = val[[Unchecked]i];
 
@@ -929,8 +942,15 @@ namespace Bon.Integrated
 				{
 					if (digits == 0 && c == '0')
 					{
+						if (allowBaseSpec)
+						{
+							// We were already here... there are at least two leading zeros, don't allow base spec anymore!
+							// This will cause us to process the redundant zeros, but whatever. No difference
+							digits++;
+						}
+
 						allowBaseSpec = true;
-						continue;
+						continue; // Don't count leading 0s as digit
 					}
 					result = result*radix + (.)(c - '0');
 				}
@@ -952,11 +972,6 @@ namespace Bon.Integrated
 					allowBaseSpec = false;
 					continue;
 				}
-				else if (digits == 0 && c == '-' && typeof(T).IsSigned)
-				{
-					isNegative = true;
-					continue;
-				}
 				else if (c == '\'')
 					continue;
 				else Error!("Failed to parse integer", reader,  typeof(T));
@@ -964,7 +979,7 @@ namespace Bon.Integrated
 				digits++;
 
 				if (result < prevRes)
-					Error!("Integer is out of range", reader, typeof(T));
+					Error!("Value is out of range for integer", reader, typeof(T));
 				prevRes = result;
 			}
 
@@ -972,27 +987,97 @@ namespace Bon.Integrated
 			if (isNegative)
 			{
 				if (result > int64.MaxValue)
-					Error!("Integer is out of range", reader, typeof(T));
+					Error!("Value is out of range for integer", reader, typeof(T));
 				let num = -(*(int64*)&result);
 				if (num < (int64)T.MinValue || num > (int64)T.MaxValue)
-					Error!("Integer is out of range", reader, typeof(T));
+					Error!("Value is out of range for integer", reader, typeof(T));
 				else return .Ok((T)num);
 			}
 			else
 			{
 				let num = result;
 				if (result > (uint64)T.MaxValue)
-					Error!("Integer is out of range", reader, typeof(T));
+					Error!("Value is out of range for integer", reader, typeof(T));
 				else return .Ok((T)num);
 			}
 		}
 
-		static mixin ParseThing<T>(BonReader reader, StringView num) where T : var
+		public static Result<T> ParseFloat<T>(BonReader reader, StringView val) where T : IFloating, var
 		{
-			T thing = default;
-			if (!(T.Parse(.(&num[0], num.Length)) case .Ok(out thing)))
-				Error!("Failed to parse", reader, typeof(T));
-			thing
+			if (val.IsEmpty)
+				Debug.FatalError();
+
+			bool isNeg = val[0] == '-';
+			bool isPos = val[0] == '+';
+
+			var val;
+			if (isNeg || isPos)
+				val.RemoveFromStart(1);
+
+			if (val.Equals("Infinity", true))
+			{
+				if (isNeg)
+					return T.NegativeInfinity;
+				else return T.PositiveInfinity;
+			}
+			else if (@val.Equals("NaN", true))
+				return T.NaN;
+			
+			T result = 0;
+			T decimalMultiplier = 0;
+			bool decimalStarted = false;
+
+			let len = val.Length;
+			for (var i = 0; i < len; i++)
+			{
+				char8 c = val[[Unchecked]i];
+
+				// Exponent prefix used in scientific notation. E.g. 1.2E5
+				if (c == 'e' || c == 'E')
+				{
+					if (!decimalStarted)
+						Error!("Invalid notation", reader, typeof(T));
+					else if(i == len - 1)
+						Error!("Expected exponent", reader, typeof(T));
+					if (ParseInt<int32>(reader, val.Substring(i + 1)) case .Ok(let exponent))
+						result *= Math.Pow(10, (T)exponent);
+					else Error!("Failed to parse exponent (linked with previous error)", reader, typeof(T));
+
+					break;
+				}
+
+				decimalStarted = true;
+
+				if (c == '.')
+				{
+					if (decimalMultiplier != 0)
+						Error!("More than one decimal separator", reader, typeof(T));
+					decimalMultiplier = (T)0.1;
+
+					continue;
+				}
+				if (decimalMultiplier != 0)
+				{
+					if ((c >= '0') && (c <= '9'))
+					{
+						result += (.)(c - '0') * decimalMultiplier;
+						decimalMultiplier *= (T)0.1;
+					}
+					else
+						Error!("Invalid notation", reader, typeof(T));
+
+					continue;
+				}
+
+				if ((c >= '0') && (c <= '9'))
+				{
+					result *= 10;
+					result += (.)(c - '0');
+				}
+				else
+					Error!("Invalid notation", reader, typeof(T));
+			}
+			return isNeg ? (result * -1) : result;
 		}
 
 		static mixin Integer(Type type, BonReader reader, ValueView val)
@@ -1021,8 +1106,8 @@ namespace Bon.Integrated
 
 			switch (type)
 			{
-			case typeof(float): *(float*)val.dataPtr = ParseThing!<float>(reader, num);
-			case typeof(double): *(double*)val.dataPtr = ParseThing!<double>(reader, num);
+			case typeof(float): *(float*)val.dataPtr = Try!(ParseFloat<float>(reader, num));
+			case typeof(double): *(double*)val.dataPtr = Try!(ParseFloat<double>(reader, num));
 			}
 		}
 

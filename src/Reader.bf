@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Diagnostics;
-using System.Globalization;
 
 using internal Bon;
 
@@ -342,11 +341,12 @@ namespace Bon.Integrated
 		{
 			var numLen = 0;
 			bool hasHex = false, isNegative = false;
-			if (inStr.Length > 0 && inStr[0] == '-')
+			if (inStr.Length > 0 && (inStr[0] == '-' || inStr[0] == '+'))
 			{
 				numLen++;
-				isNegative = true;
+				isNegative = inStr[0] == '-';
 			}
+
 			if (inStr.Length > numLen + 1 && inStr[numLen] == '0')
 			{
 				let c = inStr[numLen + 1];
@@ -399,28 +399,32 @@ namespace Bon.Integrated
 
 		public Result<StringView> Floating()
 		{
-			let nanSymbol = NumberFormatInfo.CurrentInfo.NaNSymbol;
-			let infSymbol = NumberFormatInfo.CurrentInfo.PositiveInfinitySymbol;
-			let negInfSymbol = NumberFormatInfo.CurrentInfo.NegativeInfinitySymbol;
+			let nanSymbol = "NaN";
+			let infSymbol = "Infinity";
 
 			int numLen = 0;
-
-			if (inStr.StartsWith(nanSymbol, .OrdinalIgnoreCase))
-				numLen = nanSymbol.Length;
-			else if (inStr.StartsWith(infSymbol, .OrdinalIgnoreCase))
-				numLen = infSymbol.Length;
-			else if (inStr.StartsWith(negInfSymbol, .OrdinalIgnoreCase))
-				numLen = negInfSymbol.Length;
-			else
+			bool hasValue = true;
+			if (inStr.Length > 0)
 			{
-				while (inStr.Length > numLen && {
-					let char = inStr[numLen];
-					char.IsNumber || char == '.' || char == '-' || char == '+' || char == 'e'
-				})
-					numLen++;
+				if (inStr.StartsWith(nanSymbol, .OrdinalIgnoreCase))
+					numLen = nanSymbol.Length;
+				else if (inStr.StartsWith(infSymbol, .OrdinalIgnoreCase))
+					numLen = infSymbol.Length;
+				else if ((inStr[0] == '-' || inStr[0] == '+') && inStr.Substring(1).StartsWith(infSymbol, .OrdinalIgnoreCase))
+					numLen = infSymbol.Length + 1;
+				else
+				{
+					hasValue = false; // Prove it!
+					while (inStr.Length > numLen && {
+						let char = inStr[numLen];
+						hasValue |= char.IsNumber;
+						char.IsNumber || char == '.' || char == '-' || char == '+' || char == 'e'
+					})
+						numLen++;
+				}
 			}
 
-			if (numLen == 0)
+			if (numLen == 0 || !hasValue)
 			{
 				Error!("Expected floating point");
 			}

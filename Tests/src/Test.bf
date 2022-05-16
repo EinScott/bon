@@ -180,6 +180,70 @@ namespace Bon.Tests
 			}
 
 			{
+				float f = 1;
+				let str = Bon.Serialize(f, .. scope .());
+				Test.Assert(str == "1");
+
+				float of = ?;
+				Test.Assert((Bon.Deserialize(ref of, str) case .Ok) && of == f);
+			}
+
+			{
+				double f = 1;
+				let str = Bon.Serialize(f, .. scope .());
+				Test.Assert(str == "1");
+
+				double of = ?;
+				Test.Assert((Bon.Deserialize(ref of, str) case .Ok) && of == f);
+			}
+
+			{
+				double f = double.NaN;
+				let str = Bon.Serialize(f, .. scope .());
+				Test.Assert(str == "NaN");
+
+				double of = ?;
+				Test.Assert((Bon.Deserialize(ref of, str) case .Ok) && of == f);
+			}
+
+			{
+				float f = float.PositiveInfinity;
+				let str = Bon.Serialize(f, .. scope .());
+				Test.Assert(str == "Infinity");
+
+				float of = ?;
+				Test.Assert((Bon.Deserialize(ref of, str) case .Ok) && of == f);
+			}
+
+			{
+				float f = 1e4f;
+				let str = Bon.Serialize(f, .. scope .());
+				Test.Assert(str == "10000");
+
+				float of = ?;
+				Test.Assert((Bon.Deserialize(ref of, str) case .Ok) && of == f);
+			}
+
+			{
+				double f = -1e-8;
+				let str = Bon.Serialize(f, .. scope .());
+				Test.Assert(str == "-1e-08");
+
+				double of = ?;
+				Test.Assert((Bon.Deserialize(ref of, str) case .Ok) && of == f);
+			}
+
+			{
+				float of = ?;
+				Test.Assert((Bon.Deserialize(ref of, "+infinity") case .Ok) && of == float.PositiveInfinity);
+			}
+
+			{
+				float of = ?;
+				Test.Assert((Bon.Deserialize(ref of, "nan") case .Ok) && of == float.NaN);
+			}
+
+			{
 				float ob = ?;
 				Test.Assert((Bon.Deserialize(ref ob, "1f") case .Ok) && ob == 1f);
 			}
@@ -205,6 +269,11 @@ namespace Bon.Tests
 			}
 
 			{
+				int i = ?;
+				Test.Assert((Bon.Deserialize(ref i, "+0xF5aL") case .Ok) && i == 3930);
+			}
+
+			{
 				int8 i = ?;
 				Test.Assert((Bon.Deserialize(ref i, "0b1'0'1") case .Ok) && i == 5);
 			}
@@ -217,6 +286,16 @@ namespace Bon.Tests
 			{
 				int i = ?;
 				Test.Assert((Bon.Deserialize(ref i, "default") case .Ok) && i == 0);
+			}
+
+			{
+				int i = ?;
+				Test.Assert((Bon.Deserialize(ref i, "+00000") case .Ok) && i == 0);
+			}
+
+			{
+				uint8 i = ?;
+				Test.Assert((Bon.Deserialize(ref i, "00000160") case .Ok) && i == 160);
 			}
 
 			{
@@ -234,7 +313,47 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref oc, "'\\x2a'") case .Ok) && oc == '\x2a');
 			}
 
+			{
+				int8 oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, "-0x'L") case .Ok) && oi == 0); // This makes NO sense, but beef allows it too
+			}
+
 			// Should error (but not crash)
+
+			{
+				float ob = ?;
+				Test.Assert(Bon.Deserialize(ref ob, "++Infinity") case .Err);
+			}
+
+			{
+				float ob = ?;
+				Test.Assert(Bon.Deserialize(ref ob, "-NaN") case .Err);
+			}
+
+			{
+				float ob = ?;
+				Test.Assert(Bon.Deserialize(ref ob, "0.0.") case .Err);
+			}
+
+			{
+				float ob = ?;
+				Test.Assert(Bon.Deserialize(ref ob, "0-1") case .Err);
+			}
+
+			{
+				float ob = ?;
+				Test.Assert(Bon.Deserialize(ref ob, "5e") case .Err);
+			}
+
+			{
+				float ob = ?;
+				Test.Assert(Bon.Deserialize(ref ob, "5e-03999999999") case .Err);
+			}
+
+			{
+				double ob = ?;
+				Test.Assert(Bon.Deserialize(ref ob, "e-10") case .Err);
+			}
 
 			{
 				int8 oi = ?;
@@ -247,8 +366,18 @@ namespace Bon.Tests
 			}
 
 			{
+				uint8 oi = ?;
+				Test.Assert(Bon.Deserialize(ref oi, "-25") case .Err);
+			}
+
+			{
 				int8 oi = ?;
 				Test.Assert(Bon.Deserialize(ref oi, "0b2") case .Err);
+			}
+
+			{
+				int8 oi = ?;
+				Test.Assert(Bon.Deserialize(ref oi, "00b0") case .Err);
 			}
 
 			{
