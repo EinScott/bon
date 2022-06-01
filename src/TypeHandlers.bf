@@ -183,11 +183,11 @@ namespace Bon.Integrated
 					&& m.ParamCount == 1 && m.GetParamType(0) == keyType)
 					remove = m;
 
-				if (tryAdd != default && remove != default)
+				if (tryAdd.[Friend]mData.mMethodData != null && remove.[Friend]mData.mMethodData != null)
 					break;
 			}
 
-			if (tryAdd.[Friend]mData.mMethodData == null || remove.[Friend]mData.mMethodData == null)
+			if (tryAdd.[Friend]mData.mMethodData == null || remove.[Friend]mData.mMethodData == null) // this was tryAdd == default... before (above also), but that currently fails
 				Deserialize.Error!("TryAdd and Remove methods need to be included & reflected to deserialize Dictionary<,>", null, t);
 
 			// Relative positions of entries stay the same regardless of realloc

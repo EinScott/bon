@@ -630,8 +630,12 @@ namespace Bon.Integrated
 		{
 			switch (type)
 			{
-			case typeof(float): AsThingToString!<float>(writer, val);
-			case typeof(double): AsThingToString!<double>(writer, val);
+			case typeof(float):
+				float thing = *(float*)val.dataPtr;
+				thing.ToString(writer.outStr, "R", null); // Produce a string we can recreate... MS says this should be G9 when supported
+			case typeof(double):
+				double thing = *(double*)val.dataPtr;
+				thing.ToString(writer.outStr, "R", null); // Produce a string we can recreate... MS says this should be G17 when supported
 
 			default: Debug.FatalError(); // Should be unreachable
 			}
