@@ -187,7 +187,7 @@ namespace Bon.Integrated
 					break;
 			}
 
-			if (tryAdd == default || remove == default)
+			if (tryAdd.[Friend]mData.mMethodData == null || remove.[Friend]mData.mMethodData == null)
 				Deserialize.Error!("TryAdd and Remove methods need to be included & reflected to deserialize Dictionary<,>", null, t);
 
 			// Relative positions of entries stay the same regardless of realloc
