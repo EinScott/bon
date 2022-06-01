@@ -47,8 +47,8 @@ Content of ``serialized``:
             gold = 231
         },
         {
-            level = 1
-            dead = true,
+            level = 1,
+            dead = true
         }
     ]
 }
