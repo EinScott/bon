@@ -981,6 +981,20 @@ namespace Bon.Tests
 			case Three(uint8[]);
 		}
 
+		enum CarryIndicrect
+		{
+			case One(int);
+			case Two(String);
+			case Three(uint8[]);
+		}
+
+		[BonTarget]
+		struct Indirect
+		{
+			public CarryIndicrect carry;
+			public Thing thing;
+		}
+
 		[Test]
 		static void EnumUnions()
 		{
@@ -993,6 +1007,16 @@ namespace Bon.Tests
 
 				Carry si = ?;
 				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si == i);
+			}
+
+			{
+				Indirect i = .() { carry = .One(1), thing = .Circle(.(1, 16), 1) };
+				let str = Bon.Serialize(i, .. scope .());
+				Test.Assert(str == "{carry=default,thing=.Circle{pos={x=1,y=16},radius=1}}");
+
+				Indirect si = ?;
+				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si.carry == default);
+				Test.Assert((Bon.Deserialize(ref si,"{carry=.One{0=1}}") case .Err) && si.carry == default);
 			}
 
 			using (PushFlags(.IncludeDefault))
