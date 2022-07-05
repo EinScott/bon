@@ -627,11 +627,22 @@ namespace Bon.Tests
 		[Test]
 		static void Enums()
 		{
-			// No reflection data
+			// No reflection data and not verbose
 			{
 				TypeA i = .Named120;
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == "120");
+
+				TypeA oi = ?;
+				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
+			}
+
+			// No reflection data but Serialize uses typeof(EnumT) which includes reflection...
+			using (PushFlags(.Verbose))
+			{
+				TypeA i = .Named120;
+				let str = Bon.Serialize(i, .. scope .());
+				Test.Assert(str == ".Named120");
 
 				TypeA oi = ?;
 				Test.Assert((Bon.Deserialize(ref oi, str) case .Ok) && oi == i);
@@ -998,7 +1009,7 @@ namespace Bon.Tests
 		[Test]
 		static void EnumUnions()
 		{
-			// No reflection data
+			// No reflection data but Serialize uses typeof(EnumT) which includes reflection...
 			using (PushFlags(.IncludeDefault))
 			{
 				Carry i = .One(1);
