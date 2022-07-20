@@ -14,14 +14,19 @@ namespace Bon
 
 		public Result<int64> GetEntryCount(bool countLeft = true)
 		{
-			let reader = scope BonReader();
-			if (reader.Setup(.(origStr, countLeft ? strLeft : origStr)) case .Err)
+			if (!hasMore)
 				return 0;
+
+			let reader = scope BonReader();
+			Try!(reader.Setup(.(origStr, countLeft ? strLeft : origStr)));
 			return reader.FileEntryPeekCount();
 		}
 
 		public Result<BonContext> SkipEntry(int entryCount = 1)
 		{
+			if (!hasMore)
+				return .Err;
+
 			let reader = scope BonReader();
 			Try!(reader.Setup(this));
 			Try!(reader.FileEntrySkip(entryCount));
