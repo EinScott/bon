@@ -604,7 +604,7 @@ BonEnvironment env = new .() ~ delete _;
 public void SerializeScene(String buffer)
 {
     let writer = scope BonWriter(buffer, env.serializeFlags.HasFlag(.Verbose));
-    Serialize.Start(writer);
+    let startLen = Serialize.Start(writer);
 
     using (writer.ArrayBlock())
     {
@@ -616,7 +616,7 @@ public void SerializeScene(String buffer)
         }
     }
 
-    Serialize.End(writer);
+    Serialize.End(writer, startLen);
 }
 
 void SerializeEntity(BonWriter writer, EntityId e, String buffer)

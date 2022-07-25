@@ -24,15 +24,17 @@ namespace Bon.Integrated
 
 		// These two are for integrated use!
 		[Inline]
-		public static void Start(BonWriter writer)
+		public static int Start(BonWriter writer)
 		{
 			writer.Start();
+			return writer.outStr.Length;
 		}
-
+		
+		/// @param startLength the return value of the Start call
 		[Inline]
-		public static void End(BonWriter writer)
+		public static void End(BonWriter writer, int startLength)
 		{
-			if (writer.outStr.Length == 0)
+			if (writer.outStr.Length == startLength)
 			{
 				// We never explicitly place default automatically to enable DeserializeFlags.IgnoreUnmentionedValues
 				// we still need this in order to not shift the file-level "array"
@@ -44,12 +46,12 @@ namespace Bon.Integrated
 
 		public static void Entry(BonWriter writer, ValueView val, BonEnvironment env)
 		{
-			Start(writer);
+			let startLen = Start(writer);
 
 			if (DoInclude!(val, env.serializeFlags))
 				Value(writer, val, env);
 			
-			End(writer);
+			End(writer, startLen);
 		}
 
 		public static void Value(BonWriter writer, ValueView val, BonEnvironment env, bool doOneLine = false)

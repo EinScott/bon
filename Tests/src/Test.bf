@@ -1841,6 +1841,14 @@ namespace Bon.Tests
 			SetupStringHandler!();
 
 			{
+				let str = Bon.Serialize(0, .. scope .());
+				Bon.Serialize(12, str);
+				Bon.Serialize(0, str);
+				Bon.Serialize(0, str);
+				Test.Assert(str == "?,12,?,?");
+			}
+
+			{
 				let s = StructB() {
 					age = 23,
 					type = .OtherThing,
