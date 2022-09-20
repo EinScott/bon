@@ -418,7 +418,7 @@ namespace Bon.Integrated
 					while (inStr.Length > numLen && {
 						let char = inStr[numLen];
 						hasValue |= char.IsNumber;
-						char.IsNumber || char == '.' || char == '-' || char == '+' || char == 'e'
+						char.IsNumber || char == '.' || char == '-' || char == '+' || char.ToLower == 'e'
 					})
 						numLen++;
 				}

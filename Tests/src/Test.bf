@@ -234,6 +234,11 @@ namespace Bon.Tests
 			}
 
 			{
+				double of = ?;
+				Test.Assert((Bon.Deserialize(ref of, "-1E-08") case .Ok) && of == -1E-08);
+			}
+
+			{
 				float of = ?;
 				Test.Assert((Bon.Deserialize(ref of, "+infinity") case .Ok) && of == float.PositiveInfinity);
 			}
