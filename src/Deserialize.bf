@@ -700,6 +700,13 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
+		static mixin ShouldIgnoreFiled(FieldInfo f, BonEnvironment env)
+		{
+			!env.deserializeFlags.HasFlag(.AccessNonPublic) // we don't allow non-public
+			&& !(f.[Friend]mFieldData.mFlags.HasFlag(.Public) || f.GetCustomAttribute<BonIncludeAttribute>() case .Ok) // field is not accessible
+			|| f.GetCustomAttribute<BonIgnoreAttribute>() case .Ok
+		}
+
 		public static Result<void> Struct(BonReader reader, ValueView val, BonEnvironment env)
 		{
 			let structType = val.type;
@@ -731,9 +738,7 @@ namespace Bon.Integrated
 				if (!found)
 					Error!("Failed to find field", reader, structType);
 
-				if (!env.deserializeFlags.HasFlag(.AccessNonPublic) // we don't allow non-public
-					&& !(fieldInfo.[Friend]mFieldData.mFlags.HasFlag(.Public) || fieldInfo.GetCustomAttribute<BonIncludeAttribute>() case .Ok) // field is not accessible
-					|| fieldInfo.GetCustomAttribute<BonIgnoreAttribute>() case .Ok) // or field is ignored
+				if (ShouldIgnoreFiled!(fieldInfo, env))
 					Error!("Field access not allowed", reader, structType);
 
 				Try!(Value(reader, ValueView(fieldInfo.FieldType, ((uint8*)val.dataPtr) + fieldInfo.MemberOffset), env));
@@ -745,7 +750,12 @@ namespace Bon.Integrated
 			if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
 			{
 				for (let f in fields)
+				{
+					if (ShouldIgnoreFiled!(f, env))
+						continue;
+
 					Try!(MakeDefault(reader, ValueView(f.FieldType, ((uint8*)val.dataPtr) + f.MemberOffset), env));
+				}
 			}
 
 			return reader.ObjectBlockEnd();
