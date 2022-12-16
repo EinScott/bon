@@ -88,8 +88,6 @@ namespace Bon.Integrated
 			}
 
 			var pad = currPos - start;
-			if (startCapped)
-				pad += 4;
 
 			buffer.Append("(line ");
 			lines.ToString(buffer);
@@ -114,6 +112,8 @@ namespace Bon.Integrated
 				buffer.Append(" ...");
 
 			buffer.Append("\n> ");
+			if (startCapped)
+				buffer.Append("    ");
 
 			for (let i < pad)
 			{
