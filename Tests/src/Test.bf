@@ -25,24 +25,6 @@ namespace Bon.Tests
 			}
 		}
 
-		struct PushDeFlags : IDisposable
-		{
-			BonDeserializeFlags old;
-
-			[Inline]
-			public this(BonDeserializeFlags flags)
-			{
-				old = gBonEnv.deserializeFlags;
-				gBonEnv.deserializeFlags = flags;
-			}
-
-			[Inline]
-			public void Dispose()
-			{
-				gBonEnv.deserializeFlags = old;
-			}
-		}
-
 		static StringView HandleStringView(StringView view)
 		{
 			// Since we're dealing with const strings,
@@ -861,14 +843,13 @@ namespace Bon.Tests
 				}
 
 				using (PushFlags(.IncludeNonPublic))
-				using (PushDeFlags(.AccessNonPublic))
 				{
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",intern=54,important=32656}");
 
 					SomeThings so = ?;
 					so.str = scope .();
-					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
+					Test.Assert(Bon.Deserialize(ref so, str) case .Err);
 				}
 
 				using (PushFlags(.IncludeDefault))
@@ -881,7 +862,6 @@ namespace Bon.Tests
 				}
 
 				using (PushFlags(.IgnoreAttributes))
-				using (PushDeFlags(.AccessNonPublic))
 				{
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",dont=8}");
@@ -892,15 +872,14 @@ namespace Bon.Tests
 				}
 
 				using (PushFlags(.IncludeNonPublic|.IgnoreAttributes|.IncludeDefault))
-				using (PushDeFlags(.AccessNonPublic))
 				{
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",intern=54,important=32656,dont=8,n=0}");
 
-					// We cannot access dont
+					// We cannot access dont and intern
 					SomeThings so = default;
 					Test.Assert(Bon.Deserialize(ref so, str) case .Err);
-					Test.Assert(Bon.Deserialize(ref so, "{i=5,f=1,str=\"oh hello\",intern=54,important=32656,n=0}") case .Ok);
+					Test.Assert(Bon.Deserialize(ref so, "{i=5,f=1,str=\"oh hello\",important=32656,n=0}") case .Ok);
 				}
 			}
 
@@ -1192,6 +1171,7 @@ namespace Bon.Tests
 		[BonTarget,BonPolyRegister]
 		class LookAThing<T>
 		{
+			[BonInclude]
 			T tThingLook;
 		}
 
@@ -1234,21 +1214,15 @@ namespace Bon.Tests
 			}
 
 			using (PushFlags(.IncludeNonPublic))
-			using (PushDeFlags(.AccessNonPublic))
 			{
 				OtherClassThing c = scope OtherClassThing() { Number = 59992, something = 222252222 };
 				c.Name.Set("ohh");
 
 				let str = Bon.Serialize(c, .. scope .());
 				Test.Assert(str == "{something=222252222,prop__Number=59992,Name=\"ohh\"}");
-
-				OtherClassThing co = null;
-				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType() && Bon.Serialize(co, .. scope .()) == str);
-				delete co;
 			}
 
 			using (PushFlags(.IncludeNonPublic))
-			using (PushDeFlags(.AccessNonPublic))
 			{
 				Object c = scope OtherClassThing() { Number = 59992, something = 222252222 };
 
@@ -1260,13 +1234,11 @@ namespace Bon.Tests
 				delete co;
 			}
 
-			using (PushFlags(.IncludeNonPublic))
-			using (PushDeFlags(.AccessNonPublic))
 			{
 				BaseThing c = scope OtherClassThing() { Number = 59992, something = 222252222 };
 
 				let str = Bon.Serialize(c, .. scope .());
-				Test.Assert(str == "(Bon.Tests.OtherClassThing){something=222252222,prop__Number=59992,Name=\"nothing\"}");
+				Test.Assert(str == "(Bon.Tests.OtherClassThing){something=222252222,Name=\"nothing\"}");
 
 				BaseThing co = null;
 				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType() && Bon.Serialize(co, .. scope .()) == str);
@@ -1288,7 +1260,6 @@ namespace Bon.Tests
 			}
 
 			using (PushFlags(.IncludeNonPublic))
-			using (PushDeFlags(.AccessNonPublic))
 			{
 				let c = scope LookAThing<int>();
 				c.[Friend]tThingLook = 55;
@@ -1301,7 +1272,6 @@ namespace Bon.Tests
 			}
 
 			using (PushFlags(.IncludeNonPublic))
-			using (PushDeFlags(.AccessNonPublic))
 			TEST: {
 				Object c = { let a = scope:TEST LookAThing<int>(); a.[Friend]tThingLook = 55; a };
 
@@ -1318,12 +1288,22 @@ namespace Bon.Tests
 		static void Interfaces()
 		{
 			using (PushFlags(.IncludeNonPublic))
-			using (PushDeFlags(.AccessNonPublic))
 			{
 				IThing c = scope OtherClassThing() { Number = 59992, something = 222252222 };
 
 				let str = Bon.Serialize(c, .. scope .());
 				Test.Assert(str == "(Bon.Tests.OtherClassThing){something=222252222,prop__Number=59992,Name=\"nothing\"}");
+
+				IThing co = null;
+				Test.Assert(Bon.Deserialize(ref co, str) case .Err);
+				delete co;
+			}
+
+			{
+				IThing c = scope OtherClassThing() { Number = 59992, something = 222252222 };
+
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "(Bon.Tests.OtherClassThing){something=222252222,Name=\"nothing\"}");
 
 				IThing co = null;
 				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType() && Bon.Serialize(co, .. scope .()) == str);
@@ -1476,7 +1456,7 @@ namespace Bon.Tests
 			{
 				AlignStruct[,] s = scope .[2,2]((.{a=5,b=16}, .{a=10,b=64}), (default, .{a=100,b=255}));
 				let str = Bon.Serialize(s, .. scope .());
-				Test.Assert(str == "<2,2>[[{a=5,b=16},{a=10,b=64}],[?,{a=100,b=255}]]");
+				Test.Assert(str == "<2,2>[[{a=5,b=16},{a=10,b=64}],[,{a=100,b=255}]]");
 
 				AlignStruct[,] so = null;
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
@@ -1500,14 +1480,15 @@ namespace Bon.Tests
 				s[0,0,2,1] = 9090;
 
 				let str = Bon.Serialize(s, .. scope .());
-				Test.Assert(str == "<1,2,3,4>[[[[5000],?,[?,9090]],[[?,?,?,1646],?]]]");
+				Test.Assert(str == "<1,2,3,4>[[[[5000],,[,9090]],[[,,,1646],]]]");
 
 				uint64[,,,] so = null;
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
 				delete so;
 			}
 
-			using (PushDeFlags(.IgnoreUnmentionedValues))
+			// TODO upgrade
+			/*using (PushDeFlags(.IgnoreUnmentionedValues))
 			{
 				uint64[,,,] s = scope .[1,2,3,4]();
 				s[0,1,0,3] = 1646;
@@ -1529,7 +1510,7 @@ namespace Bon.Tests
 					&& so[0,1,1,1] == 50 // Ignore unmentioned
 					&& so[0,1,0,0] == 60
 					&& so[0,1,2,0] == 70);
-			}
+			}*/
 
 			{
 				uint16[,,] so = null;
@@ -1616,7 +1597,8 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && ArrayEqual!(l, lo));
 			}
 
-			using (PushDeFlags(.IgnoreUnmentionedValues))
+			// TODO upgrade
+			/*using (PushDeFlags(.IgnoreUnmentionedValues))
 			{
 				let l = scope List<int32>()
 					{
@@ -1630,7 +1612,7 @@ namespace Bon.Tests
 						2, 3, 4, 5, 6, 100, 200, 300, 400, 500, 1000, 2500, 8000, 10000 // oops, already in use
 					};
 				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && lo.Count == 14 && lo[5] == l[5] && lo[10] == 1000);
-			}
+			}*/
 
 			{
 				let l = scope List<AlignStruct>()
@@ -1638,7 +1620,7 @@ namespace Bon.Tests
 						AlignStruct{a=1,b=2}, .{}, .{a=12,b=150}
 					};
 				let str = Bon.Serialize(l, .. scope .());
-				Test.Assert(str == "[{a=1,b=2},?,{a=12,b=150}]");
+				Test.Assert(str == "[{a=1,b=2},,{a=12,b=150}]");
 
 				List<AlignStruct> lo = scope List<AlignStruct>()
 					{
@@ -1653,7 +1635,7 @@ namespace Bon.Tests
 						AlignStruct{a=1,b=2}, .{}, .{a=12,b=150}
 					};
 				let str = Bon.Serialize(l, .. scope .());
-				Test.Assert(str == "[{a=1,b=2},?,{a=12,b=150}]");
+				Test.Assert(str == "[{a=1,b=2},,{a=12,b=150}]");
 
 				List<AlignStruct> lo = scope List<AlignStruct>(3);
 				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && ArrayEqual!(l, lo));
@@ -1725,7 +1707,8 @@ namespace Bon.Tests
 							&& d[150] == o[150] && d[24] == o[24] && o.Count == 2);
 					}
 
-					using (PushDeFlags(.IgnoreUnmentionedValues))
+					// TODO upgrade
+					/*using (PushDeFlags(.IgnoreUnmentionedValues))
 					{
 						Dictionary<int,uint8> o = scope .(3);
 						o.Add(150, 200);
@@ -1735,7 +1718,7 @@ namespace Bon.Tests
 						Test.Assert((Bon.Deserialize(ref o, str) case .Ok)
 							&& d[150] == o[150] && d[24] == o[24]
 							&& o[234] == 1 && o[6000] == 1 && o.Count == 4);
-					}
+					}*/
 				}
 
 				using (PushFlags(.Verbose))
@@ -1772,14 +1755,6 @@ namespace Bon.Tests
 					o.Add("b", default);
 
 					Test.Assert(Bon.Deserialize(ref o, str) case .Err);
-				}
-
-				using (PushDeFlags(.AllowReferenceNulling))
-				{
-					Dictionary<String,SomeData> o = scope .(2);
-					o.Add("b", default);
-
-					Test.Assert((Bon.Deserialize(ref o, str) case .Ok) && o.Count == 2);
 				}
 			}
 
@@ -2019,15 +1994,6 @@ namespace Bon.Tests
 				uint8 d = 0;
 				uint8*[4] po = .(&d,&d,&d,&d); // Cannot null pointers
 				Test.Assert(Bon.Deserialize(ref po, "[]") case .Err);
-			}
-
-			using (PushDeFlags(.IgnorePointers))
-			{
-				uint8 d = 0;
-				uint8*[4] po = .(&d,&d,&d,&d);
-				uint8*[4] poc = po;
-				Test.Assert((Bon.Deserialize(ref po, "[]") case .Ok)
-					&& po == poc); // But nothing actually changed
 			}
 		}
 

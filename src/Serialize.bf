@@ -30,16 +30,11 @@ namespace Bon.Integrated
 			return writer.outStr.Length;
 		}
 		
-		/// @param startLength the return value of the Start call
 		[Inline]
-		public static void End(BonWriter writer, int startLength)
+		public static void End(BonWriter writer, int lengthReturnedFromStartCall)
 		{
-			if (writer.outStr.Length == startLength)
-			{
-				// We never explicitly place default automatically to enable DeserializeFlags.IgnoreUnmentionedValues
-				// we still need this in order to not shift the file-level "array"
-				Irrelevant(writer);
-			}
+			if (writer.outStr.Length == lengthReturnedFromStartCall)
+				Empty(writer);
 
 			writer.End();
 		}
@@ -376,7 +371,7 @@ namespace Bon.Integrated
 			else if (valType.IsPointer)
 			{
 				if (env.serializeFlags.HasFlag(.Verbose))
-					writer.outStr.Append("/* Cannot handle pointer values. Put [NoSerialize] on this field */");
+					writer.outStr.Append("/* Cannot handle pointer values. Put [BonIgnore] on this field */");
 			}
 			else
 			{
@@ -491,11 +486,7 @@ namespace Bon.Integrated
 						var arrVal = ValueView(arrType, ptr);
 						if (DoInclude!(arrVal, env.serializeFlags))
 							Value(writer, arrVal, env, doArrayOneLine);
-						else
-						{
-							// Shorten this... as mentioned in Entry() we don't automatically place default, but ?
-							Irrelevant(writer, doArrayOneLine);
-						}
+						else Empty(writer, doArrayOneLine);
 
 						ptr += arrType.Stride;
 					}
@@ -560,11 +551,7 @@ namespace Bon.Integrated
 
 							writer.EntryEnd();
 						}	
-						else
-						{
-							// Shorten this... as mentioned in Entry() we don't automatically place default, but ?
-							Irrelevant(writer);
-						}
+						else Empty(writer);
 
 						ptr += stride;
 					}
@@ -580,10 +567,9 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
-		public static void Irrelevant(BonWriter writer, bool doOneLine = false)
+		public static void Empty(BonWriter writer, bool doOneLine = false)
 		{
 			writer.EntryStart(doOneLine);
-			writer.IrrelevantEntry();
 			writer.EntryEnd(doOneLine);
 		}
 

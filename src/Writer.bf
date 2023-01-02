@@ -202,12 +202,12 @@ namespace Bon.Integrated
 			outStr.Append(bool ? "true" : "false");
 		}
 
-		[Inline]
+		[Inline, Obsolete("Can be omitted", false)]
 		public void IrrelevantEntry()
 		{
 			outStr.Append('?');
 		}
-		
+
 		public void Start()
 		{
 			if (outStr.Length > 0)
@@ -296,19 +296,31 @@ namespace Bon.Integrated
 		
 		public void EntryEnd(bool doOneLine = false)
 		{
+			// TODO is this needed? preventDoubleComma = true, except for in emptyEntry
+			/*
 			if (!doFormatting)
 			{
-				if (!outStr.EndsWith(','))
+				if (preventDoubleComma && !outStr.EndsWith(','))
 					outStr.Append(',');
 			}
 			else
 			{
-				if (!outStr.EndsWith(",\n"))
+				if (preventDoubleComma && (!outStr.EndsWith(",\n") || outStr.EndsWith(',')))
 				{
 					outStr.Append(',');
 					if (!doOneLine)
 						f.NewLine(outStr);
 				}
+			}
+			*/
+
+			if (!doFormatting)
+				outStr.Append(',');
+			else
+			{
+				outStr.Append(',');
+				if (!doOneLine)
+					f.NewLine(outStr);
 			}
 		}
 

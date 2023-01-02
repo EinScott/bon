@@ -12,6 +12,11 @@ using internal Bon.Integrated;
 
 namespace Bon.Integrated
 {
+	struct DeserializeStackState
+	{
+		public bool arrayKeepUnlessSet;
+	}
+
 	static class Deserialize
 	{
 		public static mixin Error(String error, BonReader reader, Type type = null)
@@ -45,42 +50,52 @@ namespace Bon.Integrated
 #endif
 		}
 
-		public static Result<void> MakeDefault(BonReader reader, ValueView val, BonEnvironment env)
+		public static Result<void> MakeDefault(BonReader reader, ValueView val)
 		{
 			if (ValueDataIsZero!(val))
 				return .Ok;
 
-			Try!(CheckCanDefault(reader, val, env));
+			Try!(CheckCanDefault(reader, val, true));
 
 			let ptr = val.dataPtr;
 			let size = val.type.Size;
-			switch (size)
+
+			bool memset = true;
+			let align = val.type.Align;
+
+			if (align == 1)
 			{
-			case 0:
-			case 1: *(uint8*)ptr = 0;
-			case 2: *(uint16*)ptr = 0;
-			case 4: *(uint32*)ptr = 0;
-			case 8: *(uint64*)ptr = 0;
-			default:
-				Internal.MemSet(ptr, 0, size);
+				memset = false; // TODO does this work?
+				switch (size)
+				{
+				case 0:
+				case 1: *(uint8*)ptr = 0;
+				case 2: *(uint16*)ptr = 0;
+				case 4: *(uint32*)ptr = 0;
+				case 8: *(uint64*)ptr = 0;
+				default:
+					memset = true;
+				}
 			}
+			if (memset)
+				Internal.MemSet(ptr, 0, size, align);
 
 			return .Ok;
 		}
 
-		public static Result<void> DefaultArray(BonReader reader, Type arrType, void* arrPtr, int64 count, BonEnvironment env)
+		public static Result<void> DefaultArray(BonReader reader, Type arrType, void* arrPtr, int64 count)
 		{
 			var ptr = (uint8*)arrPtr;
 			for (let j < count)
 			{
-				Try!(MakeDefault(reader, ValueView(arrType, ptr), env));
+				Try!(MakeDefault(reader, ValueView(arrType, ptr)));
 
 				ptr += arrType.Stride;
 			}
 			return .Ok;
 		}
 
-		public static Result<void> DefaultMultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, BonEnvironment env, params int64[] counts)
+		public static Result<void> DefaultMultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, params int64[] counts)
 		{
 			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
 
@@ -104,9 +119,9 @@ namespace Bon.Integrated
 						for (let j < inner)
 							innerCounts[j] = counts[j + 1];
 
-						Try!(DefaultMultiDimensionalArray(reader, arrType, ptr, env, params innerCounts));
+						Try!(DefaultMultiDimensionalArray(reader, arrType, ptr, params innerCounts));
 					}
-					else Try!(DefaultArray(reader, arrType, ptr, counts[1], env));
+					else Try!(DefaultArray(reader, arrType, ptr, counts[1]));
 
 					ptr += stride;
 				}
@@ -114,16 +129,15 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static Result<void> CheckCanDefault(BonReader reader, ValueView val, BonEnvironment env)
+		public static Result<void> CheckCanDefault(BonReader reader, ValueView val, bool zeroCheckDone = false)
 		{
-			if (ValueDataIsZero!(val))
+			if (!zeroCheckDone && ValueDataIsZero!(val))
 				return .Ok;
 
 			let valType = val.type;
 			if (valType.IsStruct)
 			{
-				if (!env.deserializeFlags.HasFlag(.AllowReferenceNulling))
-					Try!(CheckStructForRef(reader, val, env));
+				Try!(CheckStructForRef(reader, val));
 			}
 			else if (valType is SizedArrayType)
 			{
@@ -134,37 +148,32 @@ namespace Bon.Integrated
 
 				for (let j < count)
 				{
-					Try!(CheckCanDefault(reader, ValueView(arrType, ptr), env));
+					Try!(CheckCanDefault(reader, ValueView(arrType, ptr)));
 
 					ptr += arrType.Stride;
 				}
-				return .Ok;
 			}
 			else if (TypeHoldsObject!(valType))
-			{
-				if (!env.deserializeFlags.HasFlag(.AllowReferenceNulling))
-					Error!("Cannot null reference", reader, valType);
-			}
+				Error!("Cannot null reference", reader, valType);
 			else if (valType.IsPointer)
-			{
-				if (!env.deserializeFlags.HasFlag(.IgnorePointers))
-					Error!("Cannot handle pointer values", reader, valType);
-			}
+				Error!("Cannot handle pointer values", reader, valType);
 
 			return .Ok;
 		}
 
-		public static Result<void> CheckStructForRef(BonReader reader, ValueView val, BonEnvironment env)
+		public static Result<void> CheckStructForRef(BonReader reader, ValueView val)
 		{
-			let allowNulling = env.deserializeFlags.HasFlag(.AllowReferenceNulling);
-			Debug.Assert(!allowNulling);
-
 			for (let f in val.type.GetFields(.Instance))
 			{
+				// when field is null we can just continue...
+
+				// TODO when something we ignore is not null, we need to null the complicated way...
+				// (easy way would be to error, but .... no) -> also use this for pointer
+
 				let fieldType = f.FieldType;
 				if (fieldType.IsStruct)
-					Try!(CheckStructForRef(reader, ValueView(fieldType, (uint8*)val.dataPtr + f.MemberOffset), env));
-				else if (TypeHoldsObject!(fieldType) && !allowNulling)
+					Try!(CheckStructForRef(reader, ValueView(fieldType, (uint8*)val.dataPtr + f.MemberOffset)));
+				else if (TypeHoldsObject!(fieldType))
 					Error!("Cannot null reference nested in struct", reader, fieldType);
 				else if (val.type.IsPointer)
 					Error!("Cannot handle pointer values nested in struct", reader, fieldType);
@@ -177,15 +186,7 @@ namespace Bon.Integrated
 		public static Result<void> NullInstanceRef(BonReader reader, ValueView val, BonEnvironment env)
 		{
 			if (*(void**)val.dataPtr != null)
-			{
-				if (env.deserializeFlags.HasFlag(.AllowReferenceNulling))
-				{
-					*(void**)val.dataPtr = null;
-					return .Ok;
-				}
-
 				Error!("Cannot null reference", reader, val.type);
-			}
 
 			return .Ok;
 		}
@@ -265,19 +266,15 @@ namespace Bon.Integrated
 		{
 			Try!(Start(reader));
 
-			if (reader.IsIrrelevantEntry())
-			{
-				if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
-					Try!(MakeDefault(reader, val, env));
-
-				Try!(reader.ConsumeEmpty());
-			}
+			let isEmptyEntry = Try!(reader.EmptyArrayEntry());
+			if (isEmptyEntry)
+				Try!(MakeDefault(reader, val));
 			else Try!(Value(reader, val, env));
 
 			return End(reader);
 		}
 
-		public static Result<void> Value(BonReader reader, ValueView val, BonEnvironment env)
+		public static Result<void> Value(BonReader reader, ValueView val, BonEnvironment env, DeserializeStackState state = default)
 		{
 			let valType = val.type;
 			var polyType = valType;
@@ -310,12 +307,16 @@ namespace Bon.Integrated
 
 			if (reader.IsDefault())
 			{
-				Try!(MakeDefault(reader, val, env));
+				Try!(MakeDefault(reader, val));
+				Try!(reader.ConsumeEmpty());
+			}
+			else if (reader.IsIrrelevantEntry())
+			{
+				if (!valType.HasCustomAttribute<BonKeepUnlessSetAttribute>())
+					Try!(MakeDefault(reader, val));
 
 				Try!(reader.ConsumeEmpty());
-			}	
-			else if (reader.IsIrrelevantEntry())
-				Error!("Ignored markers are only valid in arrays", reader);
+			}
 			else if (valType.IsPrimitive)
 			{
 				if (valType.IsInteger)
@@ -407,12 +408,14 @@ namespace Bon.Integrated
 						if (env.stringViewHandler != null)
 						{
 							let str = env.stringViewHandler(parsedStr);
-							Debug.Assert(str.Ptr != parsedStr.Ptr, "[BON ENV] Seriously? bonEnvironment.stringViewHandler returned passed in view but should manage the string's memory!");
-							Debug.Assert(str == parsedStr, "[BON ENV] bonEnvironment.stringViewHandler returned altered string!");
+							if (str.Ptr == parsedStr.Ptr)
+								Error!("[BON ENV] Seriously? bonEnvironment.stringViewHandler returned passed in view but should manage the string's memory!", reader);
+							if (str != parsedStr)
+								Error!("[BON ENV] bonEnvironment.stringViewHandler returned altered string!", reader);
 
 							*(StringView*)val.dataPtr = str;
 						}
-						else Debug.FatalError("[BON ENV] Register a bonEnvironment.stringViewHandler to deserialize StringViews!");
+						else Error!("[BON ENV] Register a bonEnvironment.stringViewHandler to deserialize StringViews!", reader);
 					}
 				}
 				else if (valType.IsEnum && valType.IsUnion)
@@ -481,7 +484,7 @@ namespace Bon.Integrated
 					Try!(Struct(reader, unionPayload, env));
 				}
 				else if (GetCustomHandler(valType, env, let func))
-					Try!(func(reader, val, env));
+					Try!(func(reader, val, env, state));
 				else Try!(Struct(reader, val, env));
 			}
 			else if (valType is SizedArrayType)
@@ -495,7 +498,7 @@ namespace Bon.Integrated
 				}
 
 				let t = (SizedArrayType)valType;
-				Try!(Array(reader, t.UnderlyingType, val.dataPtr, t.ElementCount, env));
+				Try!(Array(reader, t.UnderlyingType, val.dataPtr, t.ElementCount, env, state));
 			}
 			else if (TypeHoldsObject!(valType))
 			{
@@ -645,17 +648,17 @@ namespace Bon.Integrated
 							case typeof(Array2<>):
 								SetValField!(val, "mLength1", (int_arsize)counts[1]);
 
-								Try!(MultiDimensionalArray(reader, arrType, arrPtr, env, params counts));
+								Try!(MultiDimensionalArray(reader, arrType, arrPtr, env, state, params counts));
 
 							case typeof(Array1<>):
-								Try!(Array(reader, arrType, arrPtr, fullCount, env));
+								Try!(Array(reader, arrType, arrPtr, fullCount, env, state));
 
 							default:
 								Debug.FatalError();
 							}
 						}
 						else if (GetCustomHandler(polyType, env, let func))
-							Try!(func(reader, val, env));
+							Try!(func(reader, val, env, state));
 						else Try!(Class(reader, val, env));
 					}
 				}
@@ -700,11 +703,10 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		static mixin ShouldIgnoreFiled(FieldInfo f, BonEnvironment env)
+		static mixin ShouldIgnoreField(FieldInfo f, BonEnvironment env)
 		{
-			!env.deserializeFlags.HasFlag(.AccessNonPublic) // we don't allow non-public
-			&& !(f.[Friend]mFieldData.mFlags.HasFlag(.Public) || f.GetCustomAttribute<BonIncludeAttribute>() case .Ok) // field is not accessible
-			|| f.GetCustomAttribute<BonIgnoreAttribute>() case .Ok
+			!(f.[Friend]mFieldData.mFlags.HasFlag(.Public) || f.HasCustomAttribute<BonIncludeAttribute>()) // field is not accessible
+			|| f.HasCustomAttribute<BonIgnoreAttribute>()
 		}
 
 		public static Result<void> Struct(BonReader reader, ValueView val, BonEnvironment env)
@@ -738,30 +740,46 @@ namespace Bon.Integrated
 				if (!found)
 					Error!("Failed to find field", reader, structType);
 
-				if (ShouldIgnoreFiled!(fieldInfo, env))
+				if (ShouldIgnoreField!(fieldInfo, env))
 					Error!("Field access not allowed", reader, structType);
 
-				Try!(Value(reader, ValueView(fieldInfo.FieldType, ((uint8*)val.dataPtr) + fieldInfo.MemberOffset), env));
+				var state = DeserializeStackState();
+				ATTRIB:for (let attrib in fieldInfo.GetCustomAttributes())
+				{
+					switch (attrib.GetType())
+					{
+					case typeof(BonArrayKeepUnlessSetAttribute):
+						state.arrayKeepUnlessSet = true;
+						break ATTRIB; // Since there's only this
+					}
+				}
+
+				Try!(Value(reader, ValueView(fieldInfo.FieldType, ((uint8*)val.dataPtr) + fieldInfo.MemberOffset), env, state));
 
 				if (reader.ObjectHasMore())
 					Try!(reader.EntryEnd());
 			}
 
-			if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+			if (!structType.HasCustomAttribute<BonKeepMembersUnlessSetAttribute>())
 			{
 				for (let f in fields)
 				{
-					if (ShouldIgnoreFiled!(f, env))
+					if (ShouldIgnoreField!(f, env) || f.HasCustomAttribute<BonKeepUnlessSetAttribute>())
 						continue;
 
-					Try!(MakeDefault(reader, ValueView(f.FieldType, ((uint8*)val.dataPtr) + f.MemberOffset), env));
+					Try!(MakeDefault(reader, ValueView(f.FieldType, ((uint8*)val.dataPtr) + f.MemberOffset)));
 				}
 			}
 
 			return reader.ObjectBlockEnd();
 		}
 
-		public static Result<void> Array(BonReader reader, Type arrType, void* arrPtr, int64 count, BonEnvironment env)
+		static mixin IsTypeAlwaysDefaultable(Type type)
+		{
+			type.IsPrimitive || type.IsTypedPrimitive || type.IsEnum
+		}
+
+		public static Result<void> Array(BonReader reader, Type arrType, void* arrPtr, int64 count, BonEnvironment env, DeserializeStackState state)
 		{
 			Try!(reader.ArrayBlock());
 
@@ -773,13 +791,12 @@ namespace Bon.Integrated
 				{
 					var arrVal = ValueView(arrType, ptr);
 
-					if (reader.IsIrrelevantEntry())
+					let isExplicit = reader.IsDefault(false);
+					let isEmptyEntry = Try!(reader.EmptyArrayEntry());
+					if (isEmptyEntry)
 					{
-						// Null unless we leave these alone!
-						if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
-							Try!(MakeDefault(reader, arrVal, env));
-
-						Try!(reader.ConsumeEmpty());
+						if (isExplicit || !state.arrayKeepUnlessSet)
+							Try!(MakeDefault(reader, arrVal));
 					}
 					else Try!(Value(reader, arrVal, env));
 
@@ -789,16 +806,17 @@ namespace Bon.Integrated
 					ptr += arrType.Stride;
 				}
 
-				if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+				if (!state.arrayKeepUnlessSet)
 				{
-					if (arrType.IsValueType)
+					if (IsTypeAlwaysDefaultable!(arrType))
 						Internal.MemSet(ptr, 0, arrType.Stride * ((int)count - i), arrType.Align); // MakeDefault would just do the same here
 					else
 					{
 						// Default unaffected entries (since they aren't serialized)
-						for (let j < count - i)
+						let len = count - i;
+						for (let j < len)
 						{
-							Try!(MakeDefault(reader, ValueView(arrType, ptr), env));
+							Try!(MakeDefault(reader, ValueView(arrType, ptr)));
 
 							ptr += arrType.Stride;
 						}
@@ -811,7 +829,7 @@ namespace Bon.Integrated
 			return reader.ArrayBlockEnd();
 		}
 
-		public static Result<void> MultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, BonEnvironment env, params int64[] counts)
+		public static Result<void> MultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, BonEnvironment env, DeserializeStackState state, params int64[] counts)
 		{
 			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
 
@@ -831,9 +849,9 @@ namespace Bon.Integrated
 					for (let j < inner)
 						innerCounts[j] = counts[j + 1];
 
-					Try!(DefaultMultiDimensionalArray(reader, arrType, ptr, env, params innerCounts));
+					Try!(DefaultMultiDimensionalArray(reader, arrType, ptr, params innerCounts));
 				}
-				else Try!(DefaultArray(reader, arrType, ptr, counts[1], env));
+				else Try!(DefaultArray(reader, arrType, ptr, counts[1]));
 			}
 
 			Try!(reader.ArrayBlock());
@@ -845,13 +863,14 @@ namespace Bon.Integrated
 				for (; i < count && reader.ArrayHasMore(); i++)
 				{
 					// Since we don't call value in any case, we have to check for this ourselves
-					let isDefault = reader.IsDefault();
-					if (isDefault || reader.IsIrrelevantEntry())
+					let isExplicit = reader.IsDefault(false);
+					let isEmptyEntry = Try!(reader.EmptyArrayEntry());
+					if (isEmptyEntry)
 					{
 						// Null unless we leave these alone!
-						if (isDefault || !env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+						if (isExplicit || !state.arrayKeepUnlessSet)
 						{
-							if (arrType.IsValueType)
+							if (IsTypeAlwaysDefaultable!(arrType))
 								Internal.MemSet(ptr, 0, stride, arrType.Align); // MakeDefault would just do the same here
 							else DefaultArray!(ptr);
 						}
@@ -867,9 +886,9 @@ namespace Bon.Integrated
 							for (let j < inner)
 								innerCounts[j] = counts[j + 1];
 
-							Try!(MultiDimensionalArray(reader, arrType, ptr, env, params innerCounts));
+							Try!(MultiDimensionalArray(reader, arrType, ptr, env, state, params innerCounts));
 						}
-						else Try!(Array(reader, arrType, ptr, counts[1], env));
+						else Try!(Array(reader, arrType, ptr, counts[1], env, state));
 					}
 
 					if (reader.ArrayHasMore())
@@ -878,9 +897,9 @@ namespace Bon.Integrated
 					ptr += stride;
 				}
 
-				if (!env.deserializeFlags.HasFlag(.IgnoreUnmentionedValues))
+				if (!state.arrayKeepUnlessSet)
 				{
-					if (arrType.IsValueType)
+					if (IsTypeAlwaysDefaultable!(arrType))
 						Internal.MemSet(ptr, 0, stride * (.)(count - i), arrType.Align); // MakeDefault would just do the same here
 					else
 					{
@@ -1123,7 +1142,7 @@ namespace Bon.Integrated
 
 		static mixin DoChar<T, TI>(BonReader reader, ValueView val, char32 char) where T : var where TI : var
 		{
-			if ((uint)char > TI.MaxValue)
+			if ((uint64)char > TI.MaxValue)
 				Error!("Char is out of range", reader, typeof(T));
 
 			*(T*)val.dataPtr = *(T*)&char;

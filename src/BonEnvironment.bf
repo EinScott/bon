@@ -23,38 +23,16 @@ namespace Bon
 		/// The produced string will be formatted (and slightly more verbose) for manual editing.
 		case Verbose = 1 << 4;
 	}
-
-	enum BonDeserializeFlags : uint8
-	{
-		/// Fully set the state of the target structure based on the given string.
-		case Default = 0;
-
-		/// Values not mentioned in the given string will be ignored instead of being nulled
-		/// (or causing erros for reference types). As a result, a successful deserialize
-		/// call does not necessarily mean that the target value is set exactly.
-		case IgnoreUnmentionedValues = 1 | IgnorePointers;
-
-		/// Ignore pointers when encountering them instead of erroring.
-		/// Bon does not manipulate pointers.
-		case IgnorePointers = 1 << 1;
-
-		/// Allows bon strings to access non-public fields.
-		case AccessNonPublic = 1 << 2;
-
-		/// Allow bon to null existing references in fields it has to write to.
-		case AllowReferenceNulling = 1 << 3;
-	}
 	
 	public delegate void MakeThingFunc(ValueView refIntoVal);
 
 	public delegate void HandleSerializeFunc(BonWriter writer, ValueView val, BonEnvironment env);
-	public delegate Result<void> HandleDeserializeFunc(BonReader reader, ValueView val, BonEnvironment env);
+	public delegate Result<void> HandleDeserializeFunc(BonReader reader, ValueView val, BonEnvironment env, DeserializeStackState state);
 
 	/// Defines the behavior of bon.
 	class BonEnvironment
 	{
 		public BonSerializeFlags serializeFlags;
-		public BonDeserializeFlags deserializeFlags;
 
 		/// When bon serializes or deserializes an unknown type, it checks this to see if there are custom
 		/// functions to handle this type. Functions can be registered by type or by unspecialized generic
@@ -105,7 +83,6 @@ namespace Bon
 				return;
 
 			serializeFlags = gBonEnv.serializeFlags;
-			deserializeFlags = gBonEnv.deserializeFlags;
 
 			mixin CopyDelegate(var target, Delegate del)
 			{

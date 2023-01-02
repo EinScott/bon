@@ -616,6 +616,20 @@ namespace Bon.Integrated
 			return name;
 		}
 
+		public Result<bool> EmptyArrayEntry()
+		{
+			let wasExplicit = IsIrrelevantEntry() || IsDefault();
+			if (wasExplicit)
+				ConsumeEmpty();
+
+			if (Check(']', false) || Check(',', false) || ReachedEnd())
+				return .Ok(true);
+			else if (wasExplicit) // Inconsistent: explicitly empty but no end or seperator after
+				Error!("Expected end of array or comma");
+
+			return .Ok(false);
+		}
+
 		public bool IsNull(bool consumeIfFound = true)
 		{
 			if (inStr.StartsWith("null"))
@@ -638,7 +652,6 @@ namespace Bon.Integrated
 			return false;
 		}
 
-		[Inline]
 		public bool IsIrrelevantEntry()
 		{
 			return Check('?');
@@ -844,6 +857,8 @@ namespace Bon.Integrated
 			return !Check('}', false) && inStr.Length > 0;
 		}
 
+		// TODO adjust to entries can be empty...  + search for other occurances
+
 		public Result<int64> ArrayPeekCount()
 		{
 			// Validates the top-structure of the array and basic integrity of entrires.
@@ -898,7 +913,7 @@ namespace Bon.Integrated
 				}
 				else
 				{
-					if (res.isEmpty)
+					if (res.isEmpty) // TODO oh we allowed that... this is going to be problematic? or at least we need to know if last was a non-empty value to eval if this is trailing...
 						count--; // Trailing comma
 
 					Debug.Assert(inStr[[Unchecked]i] ==  ']');
