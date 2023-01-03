@@ -266,9 +266,11 @@ namespace Bon.Integrated
 		{
 			Try!(Start(reader));
 
-			let isEmptyEntry = Try!(reader.EmptyArrayEntry());
-			if (isEmptyEntry)
+			if (reader.IsIrrelevantEntry() || reader.IsDefault())
+			{
 				Try!(MakeDefault(reader, val));
+				Try!(reader.ConsumeEmpty());
+			}
 			else Try!(Value(reader, val, env));
 
 			return End(reader);
@@ -791,12 +793,12 @@ namespace Bon.Integrated
 				{
 					var arrVal = ValueView(arrType, ptr);
 
-					let isExplicit = reader.IsDefault(false);
-					let isEmptyEntry = Try!(reader.EmptyArrayEntry());
-					if (isEmptyEntry)
+					if (reader.IsIrrelevantEntry())
 					{
-						if (isExplicit || !state.arrayKeepUnlessSet)
+						if (!state.arrayKeepUnlessSet)
 							Try!(MakeDefault(reader, arrVal));
+
+						Try!(reader.ConsumeEmpty());
 					}
 					else Try!(Value(reader, arrVal, env));
 
@@ -863,12 +865,10 @@ namespace Bon.Integrated
 				for (; i < count && reader.ArrayHasMore(); i++)
 				{
 					// Since we don't call value in any case, we have to check for this ourselves
-					let isExplicit = reader.IsDefault(false);
-					let isEmptyEntry = Try!(reader.EmptyArrayEntry());
-					if (isEmptyEntry)
+					if (reader.IsIrrelevantEntry())
 					{
 						// Null unless we leave these alone!
-						if (isExplicit || !state.arrayKeepUnlessSet)
+						if (!state.arrayKeepUnlessSet)
 						{
 							if (IsTypeAlwaysDefaultable!(arrType))
 								Internal.MemSet(ptr, 0, stride, arrType.Align); // MakeDefault would just do the same here

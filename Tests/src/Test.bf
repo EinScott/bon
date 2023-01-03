@@ -955,6 +955,11 @@ namespace Bon.Tests
 					}
 					""") case .Ok) && so == s);
 			}
+
+			{
+				var s = SomeData();
+				Test.Assert(Bon.Deserialize(ref s, "{time=?}") case .Ok);
+			}
 		}
 
 		[BonTarget]
@@ -1456,7 +1461,7 @@ namespace Bon.Tests
 			{
 				AlignStruct[,] s = scope .[2,2]((.{a=5,b=16}, .{a=10,b=64}), (default, .{a=100,b=255}));
 				let str = Bon.Serialize(s, .. scope .());
-				Test.Assert(str == "<2,2>[[{a=5,b=16},{a=10,b=64}],[,{a=100,b=255}]]");
+				Test.Assert(str == "<2,2>[[{a=5,b=16},{a=10,b=64}],[?,{a=100,b=255}]]");
 
 				AlignStruct[,] so = null;
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
@@ -1480,7 +1485,7 @@ namespace Bon.Tests
 				s[0,0,2,1] = 9090;
 
 				let str = Bon.Serialize(s, .. scope .());
-				Test.Assert(str == "<1,2,3,4>[[[[5000],,[,9090]],[[,,,1646],]]]");
+				Test.Assert(str == "<1,2,3,4>[[[[5000],?,[?,9090]],[[?,?,?,1646],?]]]");
 
 				uint64[,,,] so = null;
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
@@ -1620,7 +1625,7 @@ namespace Bon.Tests
 						AlignStruct{a=1,b=2}, .{}, .{a=12,b=150}
 					};
 				let str = Bon.Serialize(l, .. scope .());
-				Test.Assert(str == "[{a=1,b=2},,{a=12,b=150}]");
+				Test.Assert(str == "[{a=1,b=2},?,{a=12,b=150}]");
 
 				List<AlignStruct> lo = scope List<AlignStruct>()
 					{
@@ -1635,7 +1640,7 @@ namespace Bon.Tests
 						AlignStruct{a=1,b=2}, .{}, .{a=12,b=150}
 					};
 				let str = Bon.Serialize(l, .. scope .());
-				Test.Assert(str == "[{a=1,b=2},,{a=12,b=150}]");
+				Test.Assert(str == "[{a=1,b=2},?,{a=12,b=150}]");
 
 				List<AlignStruct> lo = scope List<AlignStruct>(3);
 				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && ArrayEqual!(l, lo));
@@ -2073,7 +2078,6 @@ namespace Bon.Tests
 			Test.Assert(Bon.Deserialize(ref d, "}") case .Err);
 			Test.Assert(Bon.Deserialize(ref d, "{,}") case .Err);
 			Test.Assert(Bon.Deserialize(ref d, "{?}") case .Err);
-			Test.Assert(Bon.Deserialize(ref d, "{time=?}") case .Err);
 			Test.Assert(Bon.Deserialize(ref d, "{timedd=}") case .Err);
 			Test.Assert(Bon.Deserialize(ref d, "{,,}") case .Err);
 			Test.Assert(Bon.Deserialize(ref d, "{,,") case .Err);

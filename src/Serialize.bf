@@ -34,7 +34,7 @@ namespace Bon.Integrated
 		public static void End(BonWriter writer, int lengthReturnedFromStartCall)
 		{
 			if (writer.outStr.Length == lengthReturnedFromStartCall)
-				Empty(writer);
+				Irrelevant(writer);
 
 			writer.End();
 		}
@@ -486,7 +486,7 @@ namespace Bon.Integrated
 						var arrVal = ValueView(arrType, ptr);
 						if (DoInclude!(arrVal, env.serializeFlags))
 							Value(writer, arrVal, env, doArrayOneLine);
-						else Empty(writer, doArrayOneLine);
+						else Irrelevant(writer, doArrayOneLine);
 
 						ptr += arrType.Stride;
 					}
@@ -551,7 +551,7 @@ namespace Bon.Integrated
 
 							writer.EntryEnd();
 						}	
-						else Empty(writer);
+						else Irrelevant(writer);
 
 						ptr += stride;
 					}
@@ -567,9 +567,10 @@ namespace Bon.Integrated
 		}
 
 		[Inline]
-		public static void Empty(BonWriter writer, bool doOneLine = false)
+		public static void Irrelevant(BonWriter writer, bool doOneLine = false)
 		{
 			writer.EntryStart(doOneLine);
+			writer.IrrelevantEntry();
 			writer.EntryEnd(doOneLine);
 		}
 

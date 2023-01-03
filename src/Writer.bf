@@ -174,6 +174,13 @@ namespace Bon.Integrated
 			outStr.Append("null");
 		}
 
+		// TODO either remove or put this instead of ? on fields where it's just default anyway... ??? worth it?? better??
+		/*[Inline]
+		public void Default()
+		{
+			outStr.Append('~');
+		}*/
+
 		[Inline]
 		public void Reference(StringView referencePath)
 		{
@@ -202,7 +209,7 @@ namespace Bon.Integrated
 			outStr.Append(bool ? "true" : "false");
 		}
 
-		[Inline, Obsolete("Can be omitted", false)]
+		[Inline]
 		public void IrrelevantEntry()
 		{
 			outStr.Append('?');
@@ -296,31 +303,19 @@ namespace Bon.Integrated
 		
 		public void EntryEnd(bool doOneLine = false)
 		{
-			// TODO is this needed? preventDoubleComma = true, except for in emptyEntry
-			/*
 			if (!doFormatting)
 			{
-				if (preventDoubleComma && !outStr.EndsWith(','))
+				if (!outStr.EndsWith(','))
 					outStr.Append(',');
 			}
 			else
 			{
-				if (preventDoubleComma && (!outStr.EndsWith(",\n") || outStr.EndsWith(',')))
+				if (!outStr.EndsWith(",\n") || outStr.EndsWith(','))
 				{
 					outStr.Append(',');
 					if (!doOneLine)
 						f.NewLine(outStr);
 				}
-			}
-			*/
-
-			if (!doFormatting)
-				outStr.Append(',');
-			else
-			{
-				outStr.Append(',');
-				if (!doOneLine)
-					f.NewLine(outStr);
 			}
 		}
 
