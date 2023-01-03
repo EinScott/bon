@@ -420,9 +420,9 @@ namespace Bon.Integrated
 					for (let m in structType.GetFields(.Instance))
 					{
 						let flags = env.serializeFlags;
-						if ((!flags.HasFlag(.IgnoreAttributes) && m.GetCustomAttribute<BonIgnoreAttribute>() case .Ok) // check hidden
+						if ((!flags.HasFlag(.IgnorePermissions) && m.GetCustomAttribute<BonIgnoreAttribute>() case .Ok) // check hidden
 							|| !flags.HasFlag(.IncludeNonPublic) && (m.[Friend]mFieldData.mFlags & .Public == 0) // check protection level
-							&& (flags.HasFlag(.IgnoreAttributes) || !(m.GetCustomAttribute<BonIncludeAttribute>() case .Ok))) // check if we still include it anyway
+							&& (flags.HasFlag(.IgnorePermissions) || !(m.GetCustomAttribute<BonIncludeAttribute>() case .Ok))) // check if we still include it anyway
 							continue;
 
 						var val = ValueView(m.FieldType, ((uint8*)structVal.dataPtr) + m.MemberOffset);

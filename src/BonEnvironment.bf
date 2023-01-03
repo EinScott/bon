@@ -17,8 +17,8 @@ namespace Bon
 		/// Whether or not to include fields default values (e.g. null, etc)
 		case IncludeDefault = 1 << 1;
 
-		/// Ignore field attributes (only recommended for debugging / complete structure dumping)
-		case IgnoreAttributes = 1 << 3;
+		/// Ignore field permission attributes (only recommended for debugging / complete structure dumping)
+		case IgnorePermissions = 1 << 3;
 
 		/// The produced string will be formatted (and slightly more verbose) for manual editing.
 		case Verbose = 1 << 4;

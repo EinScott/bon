@@ -875,7 +875,7 @@ namespace Bon.Tests
 					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && Bon.Serialize(so, .. scope .()) == str);
 				}
 
-				using (PushFlags(.IgnoreAttributes))
+				using (PushFlags(.IgnorePermissions))
 				{
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",dont=8}");
@@ -885,7 +885,7 @@ namespace Bon.Tests
 					Test.Assert(Bon.Deserialize(ref so, str) case .Err);
 				}
 
-				using (PushFlags(.IncludeNonPublic|.IgnoreAttributes|.IncludeDefault))
+				using (PushFlags(.IncludeNonPublic|.IgnorePermissions|.IncludeDefault))
 				{
 					let str = Bon.Serialize(s, .. scope .());
 					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",intern=54,important=32656,dont=8,n=0}");
