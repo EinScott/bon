@@ -18,7 +18,7 @@ namespace Bon
 		case IncludeDefault = 1 << 1;
 
 		/// Ignore field permission attributes (only recommended for debugging / complete structure dumping)
-		case IgnorePermissions = 1 << 3;
+		case IgnorePermissions = 1 << 3 | IncludeNonPublic;
 
 		/// The produced string will be formatted (and slightly more verbose) for manual editing.
 		case Verbose = 1 << 4;
