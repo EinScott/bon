@@ -190,71 +190,21 @@ namespace Bon.Integrated
 				}
 				else if (valType.IsEnum && valType.IsUnion)
 				{
-					// Enum union in memory:
-					// {<payload>|<discriminator>}
-
-					bool didWrite = false;
-					bool foundCase = false;
-					uint64 unionCaseIndex = 0;
-					uint64 currCaseIndex = 0;
-					for (var enumField in valType.GetFields())
+					let payloadVal = GetPayloadValueFromEnumUnion(val, let caseName, ?);
+					if (payloadVal != default)
 					{
-						if (enumField.[Friend]mFieldData.mFlags.HasFlag(.EnumDiscriminator))
-						{
-							let discrType = enumField.FieldType;
-							var discrVal = ValueView(discrType, (uint8*)val.dataPtr + enumField.[Friend]mFieldData.mData);
-							Debug.Assert(discrType.IsInteger);
-
-							mixin GetVal<T>() where T : var
-							{
-								T thing = *(T*)discrVal.dataPtr;
-								unionCaseIndex = (uint64)thing;
-							}
-
-							switch (discrType)
-							{
-							case typeof(int8): GetVal!<int8>();
-							case typeof(int16): GetVal!<int16>();
-							case typeof(int32): GetVal!<int32>();
-							case typeof(int64): GetVal!<int64>();
-							case typeof(int): GetVal!<int>();
-
-							case typeof(uint8): GetVal!<uint8>();
-							case typeof(uint16): GetVal!<uint16>();
-							case typeof(uint32): GetVal!<uint32>();
-							case typeof(uint64): GetVal!<uint64>();
-							case typeof(uint): GetVal!<uint>();
-
-							default: Debug.FatalError(); // Should be unreachable
-							}
-
-							foundCase = true;
-						}
-						else if (enumField.[Friend]mFieldData.mFlags.HasFlag(.EnumCase)) // Filter through unioncaseIndex
-						{
-							Debug.Assert(foundCase);
-
-							// Skip enum cases until we get to the selected one
-							if (currCaseIndex != unionCaseIndex)
-							{
-								currCaseIndex++;
-								continue;
-							}
-
-							// Do serialize of discriminator and payload
-							writer.Enum(enumField.Name);
-							Struct(writer, ValueView(enumField.FieldType, val.dataPtr), env);
-
-							didWrite = true;
-							break;
-						}
+						writer.Enum(caseName);
+						Struct(writer, payloadVal, env);
 					}
-
-					if (!didWrite)
+					else
 					{
-						writer.outStr.Append("default"); // Just like we just do {} on no reflection info structs
+						writer.outStr.Append('?'); // Just like we just do {} on no reflection info structs
 						if (env.serializeFlags.HasFlag(.Verbose))
-							writer.outStr.Append(scope $"/* No reflection data for {valType}. Add [BonTarget] or force it */");
+						{
+							if (!valType is TypeInstance)
+								writer.outStr.Append(scope $"/* No reflection data for {valType}. Add [BonTarget] or force it */");
+							else writer.outStr.Append("/* Enum has corrupted value */");
+						}	
 					}
 				}
 				else if (GetCustomHandler(valType, env, let func))
@@ -262,7 +212,7 @@ namespace Bon.Integrated
 				else
 				{
 					if (valType.IsUnion && env.serializeFlags.HasFlag(.Verbose))
-						writer.outStr.Append("/* Union struct! fields influence each other */");
+						writer.outStr.Append("/* Union struct! Fields influence each other */");
 
 					Struct(writer, val, env);
 				}
@@ -411,6 +361,7 @@ namespace Bon.Integrated
 		public static void Struct(BonWriter writer, ValueView structVal, BonEnvironment env)
 		{
 			let structType = structVal.type;
+			let flags = env.serializeFlags;
 
 			bool hasUnnamedMembers = false;
 			using (writer.ObjectBlock())
@@ -419,10 +370,10 @@ namespace Bon.Integrated
 				{
 					for (let m in structType.GetFields(.Instance))
 					{
-						let flags = env.serializeFlags;
-						if ((!flags.HasFlag(.IgnorePermissions) && m.GetCustomAttribute<BonIgnoreAttribute>() case .Ok) // check hidden
-							|| !flags.HasFlag(.IncludeNonPublic) && (m.[Friend]mFieldData.mFlags & .Public == 0) // check protection level
-							&& (flags.HasFlag(.IgnorePermissions) || !(m.GetCustomAttribute<BonIncludeAttribute>() case .Ok))) // check if we still include it anyway
+						if ((flags & .IgnorePermissions) != .IgnorePermissions
+							&& (m.GetCustomAttribute<BonIgnoreAttribute>() case .Ok // check hidden
+							|| (!flags.HasFlag(.IncludeNonPublic) && (m.[Friend]mFieldData.mFlags & .Public == 0) // check protection level
+							&& m.GetCustomAttribute<BonIncludeAttribute>() case .Err))) // check if we still include it anyway)
 							continue;
 
 						var val = ValueView(m.FieldType, ((uint8*)structVal.dataPtr) + m.MemberOffset);
@@ -637,6 +588,68 @@ namespace Bon.Integrated
 			if (flags.HasFlag(.Verbose))
 				writer.Bool(boolean);
 			else (boolean ? 1 : 0).ToString(writer.outStr);
+		}
+
+		internal static ValueView GetPayloadValueFromEnumUnion(ValueView enumVal, out StringView caseName, out uint64 caseIndex)
+		{
+			// Enum union in memory:
+			// {<payload>|<discriminator>}
+
+			bool foundCase = false;
+			uint64 unionCaseIndex = 0;
+			uint64 currCaseIndex = 0;
+			for (var enumField in enumVal.type.GetFields())
+			{
+				if (enumField.[Friend]mFieldData.mFlags.HasFlag(.EnumDiscriminator))
+				{
+					let discrType = enumField.FieldType;
+					var discrVal = ValueView(discrType, (uint8*)enumVal.dataPtr + enumField.[Friend]mFieldData.mData);
+					Debug.Assert(discrType.IsInteger);
+
+					mixin GetVal<T>() where T : var
+					{
+						T thing = *(T*)discrVal.dataPtr;
+						unionCaseIndex = (uint64)thing;
+					}
+
+					switch (discrType)
+					{
+					case typeof(int8): GetVal!<int8>();
+					case typeof(int16): GetVal!<int16>();
+					case typeof(int32): GetVal!<int32>();
+					case typeof(int64): GetVal!<int64>();
+					case typeof(int): GetVal!<int>();
+
+					case typeof(uint8): GetVal!<uint8>();
+					case typeof(uint16): GetVal!<uint16>();
+					case typeof(uint32): GetVal!<uint32>();
+					case typeof(uint64): GetVal!<uint64>();
+					case typeof(uint): GetVal!<uint>();
+
+					default: Debug.FatalError(); // Should be unreachable
+					}
+
+					foundCase = true;
+				}
+				else if (enumField.[Friend]mFieldData.mFlags.HasFlag(.EnumCase)) // Filter through unioncaseIndex
+				{
+					Debug.Assert(foundCase);
+
+					// Skip enum cases until we get to the selected one
+					if (currCaseIndex != unionCaseIndex)
+					{
+						currCaseIndex++;
+						continue;
+					}
+
+					caseIndex = currCaseIndex;
+					caseName = enumField.Name;
+					return ValueView(enumField.FieldType, enumVal.dataPtr);
+				}
+			}
+			caseIndex = 0;
+			caseName = default;
+			return default;
 		}
 	}
 }

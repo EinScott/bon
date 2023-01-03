@@ -878,7 +878,7 @@ namespace Bon.Tests
 				using (PushFlags(.IgnorePermissions))
 				{
 					let str = Bon.Serialize(s, .. scope .());
-					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",dont=8}");
+					Test.Assert(str == "{i=5,f=1,str=\"oh hello\",intern=54,important=32656,dont=8}");
 
 					// We cannot access dont
 					SomeThings so = default;
@@ -1043,9 +1043,13 @@ namespace Bon.Tests
 			{
 				Indirect i = .() { carry = .One(1), thing = .Circle(.(1, 16), 1) };
 				let str = Bon.Serialize(i, .. scope .());
-				Test.Assert(str == "{carry=default,thing=.Circle{pos={x=1,y=16},radius=1}}");
+				Test.Assert(str == "{carry=?,thing=.Circle{pos={x=1,y=16},radius=1}}");
 
-				Indirect si = ?;
+				
+				Indirect siu = ?;
+				Test.Assert(Bon.Deserialize(ref siu, str) case .Err);
+
+				Indirect si = default;
 				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si.carry == default);
 				Test.Assert((Bon.Deserialize(ref si,"{carry=.One{0=1}}") case .Err) && si.carry == default);
 			}

@@ -11,7 +11,7 @@ namespace Bon
 		/// Include public fields, don't include default fields, respect attributes (default)
 		case Default = 0;
 
-		/// Include private fields
+		/// Include private fields (but not things we ignore!)
 		case IncludeNonPublic = 1;
 
 		/// Whether or not to include fields default values (e.g. null, etc)

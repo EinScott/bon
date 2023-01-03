@@ -50,52 +50,106 @@ namespace Bon.Integrated
 #endif
 		}
 
-		public static Result<void> MakeDefault(BonReader reader, ValueView val)
+		public static Result<void> MakeDefault(BonReader reader, ValueView val, BonEnvironment env)
 		{
 			if (ValueDataIsZero!(val))
 				return .Ok;
 
-			Try!(CheckCanDefault(reader, val, true));
+			let canQuickDefault = Try!(CheckCanDefault(reader, val, env, true));
 
-			let ptr = val.dataPtr;
-			let size = val.type.Size;
-
-			bool memset = true;
-			let align = val.type.Align;
-
-			if (align == size)
+			if (canQuickDefault)
 			{
-				memset = false;
-				switch (size)
+				let ptr = val.dataPtr;
+				let size = val.type.Size;
+
+				bool memset = true;
+				let align = val.type.Align;
+
+				if (align == size)
 				{
-				case 0:
-				case 1: *(uint8*)ptr = 0;
-				case 2: *(uint16*)ptr = 0;
-				case 4: *(uint32*)ptr = 0;
-				case 8: *(uint64*)ptr = 0;
-				default:
-					memset = true;
+					memset = false;
+					switch (size)
+					{
+					case 0:
+					case 1: *(uint8*)ptr = 0;
+					case 2: *(uint16*)ptr = 0;
+					case 4: *(uint32*)ptr = 0;
+					case 8: *(uint64*)ptr = 0;
+					default:
+						memset = true;
+					}
 				}
+				if (memset)
+					Internal.MemSet(ptr, 0, size, align);
 			}
-			if (memset)
-				Internal.MemSet(ptr, 0, size, align);
+			else MakeDefaultComplicated(reader, val, env);
 
 			return .Ok;
 		}
 
-		public static Result<void> DefaultArray(BonReader reader, Type arrType, void* arrPtr, int64 count)
+		static void MakeDefaultComplicated(BonReader reader, ValueView val, BonEnvironment env)
+		{
+			// We *can* null everything we need to, but need to ignore some fields!
+			// So we need to be careful and slowly walk everything...
+
+			let valType = val.type;
+			if (valType.IsStruct)
+			{
+				if (valType.IsEnum && valType.IsUnion)
+				{
+					let payloadVal = Serialize.GetPayloadValueFromEnumUnion(val, ?, let caseIndex);
+					if (payloadVal != default)
+						MakeDefaultStructComplicated(reader, payloadVal, env);
+					else Debug.FatalError(); // Should have caught this
+				}
+				else MakeDefaultStructComplicated(reader, val, env);
+			}
+			else if (valType is SizedArrayType)
+			{
+				let t = (SizedArrayType)valType;
+				let arrType = t.UnderlyingType;
+				let count = t.ElementCount;
+				var ptr = (uint8*)val.dataPtr;
+
+				for (let j < count)
+				{
+					let fieldVal = ValueView(arrType, ptr);
+					if (ValueDataIsZero!(fieldVal))
+						return;
+
+					MakeDefaultComplicated(reader, fieldVal, env);
+
+					ptr += arrType.Stride;
+				}
+			}
+			else Internal.MemSet(val.dataPtr, 0, valType.Size, valType.Align);
+		}
+
+		static void MakeDefaultStructComplicated(BonReader reader, ValueView val, BonEnvironment env)
+		{
+			for (let f in val.type.GetFields(.Instance))
+			{
+				let fieldVal = ValueView(f.FieldType, (uint8*)val.dataPtr + f.MemberOffset);
+				if (ValueDataIsZero!(fieldVal) || ShouldIgnoreField!(f, env))
+					return;
+				
+				MakeDefaultComplicated(reader, fieldVal, env);
+			}
+		}
+
+		public static Result<void> DefaultArray(BonReader reader, Type arrType, void* arrPtr, int64 count, BonEnvironment env)
 		{
 			var ptr = (uint8*)arrPtr;
 			for (let j < count)
 			{
-				Try!(MakeDefault(reader, ValueView(arrType, ptr)));
+				Try!(MakeDefault(reader, ValueView(arrType, ptr), env));
 
 				ptr += arrType.Stride;
 			}
 			return .Ok;
 		}
 
-		public static Result<void> DefaultMultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, params int64[] counts)
+		public static Result<void> DefaultMultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, BonEnvironment env, params int64[] counts)
 		{
 			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
 
@@ -119,9 +173,9 @@ namespace Bon.Integrated
 						for (let j < inner)
 							innerCounts[j] = counts[j + 1];
 
-						Try!(DefaultMultiDimensionalArray(reader, arrType, ptr, params innerCounts));
+						Try!(DefaultMultiDimensionalArray(reader, arrType, ptr, env, params innerCounts));
 					}
-					else Try!(DefaultArray(reader, arrType, ptr, counts[1]));
+					else Try!(DefaultArray(reader, arrType, ptr, counts[1], env));
 
 					ptr += stride;
 				}
@@ -129,15 +183,37 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static Result<void> CheckCanDefault(BonReader reader, ValueView val, bool zeroCheckDone = false)
+		public static Result<bool> CheckCanDefault(BonReader reader, ValueView val, BonEnvironment env, bool zeroCheckDone = false)
 		{
 			if (!zeroCheckDone && ValueDataIsZero!(val))
-				return .Ok;
+				return .Ok(true);
 
 			let valType = val.type;
 			if (valType.IsStruct)
 			{
-				Try!(CheckStructForRef(reader, val));
+				if (valType.IsEnum && valType.IsUnion)
+				{
+					let payloadVal = Serialize.GetPayloadValueFromEnumUnion(val, ?, let caseIndex);
+					if (payloadVal != default)
+					{
+						if (!Try!(CheckCanDefaultStruct(reader, payloadVal, env)))
+						{
+							// Something in there doesn't wants to be ignored please...
+
+							if (caseIndex != 0)
+								Error!("Cannot ignore field nested in non-default enum union case to default", reader, valType);
+
+							return .Ok(false);
+						}
+					}
+					else
+					{
+						if (!valType is TypeInstance)
+							Error!("Cannot default enum union with no reflection data", reader, valType);
+						else Error!("Cannot default enum union with corrupted value", reader, valType);
+					}
+				}
+				else return CheckCanDefaultStruct(reader, val, env);
 			}
 			else if (valType is SizedArrayType)
 			{
@@ -146,40 +222,52 @@ namespace Bon.Integrated
 				let count = t.ElementCount;
 				var ptr = (uint8*)val.dataPtr;
 
+				bool canQuickDefault = true;
 				for (let j < count)
 				{
-					Try!(CheckCanDefault(reader, ValueView(arrType, ptr)));
+					canQuickDefault &= Try!(CheckCanDefault(reader, ValueView(arrType, ptr), env));
 
 					ptr += arrType.Stride;
 				}
+				return .Ok(canQuickDefault);
 			}
 			else if (TypeHoldsObject!(valType))
-				Error!("Cannot null reference", reader, valType);
+				Error!("Cannot null reference to default", reader, valType);
 			else if (valType.IsPointer)
-				Error!("Cannot handle pointer values", reader, valType);
+				Error!("Cannot handle pointer values to default", reader, valType);
 
-			return .Ok;
+			return .Ok(true);
 		}
 
-		public static Result<void> CheckStructForRef(BonReader reader, ValueView val)
+		static Result<bool> CheckCanDefaultStruct(BonReader reader, ValueView val, BonEnvironment env)
 		{
+			if (!val.type is TypeInstance)
+				Error!("Cannot default struct with no reflection data", reader, val.type);
+
+			bool canQuickDefault = true;
 			for (let f in val.type.GetFields(.Instance))
 			{
-				// when field is null we can just continue...
-
-				// TODO when something we ignore is not null, we need to null the complicated way...
-				// (easy way would be to error, but .... no) -> also use this for pointer
-
 				let fieldType = f.FieldType;
+				let fieldVal = ValueView(fieldType, (uint8*)val.dataPtr + f.MemberOffset);
+				
+				if (ValueDataIsZero!(fieldVal))
+					continue;
+
+				if (ShouldIgnoreField!(f, env))
+				{
+					canQuickDefault = false;
+					continue;
+				}
+
 				if (fieldType.IsStruct)
-					Try!(CheckStructForRef(reader, ValueView(fieldType, (uint8*)val.dataPtr + f.MemberOffset)));
+					canQuickDefault &= Try!(CheckCanDefaultStruct(reader, fieldVal, env));
 				else if (TypeHoldsObject!(fieldType))
-					Error!("Cannot null reference nested in struct", reader, fieldType);
+					Error!("Cannot null reference nested in struct to default", reader, fieldType);
 				else if (val.type.IsPointer)
-					Error!("Cannot handle pointer values nested in struct", reader, fieldType);
+					Error!("Cannot handle pointer values nested in struct to default", reader, fieldType);
 			}
 
-			return .Ok;
+			return .Ok(canQuickDefault);
 		}
 
 		[Inline]
@@ -268,7 +356,7 @@ namespace Bon.Integrated
 
 			if (reader.IsIrrelevantEntry() || reader.IsDefault())
 			{
-				Try!(MakeDefault(reader, val));
+				Try!(MakeDefault(reader, val, env));
 				Try!(reader.ConsumeEmpty());
 			}
 			else Try!(Value(reader, val, env));
@@ -309,13 +397,13 @@ namespace Bon.Integrated
 
 			if (reader.IsDefault())
 			{
-				Try!(MakeDefault(reader, val));
+				Try!(MakeDefault(reader, val, env));
 				Try!(reader.ConsumeEmpty());
 			}
 			else if (reader.IsIrrelevantEntry())
 			{
 				if (!valType.HasCustomAttribute<BonKeepUnlessSetAttribute>())
-					Try!(MakeDefault(reader, val));
+					Try!(MakeDefault(reader, val, env));
 
 				Try!(reader.ConsumeEmpty());
 			}
@@ -720,6 +808,8 @@ namespace Bon.Integrated
 			for (let f in structType.GetFields(.Instance))
 				fields.Add(f);
 
+			// TODO maybe reverse this and search for fields from back for less moving?
+
 			if (fields.Count == 0 && reader.ObjectHasMore())
 				Error!("No reflection data for type", null, structType);
 
@@ -769,7 +859,7 @@ namespace Bon.Integrated
 					if (ShouldIgnoreField!(f, env) || f.HasCustomAttribute<BonKeepUnlessSetAttribute>())
 						continue;
 
-					Try!(MakeDefault(reader, ValueView(f.FieldType, ((uint8*)val.dataPtr) + f.MemberOffset)));
+					Try!(MakeDefault(reader, ValueView(f.FieldType, ((uint8*)val.dataPtr) + f.MemberOffset), env));
 				}
 			}
 
@@ -796,7 +886,7 @@ namespace Bon.Integrated
 					if (reader.IsIrrelevantEntry())
 					{
 						if (!keepValuesUnlessSet)
-							Try!(MakeDefault(reader, arrVal));
+							Try!(MakeDefault(reader, arrVal, env));
 
 						Try!(reader.ConsumeEmpty());
 					}
@@ -818,7 +908,7 @@ namespace Bon.Integrated
 						let len = count - i;
 						for (let j < len)
 						{
-							Try!(MakeDefault(reader, ValueView(arrType, ptr)));
+							Try!(MakeDefault(reader, ValueView(arrType, ptr), env));
 
 							ptr += arrType.Stride;
 						}
@@ -851,9 +941,9 @@ namespace Bon.Integrated
 					for (let j < inner)
 						innerCounts[j] = counts[j + 1];
 
-					Try!(DefaultMultiDimensionalArray(reader, arrType, ptr, params innerCounts));
+					Try!(DefaultMultiDimensionalArray(reader, arrType, ptr, env, params innerCounts));
 				}
-				else Try!(DefaultArray(reader, arrType, ptr, counts[1]));
+				else Try!(DefaultArray(reader, arrType, ptr, counts[1], env));
 			}
 
 			Try!(reader.ArrayBlock());
