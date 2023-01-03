@@ -84,7 +84,7 @@ namespace Bon.Integrated
 			
 			// Since mItems is a pointer...
 			let arrPtr = *(void**)itemsFieldPtr;
-			Try!(Deserialize.Array(reader, arrType, arrPtr, count, env, state));
+			Try!(Deserialize.Array(reader, arrType, arrPtr, count, env, state.arrayKeepUnlessSet));
 
 			return .Ok;
 		}

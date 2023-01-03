@@ -500,7 +500,7 @@ namespace Bon.Integrated
 				}
 
 				let t = (SizedArrayType)valType;
-				Try!(Array(reader, t.UnderlyingType, val.dataPtr, t.ElementCount, env, state));
+				Try!(Array(reader, t.UnderlyingType, val.dataPtr, t.ElementCount, env, state.arrayKeepUnlessSet));
 			}
 			else if (TypeHoldsObject!(valType))
 			{
@@ -650,10 +650,10 @@ namespace Bon.Integrated
 							case typeof(Array2<>):
 								SetValField!(val, "mLength1", (int_arsize)counts[1]);
 
-								Try!(MultiDimensionalArray(reader, arrType, arrPtr, env, state, params counts));
+								Try!(MultiDimensionalArray(reader, arrType, arrPtr, env, state.arrayKeepUnlessSet, params counts));
 
 							case typeof(Array1<>):
-								Try!(Array(reader, arrType, arrPtr, fullCount, env, state));
+								Try!(Array(reader, arrType, arrPtr, fullCount, env, state.arrayKeepUnlessSet));
 
 							default:
 								Debug.FatalError();
@@ -781,7 +781,7 @@ namespace Bon.Integrated
 			type.IsPrimitive || type.IsTypedPrimitive || type.IsEnum
 		}
 
-		public static Result<void> Array(BonReader reader, Type arrType, void* arrPtr, int64 count, BonEnvironment env, DeserializeStackState state)
+		public static Result<void> Array(BonReader reader, Type arrType, void* arrPtr, int64 count, BonEnvironment env, bool keepValuesUnlessSet)
 		{
 			Try!(reader.ArrayBlock());
 
@@ -795,7 +795,7 @@ namespace Bon.Integrated
 
 					if (reader.IsIrrelevantEntry())
 					{
-						if (!state.arrayKeepUnlessSet)
+						if (!keepValuesUnlessSet)
 							Try!(MakeDefault(reader, arrVal));
 
 						Try!(reader.ConsumeEmpty());
@@ -808,7 +808,7 @@ namespace Bon.Integrated
 					ptr += arrType.Stride;
 				}
 
-				if (!state.arrayKeepUnlessSet)
+				if (!keepValuesUnlessSet)
 				{
 					if (IsTypeAlwaysDefaultable!(arrType))
 						Internal.MemSet(ptr, 0, arrType.Stride * ((int)count - i), arrType.Align); // MakeDefault would just do the same here
@@ -831,7 +831,7 @@ namespace Bon.Integrated
 			return reader.ArrayBlockEnd();
 		}
 
-		public static Result<void> MultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, BonEnvironment env, DeserializeStackState state, params int64[] counts)
+		public static Result<void> MultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, BonEnvironment env, bool keepValuesUnlessSet, params int64[] counts)
 		{
 			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
 
@@ -868,7 +868,7 @@ namespace Bon.Integrated
 					if (reader.IsIrrelevantEntry())
 					{
 						// Null unless we leave these alone!
-						if (!state.arrayKeepUnlessSet)
+						if (!keepValuesUnlessSet)
 						{
 							if (IsTypeAlwaysDefaultable!(arrType))
 								Internal.MemSet(ptr, 0, stride, arrType.Align); // MakeDefault would just do the same here
@@ -886,9 +886,9 @@ namespace Bon.Integrated
 							for (let j < inner)
 								innerCounts[j] = counts[j + 1];
 
-							Try!(MultiDimensionalArray(reader, arrType, ptr, env, state, params innerCounts));
+							Try!(MultiDimensionalArray(reader, arrType, ptr, env, keepValuesUnlessSet, params innerCounts));
 						}
-						else Try!(Array(reader, arrType, ptr, counts[1], env, state));
+						else Try!(Array(reader, arrType, ptr, counts[1], env, keepValuesUnlessSet));
 					}
 
 					if (reader.ArrayHasMore())
@@ -897,7 +897,7 @@ namespace Bon.Integrated
 					ptr += stride;
 				}
 
-				if (!state.arrayKeepUnlessSet)
+				if (!keepValuesUnlessSet)
 				{
 					if (IsTypeAlwaysDefaultable!(arrType))
 						Internal.MemSet(ptr, 0, stride * (.)(count - i), arrType.Align); // MakeDefault would just do the same here
