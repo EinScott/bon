@@ -21,7 +21,7 @@ namespace Bon.Integrated
 			origStr = con.origStr;
 
 			if (!con.hasMore)
-				Error!("End of entries already reached");
+				Error!("Expected entry.");
 
 			return .Ok;
 		}

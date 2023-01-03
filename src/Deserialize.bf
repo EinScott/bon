@@ -63,9 +63,9 @@ namespace Bon.Integrated
 			bool memset = true;
 			let align = val.type.Align;
 
-			if (align == 1)
+			if (align == size)
 			{
-				memset = false; // TODO does this work?
+				memset = false;
 				switch (size)
 				{
 				case 0:
@@ -748,7 +748,7 @@ namespace Bon.Integrated
 				var state = DeserializeStackState();
 				ATTRIB:for (let attrib in fieldInfo.GetCustomAttributes())
 				{
-					switch (attrib.GetType())
+					switch (attrib.VariantType)
 					{
 					case typeof(BonArrayKeepUnlessSetAttribute):
 						state.arrayKeepUnlessSet = true;

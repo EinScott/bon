@@ -814,6 +814,20 @@ namespace Bon.Tests
 			public uint64 value;
 		}
 
+		[BonTarget]
+		struct OldConfig
+		{
+			public bool fullscreen = true;
+		}
+
+		[BonTarget, BonKeepMembersUnlessSet]
+		struct Config
+		{
+			public bool fullscreen = true;
+			public float zoom = 1;
+			public int difficulty = 2;
+		}
+
 		[Test]
 		static void Structs()
 		{
@@ -959,6 +973,23 @@ namespace Bon.Tests
 			{
 				var s = SomeData();
 				Test.Assert(Bon.Deserialize(ref s, "{time=?}") case .Ok);
+			}
+
+			// To upgrade old configs this way, we needed to include defaults in those since otherwise zero values that might have been explicit will be restored to default.
+			// Or viewed another way we only apply what a user explicitly specified in a config, and keep the rest.
+			using (PushFlags(.IncludeDefault))
+			{
+				let s = OldConfig { fullscreen = false }; // Old version where there was only fullscreen
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "{fullscreen=0}");
+
+				var so = Config(); // Newer defaults
+				Test.Assert((Bon.Deserialize(ref so, str) case .Ok)
+					&& so.fullscreen == false // Applied
+					&& so.difficulty == 2 && so.zoom == 1); // Newer (thus not explicitly set) values kept!
+
+				let str2 = Bon.Serialize(so, .. scope .());
+				Test.Assert(str2 == "{fullscreen=0,zoom=1,difficulty=2}");
 			}
 		}
 
@@ -1154,6 +1185,15 @@ namespace Bon.Tests
 			public String Name = new .("nothing") ~ delete _;
 		}
 
+		[BonTarget]
+		class SaveFile
+		{
+			public int kills;
+
+			[BonKeepUnlessSet]
+			public String Name = new .(8) ~ delete _;
+		}
+
 		interface IThing
 		{
 
@@ -1287,6 +1327,26 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && Bon.Serialize(co, .. scope .()) == "(Bon.Tests.LookAThing<int>){tThingLook=55}");
 				delete co;
 			}
+
+			{
+				SaveFile c = scope .();
+				c.kills = 12;
+				DeleteAndNullify!(c.Name); // This is an old version of the save file, pretend Name doesnt exitst yet..
+
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "{kills=12}");
+
+				SaveFile co = scope .();
+				Test.Assert((Bon.Deserialize(ref co, str) case .Ok)
+					&& co.kills == c.kills // Set thing is applied
+					&& co.Name != null);
+
+				// Name reference is kept, since Name (which "didn't exist" thus wasn't explicitly set to null),
+				// loads old file into expanded layout correctly without trying to null Name!
+				
+				let str2 = Bon.Serialize(co, .. scope .());
+				Test.Assert(str2 == "{kills=12,Name=\"\"}");
+			}
 		}
 
 		[Test]
@@ -1371,6 +1431,19 @@ namespace Bon.Tests
 		{
 			public uint16 a;
 			public uint8 b;
+		}
+
+		[BonTarget]
+		struct PatchableArray
+		{
+			[BonArrayKeepUnlessSet]
+			public uint64[,,,] data;
+			
+			[BonArrayKeepUnlessSet]
+			public List<int32> listData;
+
+			[BonArrayKeepUnlessSet]
+			public Dictionary<int,uint8> dictData;
 		}
 
 		[Test]
@@ -1492,30 +1565,28 @@ namespace Bon.Tests
 				delete so;
 			}
 
-			// TODO upgrade
-			/*using (PushDeFlags(.IgnoreUnmentionedValues))
 			{
-				uint64[,,,] s = scope .[1,2,3,4]();
-				s[0,1,0,3] = 1646;
-				s[0,0,0,0] = 5000;
-				s[0,0,2,1] = 9090;
+				PatchableArray s = .() { data = scope .[1,2,3,4]() };
+				s.data[0,1,0,3] = 1646;
+				s.data[0,0,0,0] = 5000;
+				s.data[0,0,2,1] = 9090;
 
 				let str = Bon.Serialize(s, .. scope .());
-				Test.Assert(str == "<1,2,3,4>[[[[5000],?,[?,9090]],[[?,?,?,1646],?]]]");
+				Test.Assert(str == "{data=<1,2,3,4>[[[[5000],?,[?,9090]],[[?,?,?,1646],?]]]}");
 
-				uint64[,,,] so = scope .[1,2,3,4]();
-				so[0,1,1,1] = 50;
-				so[0,1,0,0] = 60;
-				so[0,1,2,0] = 70;
+				PatchableArray so = .() { data = scope .[1,2,3,4]() };
+				so.data[0,1,1,1] = 50;
+				so.data[0,1,0,0] = 60;
+				so.data[0,1,2,0] = 70;
 
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok)
-					&& s[0,1,0,3] == so[0,1,0,3] // Fill mentioned values
-					&& s[0,0,0,0] == so[0,0,0,0]
-					&& s[0,0,2,1] == so[0,0,2,1]
-					&& so[0,1,1,1] == 50 // Ignore unmentioned
-					&& so[0,1,0,0] == 60
-					&& so[0,1,2,0] == 70);
-			}*/
+					&& s.data[0,1,0,3] == so.data[0,1,0,3] // Fill mentioned values
+					&& s.data[0,0,0,0] == so.data[0,0,0,0]
+					&& s.data[0,0,2,1] == so.data[0,0,2,1]
+					&& so.data[0,1,1,1] == 50 // Kept
+					&& so.data[0,1,0,0] == 60
+					&& so.data[0,1,2,0] == 70);
+			}
 
 			{
 				uint16[,,] so = null;
@@ -1602,22 +1673,20 @@ namespace Bon.Tests
 				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && ArrayEqual!(l, lo));
 			}
 
-			// TODO upgrade
-			/*using (PushDeFlags(.IgnoreUnmentionedValues))
 			{
-				let l = scope List<int32>()
+				let l = PatchableArray { listData = scope List<int32>()
 					{
 						1, 2, 3, 8, 9, 10, 100, 1000, 10000, 0, 0
-					};
+					}};
 				let str = Bon.Serialize(l, .. scope .());
-				Test.Assert(str == "<11>[1,2,3,8,9,10,100,1000,10000]");
+				Test.Assert(str == "{listData=<11>[1,2,3,8,9,10,100,1000,10000]}");
 
-				List<int32> lo = scope List<int32>()
+				var lo = PatchableArray { listData = scope List<int32>()
 					{
 						2, 3, 4, 5, 6, 100, 200, 300, 400, 500, 1000, 2500, 8000, 10000 // oops, already in use
-					};
-				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && lo.Count == 14 && lo[5] == l[5] && lo[10] == 1000);
-			}*/
+					}};
+				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && lo.listData.Count == 14 && lo.listData[5] == l.listData[5] && lo.listData[10] == 1000);
+			}
 
 			{
 				let l = scope List<AlignStruct>()
@@ -1712,18 +1781,20 @@ namespace Bon.Tests
 							&& d[150] == o[150] && d[24] == o[24] && o.Count == 2);
 					}
 
-					// TODO upgrade
-					/*using (PushDeFlags(.IgnoreUnmentionedValues))
 					{
-						Dictionary<int,uint8> o = scope .(3);
-						o.Add(150, 200);
-						o.Add(234, 1);
-						o.Add(6000, 1);
+						let s = PatchableArray() { dictData = d };
+						let str2 = Bon.Serialize(s, .. scope .());
+						Test.Assert(str2 == "{dictData=[150:2,24:23]}");
 
-						Test.Assert((Bon.Deserialize(ref o, str) case .Ok)
-							&& d[150] == o[150] && d[24] == o[24]
-							&& o[234] == 1 && o[6000] == 1 && o.Count == 4);
-					}*/
+						var o = PatchableArray() { dictData =scope .(3) };
+						o.dictData.Add(150, 200);
+						o.dictData.Add(234, 1);
+						o.dictData.Add(6000, 1);
+
+						Test.Assert((Bon.Deserialize(ref o, str2) case .Ok)
+							&& s.dictData[150] == o.dictData[150] && s.dictData[24] == o.dictData[24]
+							&& o.dictData[234] == 1 && o.dictData[6000] == 1 && o.dictData.Count == 4);
+					}
 				}
 
 				using (PushFlags(.Verbose))

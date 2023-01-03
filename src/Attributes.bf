@@ -31,20 +31,18 @@ namespace Bon
 	[AttributeUsage(.Field, .ReflectAttribute)]
 	struct BonIncludeAttribute : Attribute {}
 
-	// TODO test
-
 	/// When bon would normally attempt to zero out the field for a non-explicit reason,
 	/// like ? or not mentioning the field, its current value is instead preserved.
-	/// Only applies to this field's value, like an integer value, or an object reference.
+	/// Otherwise the value is set exactly as usual.
 	[AttributeUsage(.Field, .ReflectAttribute)]
 	struct BonKeepUnlessSetAttribute : Attribute {}
 
 	/// When bon would normally attempt to zero out an array index for a non-explicit reason,
-	/// like ? or omitting the value, its current value is instead preserved.
-	/// Allows only changing part of an array.
+	/// like ?, its current value is instead preserved. Allows only changing part of an array.
 	[AttributeUsage(.Field, .ReflectAttribute)]
 	struct BonArrayKeepUnlessSetAttribute : Attribute {}
 
-	[AttributeUsage(.Class|.Struct)]
+	/// Same as putting [BonKeepUnlessSet] on all member fields.
+	[AttributeUsage(.Class|.Struct, .ReflectAttribute)]
 	struct BonKeepMembersUnlessSetAttribute : Attribute {}
 }

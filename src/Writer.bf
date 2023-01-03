@@ -174,13 +174,6 @@ namespace Bon.Integrated
 			outStr.Append("null");
 		}
 
-		// TODO either remove or put this instead of ? on fields where it's just default anyway... ??? worth it?? better??
-		/*[Inline]
-		public void Default()
-		{
-			outStr.Append('~');
-		}*/
-
 		[Inline]
 		public void Reference(StringView referencePath)
 		{
