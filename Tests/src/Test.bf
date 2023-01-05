@@ -54,7 +54,8 @@ namespace Bon.Tests
 		static mixin NoStringHandler()
 		{
 			gBonEnv.stringViewHandler = stringViewHandler;
-			gBonEnv.allocHandlers.Remove(typeof(String));
+			if (gBonEnv.allocHandlers.GetAndRemove(typeof(String)) case .Ok(let pair))
+				delete pair.value;
 		}
 
 		[Test]
@@ -828,9 +829,47 @@ namespace Bon.Tests
 			public int difficulty = 2;
 		}
 
+		[BonTarget]
+		struct Retain
+		{
+			public uint8 num;
+			public Config config;
+
+			public RetainInner retain1;
+
+			[BonKeepUnlessSet]
+			public RetainInner retain2;
+
+			[BonIgnore]
+			public int intern;
+
+			[BonArrayKeepUnlessSet]
+			public int8[2] pair; // Retain everything!
+
+			[BonKeepUnlessSet]
+			public int8[] data; // Full array would be set, otherwise everything is kept (just considers reference)
+
+			[BonArrayKeepUnlessSet]
+			public uint8 nope;
+		}
+
+		[BonTarget]
+		struct RetainInner
+		{
+			public uint8 num;
+
+			[BonKeepUnlessSet]
+			public bool retain;
+
+			[BonIgnore]
+			public int intern;
+		}
+
 		[Test]
 		static void Structs()
 		{
+			SetupStringHandler!();
+
 			{
 				var s = SomeThings{
 					i = 5,
@@ -990,6 +1029,42 @@ namespace Bon.Tests
 
 				let str2 = Bon.Serialize(so, .. scope .());
 				Test.Assert(str2 == "{fullscreen=0,zoom=1,difficulty=2}");
+			}
+
+			{
+				let s = Retain() {
+					num = 5,
+					config = .() {
+						fullscreen = true,
+						zoom = 4,
+						difficulty = 0
+					},
+					retain1 = .() {
+						num = 6,
+						retain = true,
+						intern = 10
+					},
+					retain2 = .() {
+						num = 7,
+						retain = true,
+						intern = 100
+					},
+					intern = 1000,
+					pair = .(2, 4),
+					data = scope:: .(1, 2, 3, 4, 5),
+					nope = 42
+				};
+
+				{
+					var so = s;
+					var st = s;
+					st.num = 60;
+					st.retain1.num = 0;
+					st.nope = 0;
+					Test.Assert((Bon.Deserialize(ref so, "{num=60}") case .Ok) && so == st);
+
+					// TODO setting retain values, erroring on intern, explicit default, explicit array default, with const arrays..., with reference
+				}
 			}
 		}
 
@@ -1356,6 +1431,8 @@ namespace Bon.Tests
 		[Test]
 		static void Interfaces()
 		{
+			NoStringHandler!();
+
 			using (PushFlags(.IncludeNonPublic))
 			{
 				IThing c = scope OtherClassThing() { Number = 59992, something = 222252222 };
@@ -1622,8 +1699,10 @@ namespace Bon.Tests
 		}
 
 		[Test]
-		static void Collections()
+		static void List()
 		{
+			NoStringHandler!();
+
 			{
 				let l = scope List<AClass>();
 				let str = Bon.Serialize(l, .. scope .());
@@ -1887,6 +1966,8 @@ namespace Bon.Tests
 						""");
 				}
 			}
+
+			// TODO at least one test with class values, same for list?
 		}
 
 		[BonTarget]
@@ -2181,5 +2262,45 @@ namespace Bon.Tests
 			Test.Assert(Bon.Deserialize(ref a, "<1>[]") case .Ok);
 			Test.Assert(Bon.Deserialize(ref a, "[?, ?],blahblah") case .Ok); // Only checks current entry...
 		}
+
+//#define PROFILE_TEST
+#if PROFILE_TEST		
+		[Test]
+		static void Profile()
+		{
+			ProfileInstance profInst = default;
+			switch (Profiler.StartSampling("Test"))
+			{
+			case .Err:
+				Test.FatalError("No profiler!");
+			case .Ok(let val):
+				profInst = val;
+			}
+
+			for (let i < 1000)
+			{
+				Primitives();
+				Strings();
+				SizedArrays();
+				Enums();
+				Structs();
+				EnumUnions();
+				Boxed();
+				Classes();
+				Interfaces();
+				Arrays();
+				List();
+				Dictionary();
+				FileLevel();
+				Pointers();
+				Nullable();
+				Trash();
+
+				ClearAndDeleteItems!(strings);
+			}
+
+			profInst.Dispose();
+		}
+#endif
 	}
 }

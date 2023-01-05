@@ -13,7 +13,7 @@ namespace Bon.Integrated
 			writer.String(str);
 		}
 
-		public static Result<void> StringDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeStackState state)
+		public static Result<void> StringDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state)
 		{
 			var str = *(String*)val.dataPtr;
 
@@ -38,7 +38,7 @@ namespace Bon.Integrated
 			Serialize.Array(writer, arrType, arrPtr, count, env);
 		}
 
-		public static Result<void> ListDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeStackState state)
+		public static Result<void> ListDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state)
 		{
 			let t = (SpecializedGenericType)val.type;
 
@@ -62,7 +62,7 @@ namespace Bon.Integrated
 			if (currCount > count && !state.arrayKeepUnlessSet)
 			{
 				// The error handling here.. is a bit hacky..
-				if (Deserialize.DefaultArray(reader, arrType, *(uint8**)itemsFieldPtr + count * arrType.Stride, currCount - count, env) case .Err)
+				if (Deserialize.DefaultArray(reader, arrType, *(uint8**)itemsFieldPtr + count * arrType.Stride, currCount - count, env, true) case .Err)
 					Deserialize.Error!("Couldn't shrink List (linked with previous error). Values in the back of the list that were to be removed likely couldn't be handled.", null, t);
 
 				// Here we only set it if we ignore the unmentioned stuff
@@ -157,7 +157,7 @@ namespace Bon.Integrated
 			}
 		}
 
-		public static Result<void> DictionaryDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeStackState state)
+		public static Result<void> DictionaryDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state)
 		{
 			let t = (SpecializedGenericType)val.type;
 
@@ -192,7 +192,7 @@ namespace Bon.Integrated
 
 			// Relative positions of entries stay the same regardless of realloc
 			List<(int keyOffset, int valueOffset, bool found)> current = scope .(Math.Max(count, 16));
-			
+
 			let entriesField = t.GetField("mEntries").Get();
 			var entriesFieldPtr = classData + entriesField.[Inline]MemberOffset; // Entry**
 
@@ -286,13 +286,12 @@ namespace Bon.Integrated
 						}
 					}
 
-					// Returns is a bool. No need to dispose of that Variant explicitly either
 					if (!*((bool*)boolRet.DataPtr))
 					{
 						// This is definitely not very ideal. But we cannot try to deserialize directly into
 						// an existing key, because we only get it with the hash. So we need to try to clear
 						// it here in case it's something we can't null.
-						Try!(Deserialize.MakeDefault(reader, ValueView(keyType, keyPtr), env));
+						Try!(Deserialize.MakeDefault(reader, ValueView(keyType, keyPtr), env, true));
 
 						// Copy key data into there just in case (maybe not everything affects the hash)
 						Internal.MemCpy(keyPtr, &keyData[0], keyData.Count);
@@ -320,16 +319,15 @@ namespace Bon.Integrated
 						let entriesPtr = *(uint8**)(entriesFieldPtr);
 						
 						let keyVal = ValueView(keyType, entriesPtr + e.keyOffset);
-						if ((Deserialize.MakeDefault(reader, ValueView(valueType, entriesPtr + e.valueOffset), env) case .Err)
-							|| Deserialize.CheckCanDefault(reader, keyVal, env) case .Err)
+						let checkKeyDefaultRes = Deserialize.CheckCanDefault(reader, keyVal, env, true);
+						if (checkKeyDefaultRes case .Err || Deserialize.MakeDefault(reader, ValueView(valueType, entriesPtr + e.valueOffset), env, true) case .Err)
 							Deserialize.Error!("Couldn't shrink Dictionary (linked with previous error). Unmentioned pairs that were to be removed from the dictioanry likely couldn't be handled.", null, t);
 
 						if (remove.Invoke(.CreateReference(val.type, classData), keyVal.ToInvokeVariant()) case .Ok(var boolRet))
 							Debug.Assert(*((bool*)boolRet.DataPtr));
 						else Deserialize.Error!("Failed to invoke Remove on Dictionary<,>!", null, t);
 
-						// Null it, we checked before
-						Internal.MemSet(keyVal.dataPtr, 0, keyVal.type.Size);
+						Deserialize.MakeDefaultUnchecked(reader, keyVal, env, checkKeyDefaultRes.Get());
 					}
 				}
 			}
@@ -354,7 +352,7 @@ namespace Bon.Integrated
 			}
 		}
 
-		public static Result<void> NullableDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeStackState state)
+		public static Result<void> NullableDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state)
 		{
 			let t = (SpecializedGenericType)val.type;
 
@@ -371,7 +369,7 @@ namespace Bon.Integrated
 			if (reader.IsNull())
 			{
 				*(bool*)hasValPtr = false;
-				Try!(Deserialize.MakeDefault(reader, structVal, env));
+				Try!(Deserialize.MakeDefault(reader, structVal, env, true));
 			}
 			else
 			{
