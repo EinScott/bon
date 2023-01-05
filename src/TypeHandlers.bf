@@ -327,7 +327,7 @@ namespace Bon.Integrated
 							Debug.Assert(*((bool*)boolRet.DataPtr));
 						else Deserialize.Error!("Failed to invoke Remove on Dictionary<,>!", null, t);
 
-						Deserialize.MakeDefaultUnchecked(reader, keyVal, env, checkKeyDefaultRes.Get());
+						Deserialize.MakeDefaultUnchecked(reader, keyVal, env, true, checkKeyDefaultRes.Get());
 					}
 				}
 			}

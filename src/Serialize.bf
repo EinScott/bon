@@ -198,13 +198,13 @@ namespace Bon.Integrated
 					}
 					else
 					{
-						writer.outStr.Append('?'); // Just like we just do {} on no reflection info structs
-						if (env.serializeFlags.HasFlag(.Verbose))
+						writer.outStr.Append('?');
+						if (env.serializeFlags.HasFlag(.Verbose) && !ValueDataIsZero!(val))
 						{
-							if (!valType is TypeInstance)
+							if (valType.FieldCount <= 2) // Always has two fields $discriminator & $payload
 								writer.outStr.Append(scope $"/* No reflection data for {valType}. Add [BonTarget] or force it */");
 							else writer.outStr.Append("/* Enum has corrupted value */");
-						}	
+						}
 					}
 				}
 				else if (GetCustomHandler(valType, env, let func))
@@ -364,9 +364,9 @@ namespace Bon.Integrated
 			let flags = env.serializeFlags;
 
 			bool hasUnnamedMembers = false;
-			using (writer.ObjectBlock())
+			if (structType.FieldCount > 0)
 			{
-				if (structType.FieldCount > 0)
+				using (writer.ObjectBlock())
 				{
 					for (let m in structType.GetFields(.Instance))
 					{
@@ -389,11 +389,12 @@ namespace Bon.Integrated
 					}
 				}
 			}
+			else writer.outStr.Append("{}");
 
 			if (env.serializeFlags.HasFlag(.Verbose))
 			{
 				// Just add this as a comment in case anyone wonders...
-				if (!structType is TypeInstance)
+				if (!ValueDataIsZero!(structVal) && structType.FieldCount == 0)
 					writer.outStr.Append(scope $"/* No reflection data for {structType}. Add [BonTarget] or force it */");
 				else if (hasUnnamedMembers)
 					writer.outStr.Append("/* Type has unnamed members */");

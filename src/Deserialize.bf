@@ -14,7 +14,7 @@ namespace Bon.Integrated
 {
 	struct DeserializeFieldState
 	{
-		public bool arrayKeepUnlessSet;
+		public bool arrayKeepUnlessSet, keepUnlessSet;
 	}
 
 	static class Deserialize
@@ -57,13 +57,13 @@ namespace Bon.Integrated
 
 			let canQuickDefault = Try!(CheckCanDefault(reader, val, env, isExplicit, true, state));
 
-			MakeDefaultUnchecked(reader, val, env, canQuickDefault, state);
+			MakeDefaultUnchecked(reader, val, env, isExplicit, canQuickDefault, state);
 
 			return .Ok;
 		}
 
 		/// CheckCanDefault beforehand!
-		public static void MakeDefaultUnchecked(BonReader reader, ValueView val, BonEnvironment env, bool canQuickDefault, DeserializeFieldState state = default)
+		public static void MakeDefaultUnchecked(BonReader reader, ValueView val, BonEnvironment env, bool isExplicit, bool canQuickDefault, DeserializeFieldState state = default)
 		{
 			if (canQuickDefault)
 			{
@@ -90,10 +90,10 @@ namespace Bon.Integrated
 				if (memset)
 					Internal.MemSet(ptr, 0, size, align);
 			}
-			else MakeDefaultComplicated(reader, val, env, state);
+			else MakeDefaultComplicated(reader, val, env, isExplicit, state);
 		}
 
-		static void MakeDefaultComplicated(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state = default)
+		static void MakeDefaultComplicated(BonReader reader, ValueView val, BonEnvironment env, bool isExplicit, DeserializeFieldState state = default)
 		{
 			// We *can* null everything we need to, but need to ignore some fields!
 			// So we need to be careful and slowly walk everything...
@@ -105,10 +105,10 @@ namespace Bon.Integrated
 				{
 					let payloadVal = Serialize.GetPayloadValueFromEnumUnion(val, ?, let caseIndex);
 					if (payloadVal != default)
-						MakeDefaultStructComplicated(reader, payloadVal, env);
+						MakeDefaultStructComplicated(reader, payloadVal, isExplicit, env);
 					else Debug.FatalError(); // Should have caught this
 				}
-				else MakeDefaultStructComplicated(reader, val, env);
+				else MakeDefaultStructComplicated(reader, val, isExplicit, env);
 			}
 			else if (valType is SizedArrayType)
 			{
@@ -120,35 +120,43 @@ namespace Bon.Integrated
 				let count = t.ElementCount;
 				var ptr = (uint8*)val.dataPtr;
 
-				for (let j < count)
+				if (IsTypeAlwaysDefaultable!(arrType))
+					Internal.MemSet(ptr, 0, count * arrType.Stride, arrType.Align);
+				else
 				{
-					let fieldVal = ValueView(arrType, ptr);
-					if (ValueDataIsZero!(fieldVal))
-						return;
+					for (let j < count)
+					{
+						let fieldVal = ValueView(arrType, ptr);
+						if (ValueDataIsZero!(fieldVal))
+							continue;
 
-					MakeDefaultComplicated(reader, fieldVal, env);
+						MakeDefaultComplicated(reader, fieldVal, env, isExplicit);
 
-					ptr += arrType.Stride;
+						ptr += arrType.Stride;
+					}
 				}
 			}
 			else Internal.MemSet(val.dataPtr, 0, valType.Size, valType.Align);
 		}
 
-		static void MakeDefaultStructComplicated(BonReader reader, ValueView val, BonEnvironment env)
+		static void MakeDefaultStructComplicated(BonReader reader, ValueView val, bool isExplicit, BonEnvironment env)
 		{
-			let structIsKeepUnlessSet = val.type.HasCustomAttribute<BonKeepMembersUnlessSetAttribute>();
+			var structIsKeepUnlessSet = false;
+			if (!isExplicit)
+				structIsKeepUnlessSet = val.type.HasCustomAttribute<BonKeepMembersUnlessSetAttribute>();
 
 			for (let f in val.type.GetFields(.Instance))
 			{
 				let fieldVal = ValueView(f.FieldType, (uint8*)val.dataPtr + f.MemberOffset);
-				if (ValueDataIsZero!(fieldVal) || ShouldIgnoreField!(f, env) || structIsKeepUnlessSet || f.HasCustomAttribute<BonKeepUnlessSetAttribute>())
-					return;
+				if (ValueDataIsZero!(fieldVal) || ShouldIgnoreField!(f, env)
+					|| !isExplicit && (structIsKeepUnlessSet || f.HasCustomAttribute<BonKeepUnlessSetAttribute>()))
+					continue;
 
 				DeserializeFieldState state = default;
-				if (f.HasCustomAttribute<BonArrayKeepUnlessSetAttribute>())
+				if (!isExplicit && f.HasCustomAttribute<BonArrayKeepUnlessSetAttribute>())
 					state.arrayKeepUnlessSet = true;
 
-				MakeDefaultComplicated(reader, fieldVal, env, state);
+				MakeDefaultComplicated(reader, fieldVal, env, isExplicit, state);
 			}
 		}
 
@@ -216,14 +224,14 @@ namespace Bon.Integrated
 							// Something in there doesn't wants to be ignored please...
 
 							if (caseIndex != 0)
-								Error!("Cannot ignore field nested in non-default enum union case to default", reader, valType);
+								Error!("Cannot default field nested in non-default enum union case", reader, valType);
 
 							return .Ok(false);
 						}
 					}
 					else
 					{
-						if (!valType is TypeInstance)
+						if (valType.FieldCount <= 2) // Always has two fields
 							Error!("Cannot default enum union with no reflection data", reader, valType);
 						else Error!("Cannot default enum union with corrupted value", reader, valType);
 					}
@@ -261,7 +269,7 @@ namespace Bon.Integrated
 
 		static Result<bool> CheckCanDefaultStruct(BonReader reader, ValueView val, BonEnvironment env, bool isExplicit)
 		{
-			if (!val.type is TypeInstance)
+			if (val.type.FieldCount == 0)
 				Error!("Cannot default struct with no reflection data", reader, val.type);
 
 			bool canQuickDefault = true;
@@ -273,7 +281,7 @@ namespace Bon.Integrated
 			{
 				let fieldType = f.FieldType;
 				let fieldVal = ValueView(fieldType, (uint8*)val.dataPtr + f.MemberOffset);
-				
+
 				if (ValueDataIsZero!(fieldVal))
 					continue;
 
@@ -422,13 +430,13 @@ namespace Bon.Integrated
 
 			if (reader.IsDefault())
 			{
-				Try!(MakeDefault(reader, val, env, true));
+				Try!(MakeDefault(reader, val, env, true, state));
 				Try!(reader.ConsumeEmpty());
 			}
 			else if (reader.IsIrrelevantEntry())
 			{
-				if (!valType.HasCustomAttribute<BonKeepUnlessSetAttribute>())
-					Try!(MakeDefault(reader, val, env, false));
+				if (!valType.HasCustomAttribute<BonKeepUnlessSetAttribute>() && !state.keepUnlessSet)
+					Try!(MakeDefault(reader, val, env, false, state));
 
 				Try!(reader.ConsumeEmpty());
 			}
@@ -573,6 +581,18 @@ namespace Bon.Integrated
 						Error!("No reflection data for type", null, valType);
 					if (!foundCase)
 						Error!("Enum union case not found", reader, valType);
+
+					let payloadVal = Serialize.GetPayloadValueFromEnumUnion(val, ?, let currentDiscrIndex);
+					if (payloadVal != default)
+					{
+						// When we're changing enum union case we need to erase the previous value since fields shift,
+						// otherwise weird stuff might happen
+
+						if (currentDiscrIndex != unionDiscrIndex)
+							if (MakeDefault(reader, val, env, true) case .Err)
+								Error!("Cannot default current enum union case to deserialize another (linked with previous error)", reader, valType);
+					}
+					else Error!("Cannot deserialize into enum union with corrupted value", reader, valType);
 
 					mixin PutVal<T>() where T : var
 					{
@@ -829,6 +849,8 @@ namespace Bon.Integrated
 			var state = DeserializeFieldState();
 			if (fieldInfo.HasCustomAttribute<BonArrayKeepUnlessSetAttribute>())
 				state.arrayKeepUnlessSet = true;
+			if (fieldInfo.HasCustomAttribute<BonKeepUnlessSetAttribute>())
+				state.keepUnlessSet = true;
 			state
 		}
 
@@ -909,7 +931,6 @@ namespace Bon.Integrated
 					{
 						if (!keepValuesUnlessSet)
 							Try!(MakeDefault(reader, arrVal, env, false));
-
 						Try!(reader.ConsumeEmpty());
 					}
 					else Try!(Value(reader, arrVal, env));

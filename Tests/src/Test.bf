@@ -865,10 +865,25 @@ namespace Bon.Tests
 			public int intern;
 		}
 
+		struct NoData
+		{
+			public int a;
+		}
+
 		[Test]
 		static void Structs()
 		{
 			SetupStringHandler!();
+
+			using (PushFlags(.Verbose))
+			{
+				let s = NoData() { a = 25 };
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "{}/* No reflection data for Bon.Tests.NoData. Add [BonTarget] or force it */");
+
+				NoData so = default;
+				Test.Assert(Bon.Deserialize(ref so, "{a=25}") case .Err);
+			}
 
 			{
 				var s = SomeThings{
@@ -1062,8 +1077,83 @@ namespace Bon.Tests
 					st.retain1.num = 0;
 					st.nope = 0;
 					Test.Assert((Bon.Deserialize(ref so, "{num=60}") case .Ok) && so == st);
+				}
 
-					// TODO setting retain values, erroring on intern, explicit default, explicit array default, with const arrays..., with reference
+				{
+					var so = s;
+					var st = s;
+					st.num = 60;
+					st.retain1.num = 0;
+					st.nope = 0;
+					Test.Assert((Bon.Deserialize(ref so, "{num=60,retain1=?,retain2=?,data=?,pair=?}") case .Ok) && so == st);
+				}
+
+				{
+					var so = s;
+					var st = s;
+					st.num = 0;
+					st.retain1.num = 4;
+					st.retain2.retain = false;
+					st.retain2.num = 0;
+					st.pair = .(2, 2);
+					st.data = scope .(0, 1, 0, 6, 0);
+					st.nope = 0;
+					Test.Assert(Bon.Deserialize(ref so, "{num=0,pair=[?,2],retain1={num=4},retain2={retain=false},data=<5>[0, 1, ?, 6]}") case .Ok);
+					Test.Assert(ArrayEqual!(so.data, st.data)); // @report removing st.data and typing "st." crashes
+					st.data = so.data = null;
+					Test.Assert(st == so);
+				}
+
+				{
+					var so = s;
+					var st = s;
+					st.num = 0;
+					st.config.zoom = 16;
+					st.retain1.num = 0;
+					st.retain1.retain = false;
+					st.retain2.num = 0;
+					st.retain2.retain = false;
+					st.pair = .(0, 4);
+					st.nope = 0;
+					Test.Assert((Bon.Deserialize(ref so, "{pair=[default, ?],retain1=default,retain2=default,config={zoom=16}}") case .Ok) && so == st);
+				}
+
+				{
+					var so = s;
+					so.data = null;
+					var st = so;
+					st.num = 0;
+					st.retain1.num = 0;
+					st.retain2.num = 0;
+					st.data = scope .(0 , 4);
+					st.nope = 0;
+					Test.Assert(Bon.Deserialize(ref so, "{data=[00, 04],retain2={}}") case .Ok);
+					Test.Assert(ArrayEqual!(so.data, st.data));
+					delete so.data;
+					st.data = so.data = null;
+					Test.Assert(st == so);
+				}
+
+				{
+					var so = s;
+					so.data = null;
+					var st = so;
+					st.num = 0;
+					st.config = default;
+					st.retain1.num = 0;
+					st.retain1.retain = false;
+					st.retain2.num = 0;
+					st.retain2.retain = false;
+					st.pair = default;
+					st.nope = 0;
+					Test.Assert((Bon.Deserialize(ref so, "default") case .Ok) && so == st);
+				}
+
+				{
+					var so = s;
+					Test.Assert(Bon.Deserialize(ref so, "{retain1={intern=2}}") case .Err);
+					Test.Assert(Bon.Deserialize(ref so, "{data=null}") case .Err);
+					Test.Assert(Bon.Deserialize(ref so, "default") case .Err);
 				}
 			}
 		}
@@ -1111,7 +1201,7 @@ namespace Bon.Tests
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == ".One{0=1}");
 
-				Carry si = ?;
+				Carry si = default;
 				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si == i);
 			}
 
@@ -1120,13 +1210,26 @@ namespace Bon.Tests
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == "{carry=?,thing=.Circle{pos={x=1,y=16},radius=1}}");
 
-				
 				Indirect siu = ?;
 				Test.Assert(Bon.Deserialize(ref siu, str) case .Err);
 
 				Indirect si = default;
 				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si.carry == default);
 				Test.Assert((Bon.Deserialize(ref si,"{carry=.One{0=1}}") case .Err) && si.carry == default);
+			}
+
+			using (PushFlags(.Verbose))
+			{
+				Indirect i = .() { carry = .One(1)};
+				let str = Bon.Serialize(i, .. scope .());
+				Test.Assert(str == """
+					{
+						carry = ?/* No reflection data for Bon.Tests.CarryIndicrect. Add [BonTarget] or force it */
+					}
+					""");
+
+				Indirect siu = i;
+				Test.Assert(Bon.Deserialize(ref siu, str) case .Err);
 			}
 
 			using (PushFlags(.IncludeDefault))
@@ -1159,6 +1262,20 @@ namespace Bon.Tests
 
 				Thing si = default;
 				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si == i);
+			}
+
+			{
+				SetupStringHandler!();
+
+				Thing i = .Text(.(50, 50), "Something\"!", 24, 90f);
+				Test.Assert(Bon.Deserialize(ref i, "?") case .Err);
+			}
+
+			{
+				SetupStringHandler!();
+
+				Thing i = .Text(.(50, 50), "Something\"!", 24, 90f);
+				Test.Assert(Bon.Deserialize(ref i, ".Text{size=3}") case .Err);
 			}
 
 			{
@@ -1683,7 +1800,7 @@ namespace Bon.Tests
 
 			{
 				uint16[,,] so = null;
-				Test.Assert(Bon.Deserialize(ref so, " < 2,5 , 1 > [[[1],[2],[ 3 ] ,  [ 4 ] ] ] ") case .Ok);
+				Test.Assert(Bon.Deserialize(ref so, " < 2,5 , 1 > [[[1],[2],[ 3 ] ,  [ 4 ], ] , ] ") case .Ok);
 				delete so;
 			}
 
@@ -1967,7 +2084,21 @@ namespace Bon.Tests
 				}
 			}
 
-			// TODO at least one test with class values, same for list?
+			{
+				Dictionary<String,String> d = scope .(2);
+				d.Add("no", "yes");
+				d.Add("bad", "good");
+
+				let str = Bon.Serialize(d, .. scope .());
+				Test.Assert(str == "[\"no\":\"yes\",\"bad\":\"good\"]");
+
+				Dictionary<String,String> o = scope .(2);
+				Test.Assert((Bon.Deserialize(ref o, str) case .Ok) && o.Count == 2
+					&& o["no"] == "yes"
+					&& o["bad"] == "good");
+
+				Test.Assert(Bon.Deserialize(ref o, "[\"dont\":\"do\"]") case .Err);
+			}
 		}
 
 		[BonTarget]
@@ -2203,6 +2334,9 @@ namespace Bon.Tests
 			SomeData d = ?;
 			uint8[2] a = ?;
 			SomeData[2] ad = ?;
+			Carry eu = ?;
+
+			Test.Assert(Bon.Deserialize(ref eu, ".One{}") case .Err);
 
 			Test.Assert(Bon.Deserialize(ref i, "11 34") case .Err);
 			Test.Assert(Bon.Deserialize(ref i, "  11.") case .Err);
