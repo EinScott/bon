@@ -117,10 +117,7 @@ Try!(Bon.Deserialize(ref c, "{member=120}"));
 
 Bon should never leak object references. When getting an error from this, it is recommended that you clear structures manually or always [ignore](#type-setup) the field. If bon is always deserializing into empty structures, this case will never occur.
 
-Alternatively, when nulling references due to them not being specified in the bon string (for example old saves where something didn't exist in the structure yet), putting ``[BonKeepUnlessSet]`` will leave the field's value as is in those cases. ``[BonArrayKeepUnlessSet]`` does the same for all values in the array. See [keeping field values](#keep-unless-set).
-
-remove:
-In some cases, like re-sizing of collections, unintended nulling of entries when trying to shrink the collection to the defined size, another option would be to set the ``.IgnoreUnmentionedValues`` flag to just keep existing entries.
+Alternatively, when nulling references due to them not being specified in the bon string (for example old saves where something didn't exist in the structure yet), putting ``[BonKeepUnlessSet]`` will leave the field's value as is in those cases. See [keeping field values](#keep-unless-set) for all options.
 
 ### Supported types
 
