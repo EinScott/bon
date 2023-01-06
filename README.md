@@ -568,7 +568,7 @@ static void ResourceSerialize(BonWriter writer, ValueView val, BonEnvironment en
     writer.Reference(name);
 }
 
-static Result<void> ResourceDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeStackState state)
+static Result<void> ResourceDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state)
 {
     let t = (SpecializedGenericType)val.type;
     Debug.Assert(t.UnspecializedType == typeof(Resource<>));
