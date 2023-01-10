@@ -1527,13 +1527,13 @@ namespace Bon.Tests
 			{
 				SaveFile c = scope .();
 				c.kills = 12;
-				DeleteAndNullify!(c.Name); // This is an old version of the save file, pretend Name doesnt exitst yet..
+				DeleteAndNullify!(c.Name); // Can still be null and will be explicitly noted as such
 
 				let str = Bon.Serialize(c, .. scope .());
-				Test.Assert(str == "{kills=12}");
+				Test.Assert(str == "{kills=12,Name=null}");
 
 				SaveFile co = scope .();
-				Test.Assert((Bon.Deserialize(ref co, str) case .Ok)
+				Test.Assert((Bon.Deserialize(ref co, "{kills=12}") case .Ok) // This is an old version of the save file, pretend Name doesnt exitst yet..
 					&& co.kills == c.kills // Set thing is applied
 					&& co.Name != null);
 

@@ -363,28 +363,33 @@ namespace Bon.Integrated
 			let structType = structVal.type;
 			let flags = env.serializeFlags;
 
-			bool hasUnnamedMembers = false;
+			bool hasUnnamedMembers = false, membersKeepUnlessSet = structType.HasCustomAttribute<BonKeepMembersUnlessSetAttribute>();
 			if (structType.FieldCount > 0)
 			{
 				using (writer.ObjectBlock())
 				{
-					for (let m in structType.GetFields(.Instance))
+					for (let f in structType.GetFields(.Instance))
 					{
 						if ((flags & .IgnorePermissions) != .IgnorePermissions
-							&& (m.GetCustomAttribute<BonIgnoreAttribute>() case .Ok // check hidden
-							|| (!flags.HasFlag(.IncludeNonPublic) && (m.[Friend]mFieldData.mFlags & .Public == 0) // check protection level
-							&& m.GetCustomAttribute<BonIncludeAttribute>() case .Err))) // check if we still include it anyway)
+							&& (f.GetCustomAttribute<BonIgnoreAttribute>() case .Ok // check hidden
+							|| (!flags.HasFlag(.IncludeNonPublic) && (f.[Friend]mFieldData.mFlags & .Public == 0) // check protection level
+							&& f.GetCustomAttribute<BonIncludeAttribute>() case .Err))) // check if we still include it anyway)
 							continue;
 
-						var val = ValueView(m.FieldType, ((uint8*)structVal.dataPtr) + m.MemberOffset);
+						var val = ValueView(f.FieldType, ((uint8*)structVal.dataPtr) + f.MemberOffset);
 
-						if (!DoInclude!(val, flags))
+						if (!membersKeepUnlessSet && !DoInclude!(val, flags) && !f.HasCustomAttribute<BonKeepUnlessSetAttribute>())
 							continue;
 
-						if (flags.HasFlag(.Verbose) && uint64.Parse(m.Name) case .Ok)
+						// TODO also always consider the array variant...
+						// add flag to still omit this?
+						// or alternatively decide that the attribute is stupid alltogether and the feature should be removed...
+						// - then update docs
+
+						if (flags.HasFlag(.Verbose) && uint64.Parse(f.Name) case .Ok)
 							hasUnnamedMembers = true;
 
-						writer.Identifier(m.Name);
+						writer.Identifier(f.Name);
 						Value(writer, val, env);
 					}
 				}

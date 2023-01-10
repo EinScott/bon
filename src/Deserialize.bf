@@ -435,7 +435,7 @@ namespace Bon.Integrated
 			}
 			else if (reader.IsIrrelevantEntry())
 			{
-				if (!valType.HasCustomAttribute<BonKeepUnlessSetAttribute>() && !state.keepUnlessSet)
+				if (!state.keepUnlessSet)
 					Try!(MakeDefault(reader, val, env, false, state));
 
 				Try!(reader.ConsumeEmpty());
@@ -866,6 +866,7 @@ namespace Bon.Integrated
 			if (fields.Count == 0 && reader.ObjectHasMore())
 				Error!("No reflection data for type", null, structType);
 
+			let keepMembersUnlessSet = structType.HasCustomAttribute<BonKeepMembersUnlessSetAttribute>();
 			while (reader.ObjectHasMore())
 			{
 				let name = Try!(reader.Identifier());
@@ -888,14 +889,17 @@ namespace Bon.Integrated
 				if (ShouldIgnoreField!(fieldInfo, env))
 					Error!("Field access not allowed", reader, structType);
 
-				let state = GetStateForField!(fieldInfo);
+				var state = GetStateForField!(fieldInfo);
+				if (keepMembersUnlessSet)
+					state.keepUnlessSet = true;
+
 				Try!(Value(reader, ValueView(fieldInfo.FieldType, ((uint8*)val.dataPtr) + fieldInfo.MemberOffset), env, state));
 
 				if (reader.ObjectHasMore())
 					Try!(reader.EntryEnd());
 			}
 
-			if (!structType.HasCustomAttribute<BonKeepMembersUnlessSetAttribute>())
+			if (!keepMembersUnlessSet)
 			{
 				for (let f in fields)
 				{
