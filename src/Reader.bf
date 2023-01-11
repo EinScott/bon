@@ -425,9 +425,7 @@ namespace Bon.Integrated
 			}
 
 			if (numLen == 0 || !hasValue)
-			{
 				Error!("Expected floating point");
-			}
 
 			let num = inStr.Substring(0, numLen);
 			inStr.RemoveFromStart(numLen);

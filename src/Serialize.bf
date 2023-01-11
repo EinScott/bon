@@ -5,6 +5,11 @@ using System.Reflection;
 
 namespace Bon.Integrated
 {
+	struct SerializeValueState
+	{
+		public bool doOneLine, arrayKeepUnlessSet;
+	}
+
 	static class Serialize
 	{
 		public static mixin CompNoReflectionError(String type, String example)
@@ -49,14 +54,14 @@ namespace Bon.Integrated
 			End(writer, startLen);
 		}
 
-		public static void Value(BonWriter writer, ValueView val, BonEnvironment env, bool doOneLine = false)
+		public static void Value(BonWriter writer, ValueView val, BonEnvironment env, SerializeValueState state = default)
 		{
 			let valType = val.type;
 
 			// Make sure that doOneLineVal is only passed when valid
-			Debug.Assert(!doOneLine || DoTypeOneLine!(valType, env.serializeFlags));
+			Debug.Assert(!state.doOneLine || DoTypeOneLine!(valType, env.serializeFlags));
 
-			writer.EntryStart(doOneLine);
+			writer.EntryStart(state.doOneLine);
 
 			if (valType.IsPrimitive)
 			{
@@ -208,7 +213,7 @@ namespace Bon.Integrated
 					}
 				}
 				else if (GetCustomHandler(valType, env, let func))
-					func(writer, val, env);
+					func(writer, val, env, state);
 				else
 				{
 					if (valType.IsUnion && env.serializeFlags.HasFlag(.Verbose))
@@ -228,7 +233,7 @@ namespace Bon.Integrated
 				if (env.serializeFlags.HasFlag(.Verbose))
 					writer.Sizer((.)count, true);
 
-				Array(writer, t.UnderlyingType, val.dataPtr, count, env);
+				Array(writer, t.UnderlyingType, val.dataPtr, count, env, state.arrayKeepUnlessSet);
 			}
 			else if (TypeHoldsObject!(valType))
 			{
@@ -283,14 +288,14 @@ namespace Bon.Integrated
 						case typeof(Array1<>):
 							if (!Serialize.IsArrayFilled(arrType, arrPtr, count, env))
 								writer.Sizer((.)count);
-							Array(writer, arrType, arrPtr, count, env);
+							Array(writer, arrType, arrPtr, count, env, state.arrayKeepUnlessSet);
 
 						case typeof(Array2<>):
 							let count1 = GetValField!<int_cosize>(val, "mLength1");
 							count /= count1;
 							writer.MultiSizer((.)count,(.)count1);
 
-							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1);
+							MultiDimensionalArray(writer, arrType, arrPtr, env, state.arrayKeepUnlessSet, count, count1);
 
 						case typeof(Array3<>):
 							let count2 = GetValField!<int_cosize>(val, "mLength2");
@@ -298,7 +303,7 @@ namespace Bon.Integrated
 							count /= (count1 * count2);
 							writer.MultiSizer((.)count,(.)count1,(.)count2);
 
-							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1, count2);
+							MultiDimensionalArray(writer, arrType, arrPtr, env, state.arrayKeepUnlessSet, count, count1, count2);
 
 						case typeof(Array4<>):
 							let count1 = GetValField!<int_cosize>(val, "mLength1");
@@ -307,14 +312,14 @@ namespace Bon.Integrated
 							count /= (count1 * count2 * count3);
 							writer.MultiSizer((.)count,(.)count1,(.)count2,(.)count3);
 
-							MultiDimensionalArray(writer, arrType, arrPtr, env, count, count1, count2, count3);
+							MultiDimensionalArray(writer, arrType, arrPtr, env, state.arrayKeepUnlessSet, count, count1, count2, count3);
 
 						default:
 							Debug.FatalError();
 						}
 					}
 					else if (GetCustomHandler(polyType, env, let func))
-						func(writer, val, env);
+						func(writer, val, env, state);
 					else Class(writer, val, env);
 				}
 			}
@@ -329,7 +334,7 @@ namespace Bon.Integrated
 				Debug.FatalError();
 			}
 
-			writer.EntryEnd(doOneLine);
+			writer.EntryEnd(state.doOneLine);
 		}
 
 		static bool GetCustomHandler(Type type, BonEnvironment env, out HandleSerializeFunc func)
@@ -358,6 +363,14 @@ namespace Bon.Integrated
 			Struct(writer, ValueView(classType, *(void**)classVal.dataPtr), env);
 		}
 
+		static mixin GetStateFromValueField(FieldInfo fieldInfo)
+		{
+			SerializeValueState state = default;
+			if (fieldInfo.HasCustomAttribute<BonArrayKeepUnlessSetAttribute>())
+				state.arrayKeepUnlessSet = true;
+			state
+		}
+
 		public static void Struct(BonWriter writer, ValueView structVal, BonEnvironment env)
 		{
 			let structType = structVal.type;
@@ -381,16 +394,17 @@ namespace Bon.Integrated
 						if (!membersKeepUnlessSet && !DoInclude!(val, flags) && !f.HasCustomAttribute<BonKeepUnlessSetAttribute>())
 							continue;
 
-						// TODO also always consider the array variant...
-						// add flag to still omit this?
-						// or alternatively decide that the attribute is stupid alltogether and the feature should be removed...
-						// - then update docs
+						// TODO add flag to still omit this?
+						// update wording around values and fields, and remove constraint on keepUnlessSet use
+						// mention new behaviour on serialize
+						// tests for new behaviour- patchableArray outputs exact, struct outputs all 0 but keepUnlessSet members...
+						// is there a case where we would want keep values to still not mention? no i dont think so...
 
 						if (flags.HasFlag(.Verbose) && uint64.Parse(f.Name) case .Ok)
 							hasUnnamedMembers = true;
 
 						writer.Identifier(f.Name);
-						Value(writer, val, env);
+						Value(writer, val, env, GetStateFromValueField!(f));
 					}
 				}
 			}
@@ -413,15 +427,17 @@ namespace Bon.Integrated
 			return false;
 		}
 
-		public static void Array(BonWriter writer, Type arrType, void* arrPtr, int64 count, BonEnvironment env)
+		public static void Array(BonWriter writer, Type arrType, void* arrPtr, int64 count, BonEnvironment env, bool includeAllValues = false)
 		{
-			let doArrayOneLine = DoTypeOneLine!(arrType, env.serializeFlags);
-			using (writer.ArrayBlock(doArrayOneLine))
+			SerializeValueState state = .{
+				doOneLine = DoTypeOneLine!(arrType, env.serializeFlags)
+			};
+			using (writer.ArrayBlock(state.doOneLine))
 			{
 				if (count > 0)
 				{
 					var includeCount = count;
-					if (!env.serializeFlags.HasFlag(.IncludeDefault)) // DoInclude! would return true on anything anyway
+					if (!includeAllValues && !env.serializeFlags.HasFlag(.IncludeDefault)) // DoInclude! would return true on anything anyway
 					{
 						var ptr = (uint8*)arrPtr + arrType.Stride * (count - 1);
 						for (var i = count - 1; i >= 0; i--)
@@ -441,9 +457,9 @@ namespace Bon.Integrated
 					for (let i < includeCount)
 					{
 						var arrVal = ValueView(arrType, ptr);
-						if (DoInclude!(arrVal, env.serializeFlags))
-							Value(writer, arrVal, env, doArrayOneLine);
-						else Irrelevant(writer, doArrayOneLine);
+						if (includeAllValues || DoInclude!(arrVal, env.serializeFlags))
+							Value(writer, arrVal, env, state);
+						else Irrelevant(writer, state.doOneLine);
 
 						ptr += arrType.Stride;
 					}
@@ -451,7 +467,7 @@ namespace Bon.Integrated
 			}
 		}
 
-		public static void MultiDimensionalArray(BonWriter writer, Type arrType, void* arrPtr, BonEnvironment env, params int64[] counts)
+		public static void MultiDimensionalArray(BonWriter writer, Type arrType, void* arrPtr, BonEnvironment env, bool includeAllValues = false, params int64[] counts)
 		{
 			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
 
@@ -467,7 +483,7 @@ namespace Bon.Integrated
 				if (count > 0)
 				{
 					var includeCount = count;
-					if (!env.serializeFlags.HasFlag(.IncludeDefault))
+					if (!includeAllValues || !env.serializeFlags.HasFlag(.IncludeDefault))
 					{
 						var ptr = (uint8*)arrPtr + stride * (count - 1);
 						DEFCHECK:for (var i = count - 1; i >= 0; i--)
@@ -493,7 +509,7 @@ namespace Bon.Integrated
 								break;
 							}
 
-						if (!isZero || env.serializeFlags.HasFlag(.IncludeDefault))
+						if (!isZero || includeAllValues || env.serializeFlags.HasFlag(.IncludeDefault))
 						{
 							let inner = counts.Count - 1;
 							if (inner > 1)
@@ -502,9 +518,9 @@ namespace Bon.Integrated
 								for (let j < inner)
 									innerCounts[j] = counts[j + 1];
 
-								MultiDimensionalArray(writer, arrType, ptr, env, params innerCounts);
+								MultiDimensionalArray(writer, arrType, ptr, env, includeAllValues, params innerCounts);
 							}
-							else Array(writer, arrType, ptr, counts[1], env);
+							else Array(writer, arrType, ptr, counts[1], env, includeAllValues);
 
 							writer.EntryEnd();
 						}	

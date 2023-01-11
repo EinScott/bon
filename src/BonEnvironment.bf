@@ -26,8 +26,8 @@ namespace Bon
 	
 	public delegate void MakeThingFunc(ValueView refIntoVal);
 
-	public delegate void HandleSerializeFunc(BonWriter writer, ValueView val, BonEnvironment env);
-	public delegate Result<void> HandleDeserializeFunc(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state);
+	public delegate void HandleSerializeFunc(BonWriter writer, ValueView val, BonEnvironment env, SerializeValueState state);
+	public delegate Result<void> HandleDeserializeFunc(BonReader reader, ValueView val, BonEnvironment env, DeserializeValueState state);
 
 	/// Defines the behavior of bon.
 	class BonEnvironment

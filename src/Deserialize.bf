@@ -12,7 +12,7 @@ using internal Bon.Integrated;
 
 namespace Bon.Integrated
 {
-	struct DeserializeFieldState
+	struct DeserializeValueState
 	{
 		public bool arrayKeepUnlessSet, keepUnlessSet;
 	}
@@ -50,7 +50,15 @@ namespace Bon.Integrated
 #endif
 		}
 
-		public static Result<void> MakeDefault(BonReader reader, ValueView val, BonEnvironment env, bool isExplicit, DeserializeFieldState state = default)
+		static mixin GetStateFromValueFieldForDefault(FieldInfo fieldInfo)
+		{
+			var state = DeserializeValueState();
+			if (fieldInfo.HasCustomAttribute<BonArrayKeepUnlessSetAttribute>())
+				state.arrayKeepUnlessSet = true;
+			state
+		}
+
+		public static Result<void> MakeDefault(BonReader reader, ValueView val, BonEnvironment env, bool isExplicit, DeserializeValueState state = default)
 		{
 			if (ValueDataIsZero!(val))
 				return .Ok;
@@ -63,7 +71,7 @@ namespace Bon.Integrated
 		}
 
 		/// CheckCanDefault beforehand!
-		public static void MakeDefaultUnchecked(BonReader reader, ValueView val, BonEnvironment env, bool isExplicit, bool canQuickDefault, DeserializeFieldState state = default)
+		public static void MakeDefaultUnchecked(BonReader reader, ValueView val, BonEnvironment env, bool isExplicit, bool canQuickDefault, DeserializeValueState state = default)
 		{
 			if (canQuickDefault)
 			{
@@ -93,7 +101,7 @@ namespace Bon.Integrated
 			else MakeDefaultComplicated(reader, val, env, isExplicit, state);
 		}
 
-		static void MakeDefaultComplicated(BonReader reader, ValueView val, BonEnvironment env, bool isExplicit, DeserializeFieldState state = default)
+		static void MakeDefaultComplicated(BonReader reader, ValueView val, BonEnvironment env, bool isExplicit, DeserializeValueState state = default)
 		{
 			// We *can* null everything we need to, but need to ignore some fields!
 			// So we need to be careful and slowly walk everything...
@@ -152,11 +160,8 @@ namespace Bon.Integrated
 					|| !isExplicit && (structIsKeepUnlessSet || f.HasCustomAttribute<BonKeepUnlessSetAttribute>()))
 					continue;
 
-				DeserializeFieldState state = default;
-				if (!isExplicit && f.HasCustomAttribute<BonArrayKeepUnlessSetAttribute>())
-					state.arrayKeepUnlessSet = true;
-
-				MakeDefaultComplicated(reader, fieldVal, env, isExplicit, state);
+				MakeDefaultComplicated(reader, fieldVal, env, isExplicit,
+					!isExplicit ? GetStateFromValueFieldForDefault!(f) : default);
 			}
 		}
 
@@ -206,7 +211,7 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static Result<bool> CheckCanDefault(BonReader reader, ValueView val, BonEnvironment env, bool isExplicit, bool zeroCheckDone = false, DeserializeFieldState state = default)
+		public static Result<bool> CheckCanDefault(BonReader reader, ValueView val, BonEnvironment env, bool isExplicit, bool zeroCheckDone = false, DeserializeValueState state = default)
 		{
 			if (!zeroCheckDone && ValueDataIsZero!(val))
 				return .Ok(true);
@@ -292,11 +297,8 @@ namespace Bon.Integrated
 					continue;
 				}
 
-				DeserializeFieldState state = default;
-				if (!isExplicit && f.HasCustomAttribute<BonArrayKeepUnlessSetAttribute>())
-					state.arrayKeepUnlessSet = true;
-
-				canQuickDefault &= Try!(CheckCanDefault(reader, fieldVal, env, isExplicit, true, state));
+				canQuickDefault &= Try!(CheckCanDefault(reader, fieldVal, env, isExplicit, true,
+					!isExplicit ? GetStateFromValueFieldForDefault!(f) : default));
 			}
 
 			return .Ok(canQuickDefault);
@@ -386,18 +388,12 @@ namespace Bon.Integrated
 		{
 			Try!(Start(reader));
 
-			let isDefault = reader.IsDefault();
-			if (isDefault || reader.IsIrrelevantEntry())
-			{
-				Try!(MakeDefault(reader, val, env, isDefault));
-				Try!(reader.ConsumeEmpty());
-			}
-			else Try!(Value(reader, val, env));
+			Try!(Value(reader, val, env));
 
 			return End(reader);
 		}
 
-		public static Result<void> Value(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state = default)
+		public static Result<void> Value(BonReader reader, ValueView val, BonEnvironment env, DeserializeValueState state = default)
 		{
 			let valType = val.type;
 			var polyType = valType;
@@ -844,9 +840,9 @@ namespace Bon.Integrated
 			|| f.HasCustomAttribute<BonIgnoreAttribute>()
 		}
 
-		static mixin GetStateForField(FieldInfo fieldInfo)
+		static mixin GetStateFromValueField(FieldInfo fieldInfo)
 		{
-			var state = DeserializeFieldState();
+			DeserializeValueState state = default;
 			if (fieldInfo.HasCustomAttribute<BonArrayKeepUnlessSetAttribute>())
 				state.arrayKeepUnlessSet = true;
 			if (fieldInfo.HasCustomAttribute<BonKeepUnlessSetAttribute>())
@@ -889,7 +885,7 @@ namespace Bon.Integrated
 				if (ShouldIgnoreField!(fieldInfo, env))
 					Error!("Field access not allowed", reader, structType);
 
-				var state = GetStateForField!(fieldInfo);
+				var state = GetStateFromValueField!(fieldInfo);
 				if (keepMembersUnlessSet)
 					state.keepUnlessSet = true;
 
@@ -906,7 +902,7 @@ namespace Bon.Integrated
 					if (ShouldIgnoreField!(f, env) || f.HasCustomAttribute<BonKeepUnlessSetAttribute>())
 						continue;
 
-					let state = GetStateForField!(f);
+					let state = GetStateFromValueField!(f);
 					Try!(MakeDefault(reader, ValueView(f.FieldType, ((uint8*)val.dataPtr) + f.MemberOffset), env, false, state));
 				}
 			}
@@ -919,25 +915,21 @@ namespace Bon.Integrated
 			type.IsPrimitive || type.IsTypedPrimitive || type.IsEnum
 		}
 
-		public static Result<void> Array(BonReader reader, Type arrType, void* arrPtr, int64 count, BonEnvironment env, bool keepValuesUnlessSet)
+		public static Result<void> Array(BonReader reader, Type arrType, void* arrPtr, int64 count, BonEnvironment env, bool keepValuesUnlessSet = false)
 		{
 			Try!(reader.ArrayBlock());
 
 			if (count > 0)
 			{
+				DeserializeValueState state = .{
+					keepUnlessSet = keepValuesUnlessSet
+				};
+
 				var ptr = (uint8*)arrPtr;
 				var i = 0;
 				for (; i < count && reader.ArrayHasMore(); i++)
 				{
-					var arrVal = ValueView(arrType, ptr);
-
-					if (reader.IsIrrelevantEntry())
-					{
-						if (!keepValuesUnlessSet)
-							Try!(MakeDefault(reader, arrVal, env, false));
-						Try!(reader.ConsumeEmpty());
-					}
-					else Try!(Value(reader, arrVal, env));
+					Try!(Value(reader, ValueView(arrType, ptr), env, state));
 
 					if (reader.ArrayHasMore())
 						Try!(reader.EntryEnd());
@@ -968,7 +960,7 @@ namespace Bon.Integrated
 			return reader.ArrayBlockEnd();
 		}
 
-		public static Result<void> MultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, BonEnvironment env, bool keepValuesUnlessSet, params int64[] counts)
+		public static Result<void> MultiDimensionalArray(BonReader reader, Type arrType, void* arrPtr, BonEnvironment env, bool keepValuesUnlessSet = false, params int64[] counts)
 		{
 			Debug.Assert(counts.Count > 1); // Must be multi-dimensional!
 

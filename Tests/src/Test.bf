@@ -1632,6 +1632,14 @@ namespace Bon.Tests
 		}
 
 		[BonTarget]
+		struct NormalArray
+		{
+			public uint64[,,,] data;
+			public List<int32> listData;
+			public Dictionary<int,uint8> dictData;
+		}
+
+		[BonTarget]
 		struct PatchableArray
 		{
 			[BonArrayKeepUnlessSet]
@@ -1764,7 +1772,7 @@ namespace Bon.Tests
 			}
 
 			{
-				PatchableArray s = .() { data = scope .[1,2,3,4]() };
+				NormalArray s = .() { data = scope .[1,2,3,4]() };
 				s.data[0,1,0,3] = 1646;
 				s.data[0,0,0,0] = 5000;
 				s.data[0,0,2,1] = 9090;
@@ -1874,7 +1882,7 @@ namespace Bon.Tests
 			}
 
 			{
-				let l = PatchableArray { listData = scope List<int32>()
+				let l = NormalArray { listData = scope List<int32>()
 					{
 						1, 2, 3, 8, 9, 10, 100, 1000, 10000, 0, 0
 					}};
@@ -1982,7 +1990,7 @@ namespace Bon.Tests
 					}
 
 					{
-						let s = PatchableArray() { dictData = d };
+						let s = NormalArray() { dictData = d };
 						let str2 = Bon.Serialize(s, .. scope .());
 						Test.Assert(str2 == "{dictData=[150:2,24:23]}");
 

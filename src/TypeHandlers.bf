@@ -7,13 +7,13 @@ namespace Bon.Integrated
 {
 	static
 	{
-		public static void StringSerialize(BonWriter writer, ValueView val, BonEnvironment env)
+		public static void StringSerialize(BonWriter writer, ValueView val, BonEnvironment env, SerializeValueState state)
 		{
 			let str = *(String*)val.dataPtr;
 			writer.String(str);
 		}
 
-		public static Result<void> StringDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state)
+		public static Result<void> StringDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeValueState state)
 		{
 			var str = *(String*)val.dataPtr;
 
@@ -22,7 +22,7 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static void ListSerialize(BonWriter writer, ValueView val, BonEnvironment env)
+		public static void ListSerialize(BonWriter writer, ValueView val, BonEnvironment env, SerializeValueState state)
 		{
 			let t = (SpecializedGenericType)val.type;
 
@@ -35,10 +35,10 @@ namespace Bon.Integrated
 
 			if (count != 0 && !Serialize.IsArrayFilled(arrType, arrPtr, count, env))
 				writer.Sizer((.)count);
-			Serialize.Array(writer, arrType, arrPtr, count, env);
+			Serialize.Array(writer, arrType, arrPtr, count, env, state.arrayKeepUnlessSet); // TODO update effect for others below
 		}
 
-		public static Result<void> ListDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state)
+		public static Result<void> ListDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeValueState state)
 		{
 			let t = (SpecializedGenericType)val.type;
 
@@ -89,7 +89,7 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static void DictionarySerialize(BonWriter writer, ValueView val, BonEnvironment env)
+		public static void DictionarySerialize(BonWriter writer, ValueView val, BonEnvironment env, SerializeValueState state)
 		{
 			let t = (SpecializedGenericType)val.type;
 
@@ -157,7 +157,7 @@ namespace Bon.Integrated
 			}
 		}
 
-		public static Result<void> DictionaryDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state)
+		public static Result<void> DictionaryDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeValueState state)
 		{
 			let t = (SpecializedGenericType)val.type;
 
@@ -335,7 +335,7 @@ namespace Bon.Integrated
 			return .Ok;
 		}
 
-		public static void NullableSerialize(BonWriter writer, ValueView val, BonEnvironment env)
+		public static void NullableSerialize(BonWriter writer, ValueView val, BonEnvironment env, SerializeValueState state)
 		{
 			let t = (SpecializedGenericType)val.type;
 
@@ -352,7 +352,7 @@ namespace Bon.Integrated
 			}
 		}
 
-		public static Result<void> NullableDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeFieldState state)
+		public static Result<void> NullableDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeValueState state)
 		{
 			let t = (SpecializedGenericType)val.type;
 
