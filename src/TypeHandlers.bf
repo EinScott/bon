@@ -35,7 +35,7 @@ namespace Bon.Integrated
 
 			if (count != 0 && !Serialize.IsArrayFilled(arrType, arrPtr, count, env))
 				writer.Sizer((.)count);
-			Serialize.Array(writer, arrType, arrPtr, count, env, state.arrayKeepUnlessSet); // TODO update effect for others below
+			Serialize.Array(writer, arrType, arrPtr, count, env, state.arrayKeepUnlessSet);
 		}
 
 		public static Result<void> ListDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeValueState state)

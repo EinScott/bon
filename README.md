@@ -456,12 +456,12 @@ namespace System
 
 #### Keep unless set
 
-This only affects deserialization. Values that are marked as keep-unless-set act as though they are ignored when the bon string doesn't explicitly set them (and changing the value is not required otherwise) and thus keep their value instead of being zeroed is normally the case. When these values are explicitly set, they act just like they would without keep-unless-set.
-Assigning these values with [irrelevant](#special-values) (``?``) counts as not explicitly setting them.
+When deserializing, values that are marked as keep-unless-set act as though they are ignored when the bon string doesn't explicitly set them (and changing the value is not required otherwise), thus keeping their value instead of being zeroed as is normally the case. When these values are explicitly set, they act just like they would without keep-unless-set.
+Assigning these values with [irrelevant](#special-values) (``?``) counts as not explicitly setting them. When serializing, these values are always included to still allow for zero values to be enforced when deserializing.
 
 Individual fields can be marked with ``[BonKeepUnlessSet]``. All fields of a type can be marked by putting ``[BonKeepMembersUnlessSet]`` on the type. All indices of an array can be marked by putting ``[BonArrayKeepUnlessSet]`` on the array field.
 
-This can be useful for either patching state or supporting older strings with expanded structures, where new fields still retain their (non-zero) default values while old/explicitly set values are set. When doing the later for something other than preserving object references / circumventing nulling errors, *intended* zero values can still be serialized by [including default values](#serialize-flags). See the [Tests](https://github.com/EinScott/bon/blob/main/Tests/src/Test.bf) (end of ``Structs()`` test) for examples.
+This can be useful for keeping default values for fields unmentioned in user configs or supporting older strings with expanded structures, where new fields still retain their (non-zero) default values while old/explicitly set values are set. See the [Tests](https://github.com/EinScott/bon/blob/main/Tests/src/Test.bf) (end of ``Structs()`` test) for examples.
 
 #### Polymorphism
 
@@ -497,7 +497,7 @@ For bon to use a type, reflection data for them simply needs to be included in t
 
 ### Bon environment
 
-``BonEnvironment`` holds bon's configuration. The output behavior of a ``Bon.Serialize`` or ``Bon.Deserialize`` call is only dependent on the value or bon string as well as the bon environment passed in. By default, the global environment ``gBonEnv`` is used. Newly created environments are independent from the it, but start out with a copy of its state.
+``BonEnvironment`` holds bon's configuration. The output behavior of a ``Bon.Serialize`` or ``Bon.Deserialize`` call is only dependent on the value or bon string as well as the bon environment passed in. By default, the global environment ``gBonEnv`` is used. Newly created environments are independent from the it and unconfigured, but start out with a copy of the global environment's [poly types](#polymorphism) registration.
 
 Bon doesn't mutate the state of bon environments over the course of serialize or deserialize calls, so using bon with the same environment on multiple threads is possible. But outside code editing a bon environment while a bon call on another thread is using it may lead to undefined behavior.
 
@@ -556,7 +556,7 @@ Bon can be extended to support serialization and serialization of certain types 
 These methods can also be non-static if bon were to be used very tightly with some system. In this simple example, Resource<> is some wrapper class for centrally managed resources that can be acquired by string, so it makes sense to just serialize that.
 
 ```bf
-static void ResourceSerialize(BonWriter writer, ValueView val, BonEnvironment env)
+static void ResourceSerialize(BonWriter writer, ValueView val, BonEnvironment env, SerializeFieldState state)
 {
     let t = (SpecializedGenericType)val.type;
     Debug.Assert(t.UnspecializedType == typeof(Resource<>));

@@ -82,35 +82,7 @@ namespace Bon
 			if (gBonEnv == null)
 				return;
 
-			serializeFlags = gBonEnv.serializeFlags;
-
-			mixin CopyDelegate(var target, Delegate del)
-			{
-				// Shady delegate cloning
-				var clone = del == null ? null : new Delegate()..SetFuncPtr(del.[Friend]mFuncPtr, del.[Friend]mTarget);
-				target = *(decltype(target)*)((void**)&clone);
-			}
-
-			for (let pair in gBonEnv.typeHandlers)
-			{
-				HandleSerializeFunc ser = null;
-				HandleDeserializeFunc de = null;
-				CopyDelegate!(ref ser, pair.value.serialize);
-				CopyDelegate!(ref de, pair.value.deserialize);
-
-				typeHandlers.Add(pair.key, (ser, de));
-			}
-
-			for (let pair in gBonEnv.allocHandlers)
-			{
-				MakeThingFunc make = null;
-				CopyDelegate!(ref make, pair.value);
-
-				allocHandlers.Add(pair.key, make);
-			}
-
-			CopyDelegate!(ref stringViewHandler, gBonEnv.stringViewHandler);
-
+			// Copy poly type registration from global env
 			for (let pair in gBonEnv.polyTypes)
 				polyTypes.Add(new .(pair.key), pair.value);
 		}

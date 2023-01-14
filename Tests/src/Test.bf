@@ -815,7 +815,7 @@ namespace Bon.Tests
 			public uint64 value;
 		}
 
-		[BonTarget]
+		[BonTarget, BonKeepMembersUnlessSet]
 		struct OldConfig
 		{
 			public bool fullscreen = true;
@@ -1029,13 +1029,11 @@ namespace Bon.Tests
 				Test.Assert(Bon.Deserialize(ref s, "{time=?}") case .Ok);
 			}
 
-			// To upgrade old configs this way, we needed to include defaults in those since otherwise zero values that might have been explicit will be restored to default.
-			// Or viewed another way we only apply what a user explicitly specified in a config, and keep the rest.
-			using (PushFlags(.IncludeDefault))
+			// Upgrade old configs
 			{
 				let s = OldConfig { fullscreen = false }; // Old version where there was only fullscreen
 				let str = Bon.Serialize(s, .. scope .());
-				Test.Assert(str == "{fullscreen=0}");
+				Test.Assert(str == "{fullscreen=0}"); // TODO problem: we can't just decide to always serialize something without a big rewrite... so maybe consider other options...
 
 				var so = Config(); // Newer defaults
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok)

@@ -394,11 +394,8 @@ namespace Bon.Integrated
 						if (!membersKeepUnlessSet && !DoInclude!(val, flags) && !f.HasCustomAttribute<BonKeepUnlessSetAttribute>())
 							continue;
 
-						// TODO add flag to still omit this?
-						// update wording around values and fields, and remove constraint on keepUnlessSet use
-						// mention new behaviour on serialize
+						// TODO
 						// tests for new behaviour- patchableArray outputs exact, struct outputs all 0 but keepUnlessSet members...
-						// is there a case where we would want keep values to still not mention? no i dont think so...
 
 						if (flags.HasFlag(.Verbose) && uint64.Parse(f.Name) case .Ok)
 							hasUnnamedMembers = true;
