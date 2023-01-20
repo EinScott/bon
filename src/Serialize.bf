@@ -17,9 +17,14 @@ namespace Bon.Integrated
 			scope:mixin $"No reflection data for {type}!\n(for example: [BonTarget] extension {example} {{}} or through build settings)"
 		}
 
+		static mixin DoAlwaysInclude(Type type)
+		{
+			type.IsStruct || type.IsSizedArray
+		}
+		
 		static mixin DoInclude(ValueView val, BonSerializeFlags flags)
 		{
-			(flags.HasFlag(.IncludeDefault) || !ValueDataIsZero!(val))
+			flags.HasFlag(.IncludeDefault) || DoAlwaysInclude!(val.type) || !ValueDataIsZero!(val)
 		}
 
 		static mixin DoTypeOneLine(Type type, BonSerializeFlags flags)
@@ -222,7 +227,7 @@ namespace Bon.Integrated
 					Struct(writer, val, env);
 				}
 			}
-			else if (valType is SizedArrayType)
+			else if (valType.IsSizedArray)
 			{
 				let t = (SizedArrayType)valType;
 				let count = t.ElementCount;
@@ -434,7 +439,7 @@ namespace Bon.Integrated
 				if (count > 0)
 				{
 					var includeCount = count;
-					if (!includeAllValues && !env.serializeFlags.HasFlag(.IncludeDefault)) // DoInclude! would return true on anything anyway
+					if (!includeAllValues && !env.serializeFlags.HasFlag(.IncludeDefault) && !DoAlwaysInclude!(arrType)) // DoInclude! would return true on anything anyway
 					{
 						var ptr = (uint8*)arrPtr + arrType.Stride * (count - 1);
 						for (var i = count - 1; i >= 0; i--)
@@ -480,7 +485,7 @@ namespace Bon.Integrated
 				if (count > 0)
 				{
 					var includeCount = count;
-					if (!includeAllValues || !env.serializeFlags.HasFlag(.IncludeDefault))
+					if (!includeAllValues && !env.serializeFlags.HasFlag(.IncludeDefault) && !DoAlwaysInclude!(arrType))
 					{
 						var ptr = (uint8*)arrPtr + stride * (count - 1);
 						DEFCHECK:for (var i = count - 1; i >= 0; i--)
@@ -506,7 +511,7 @@ namespace Bon.Integrated
 								break;
 							}
 
-						if (!isZero || includeAllValues || env.serializeFlags.HasFlag(.IncludeDefault))
+						if (!isZero || includeAllValues || env.serializeFlags.HasFlag(.IncludeDefault) || DoAlwaysInclude!(arrType))
 						{
 							let inner = counts.Count - 1;
 							if (inner > 1)

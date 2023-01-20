@@ -95,7 +95,7 @@ namespace Bon.Integrated
 			
 			buffer.Append("> ");
 			if (startCapped)
-				buffer.Append("... ");
+				buffer.Append("...");
 
 			var part = origStr.Substring(start, end - start + 1);
 			if (part.StartsWith("\n"))
@@ -109,11 +109,11 @@ namespace Bon.Integrated
 			}
 
 			if (endCapped)
-				buffer.Append(" ...");
+				buffer.Append("...");
 
 			buffer.Append("\n> ");
 			if (startCapped)
-				buffer.Append("    ");
+				buffer.Append("   ");
 
 			for (let i < pad)
 			{

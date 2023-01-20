@@ -118,7 +118,7 @@ namespace Bon.Integrated
 				}
 				else MakeDefaultStructComplicated(reader, val, isExplicit, env);
 			}
-			else if (valType is SizedArrayType)
+			else if (valType.IsSizedArray)
 			{
 				if (state.arrayKeepUnlessSet)
 					return;
@@ -243,7 +243,7 @@ namespace Bon.Integrated
 				}
 				else return CheckCanDefaultStruct(reader, val, env, isExplicit);
 			}
-			else if (valType is SizedArrayType)
+			else if (valType.IsSizedArray)
 			{
 				// This array is clearly not set at all, so just leave everything alone.
 				// To do this, we will need to take the complicated path though...
@@ -618,7 +618,7 @@ namespace Bon.Integrated
 					Try!(func(reader, val, env, state));
 				else Try!(Struct(reader, val, env));
 			}
-			else if (valType is SizedArrayType)
+			else if (valType.IsSizedArray)
 			{
 				if (reader.ArrayHasSizer())
 				{

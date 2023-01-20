@@ -969,7 +969,7 @@ namespace Bon.Tests
 
 				{
 					let str = Bon.Serialize(s, .. scope .());
-					Test.Assert(str == "{thing=651,bs=[{name=\"first element\",age=34,type=1},{name=\"second element\",age=101},?,{name=\"\"}]}");
+					Test.Assert(str == "{thing=651,bs=[{name=\"first element\",age=34,type=1},{name=\"second element\",age=101},{name=null},{name=\"\"},{name=null}]}");
 
 					StructA so = default;
 					Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && s == so);
@@ -991,9 +991,14 @@ namespace Bon.Tests
 									name = "second element",
 									age = 101
 								},
-								?,
+								{
+									name = null
+								},
 								{
 									name = ""
+								},
+								{
+									name = null
 								}
 							]
 						}
@@ -1033,7 +1038,7 @@ namespace Bon.Tests
 			{
 				let s = OldConfig { fullscreen = false }; // Old version where there was only fullscreen
 				let str = Bon.Serialize(s, .. scope .());
-				Test.Assert(str == "{fullscreen=0}"); // TODO problem: we can't just decide to always serialize something without a big rewrite... so maybe consider other options...
+				Test.Assert(str == "{fullscreen=0}");
 
 				var so = Config(); // Newer defaults
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok)
@@ -1222,7 +1227,8 @@ namespace Bon.Tests
 				let str = Bon.Serialize(i, .. scope .());
 				Test.Assert(str == """
 					{
-						carry = ?/* No reflection data for Bon.Tests.CarryIndicrect. Add [BonTarget] or force it */
+						carry = ?/* No reflection data for Bon.Tests.CarryIndicrect. Add [BonTarget] or force it */,
+						thing = .Nothing{}
 					}
 					""");
 
@@ -1245,7 +1251,7 @@ namespace Bon.Tests
 			{
 				Thing i = .Circle(.(0, 0), 4.5f);
 				let str = Bon.Serialize(i, .. scope .());
-				Test.Assert(str == ".Circle{radius=4.5}");
+				Test.Assert(str == ".Circle{pos={},radius=4.5}");
 
 				Thing si = default;
 				Test.Assert((Bon.Deserialize(ref si, str) case .Ok) && si == i);
@@ -1738,7 +1744,7 @@ namespace Bon.Tests
 			{
 				AlignStruct[,] s = scope .[2,2]((.{a=5,b=16}, .{a=10,b=64}), (default, .{a=100,b=255}));
 				let str = Bon.Serialize(s, .. scope .());
-				Test.Assert(str == "<2,2>[[{a=5,b=16},{a=10,b=64}],[?,{a=100,b=255}]]");
+				Test.Assert(str == "<2,2>[[{a=5,b=16},{a=10,b=64}],[{},{a=100,b=255}]]");
 
 				AlignStruct[,] so = null;
 				Test.Assert((Bon.Deserialize(ref so, str) case .Ok) && ArrayEqual!(s, so));
@@ -1841,7 +1847,7 @@ namespace Bon.Tests
 				l.Add(scope AClass() { aStringThing = new $"uhh", thing = 255, data = .{ time=1, value=10 } });
 				l.Add(scope AClass() { aStringThing = new $"Hi, na?", thing = 42 });
 				let str = Bon.Serialize(l, .. scope .());
-				Test.Assert(str == "[{aStringThing=\"uhh\",thing=255,data={time=1,value=10}},{aStringThing=\"Hi, na?\",thing=42}]");
+				Test.Assert(str == "[{aStringThing=\"uhh\",thing=255,data={time=1,value=10}},{aStringThing=\"Hi, na?\",thing=42,data={}}]");
 
 				List<AClass> lo = null;
 				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && l.Count == lo.Count && l[0].aStringThing == lo[0].aStringThing);
@@ -1900,7 +1906,7 @@ namespace Bon.Tests
 						AlignStruct{a=1,b=2}, .{}, .{a=12,b=150}
 					};
 				let str = Bon.Serialize(l, .. scope .());
-				Test.Assert(str == "[{a=1,b=2},?,{a=12,b=150}]");
+				Test.Assert(str == "[{a=1,b=2},{},{a=12,b=150}]");
 
 				List<AlignStruct> lo = scope List<AlignStruct>()
 					{
@@ -1915,7 +1921,7 @@ namespace Bon.Tests
 						AlignStruct{a=1,b=2}, .{}, .{a=12,b=150}
 					};
 				let str = Bon.Serialize(l, .. scope .());
-				Test.Assert(str == "[{a=1,b=2},?,{a=12,b=150}]");
+				Test.Assert(str == "[{a=1,b=2},{},{a=12,b=150}]");
 
 				List<AlignStruct> lo = scope List<AlignStruct>(3);
 				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && ArrayEqual!(l, lo));
@@ -2165,7 +2171,7 @@ namespace Bon.Tests
 
 				let str = Bon.Serialize(sv, .. scope .());
 				Bon.Serialize(s, str);
-				Test.Assert(str == "?,{name=\"nice name\",age=23,type=1}");
+				Test.Assert(str == "{},{name=\"nice name\",age=23,type=1}");
 
 				Compat svo = ?;
 				StructB so = ?;
