@@ -1073,6 +1073,9 @@ namespace Bon.Tests
 					nope = 42
 				};
 
+				let str = Bon.Serialize(s, .. scope .());
+				Test.Assert(str == "{num=5,config={fullscreen=1,zoom=4,difficulty=0},retain1={num=6,retain=1},retain2={num=7,retain=1},pair=[2,4],data=[1,2,3,4,5],nope=42}");
+
 				{
 					var so = s;
 					var st = s;
@@ -1101,10 +1104,15 @@ namespace Bon.Tests
 					st.pair = .(2, 2);
 					st.data = scope .(0, 1, 0, 6, 0);
 					st.nope = 0;
+
+					let str2 = Bon.Serialize(st, .. scope .());
+					Test.Assert(str2 == "{config={fullscreen=1,zoom=4,difficulty=0},retain1={num=4,retain=1},retain2={retain=0},pair=[2,2],data=<5>[?,1,?,6]}");
+
 					Test.Assert(Bon.Deserialize(ref so, "{num=0,pair=[?,2],retain1={num=4},retain2={retain=false},data=<5>[0, 1, ?, 6]}") case .Ok);
 					Test.Assert(ArrayEqual!(so.data, st.data)); // @report removing st.data and typing "st." crashes
 					st.data = so.data = null;
 					Test.Assert(st == so);
+
 				}
 
 				{
@@ -1796,6 +1804,9 @@ namespace Bon.Tests
 					&& so.data[0,1,1,1] == 50 // Kept
 					&& so.data[0,1,0,0] == 60
 					&& so.data[0,1,2,0] == 70);
+
+				let str2 = Bon.Serialize(so, .. scope .());
+				Test.Assert(str2 == "{data=<1,2,3,4>[[[[5000,0,0,0],[0,0,0,0],[0,9090,0,0]],[[60,0,0,1646],[0,50,0,0],[70,0,0,0]]]]}");
 			}
 
 			{
@@ -1895,9 +1906,12 @@ namespace Bon.Tests
 
 				var lo = PatchableArray { listData = scope List<int32>()
 					{
-						2, 3, 4, 5, 6, 100, 200, 300, 400, 500, 1000, 2500, 8000, 10000 // oops, already in use
+						2, 3, 4, 5, 6, 100, 200, 300, 400, 500, 1000, 2500, 8000, 10000, 0, 1, 0 // oops, already in use
 					}};
-				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && lo.listData.Count == 14 && lo.listData[5] == l.listData[5] && lo.listData[10] == 1000);
+				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && lo.listData.Count == 17 && lo.listData[5] == l.listData[5] && lo.listData[10] == 1000);
+
+				let str2 = Bon.Serialize(lo, .. scope .());
+				Test.Assert(str2 == "{listData=[1,2,3,8,9,10,100,1000,10000,500,1000,2500,8000,10000,0,1,0]}");
 			}
 
 			{
@@ -2006,6 +2020,9 @@ namespace Bon.Tests
 						Test.Assert((Bon.Deserialize(ref o, str2) case .Ok)
 							&& s.dictData[150] == o.dictData[150] && s.dictData[24] == o.dictData[24]
 							&& o.dictData[234] == 1 && o.dictData[6000] == 1 && o.dictData.Count == 4);
+
+						let str3 = Bon.Serialize(o, .. scope .());
+						Test.Assert(str3 == "{dictData=[150:2,234:1,6000:1,24:23]}");
 					}
 				}
 

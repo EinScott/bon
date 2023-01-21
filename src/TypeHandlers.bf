@@ -33,9 +33,10 @@ namespace Bon.Integrated
 			var arrPtr = *(void**)GetValFieldPtr!(val, "mItems"); // *(T**)
 			var count = GetValField!<int_cosize>(val, "mSize");
 
-			if (count != 0 && !Serialize.IsArrayFilled(arrType, arrPtr, count, env))
+			bool includeAllInArray = state.arrayKeepUnlessSet;
+			if (count != 0 && !includeAllInArray && !Serialize.IsArrayFilled(arrType, arrPtr, count, env))
 				writer.Sizer((.)count);
-			Serialize.Array(writer, arrType, arrPtr, count, env, state.arrayKeepUnlessSet);
+			Serialize.Array(writer, arrType, arrPtr, count, env, includeAllInArray);
 		}
 
 		public static Result<void> ListDeserialize(BonReader reader, ValueView val, BonEnvironment env, DeserializeValueState state)

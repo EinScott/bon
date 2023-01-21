@@ -287,20 +287,21 @@ namespace Bon.Integrated
 						let arrType = t.GetGenericArg(0); // T
 						var arrPtr = GetValFieldPtr!(val, "mFirstElement"); // T*
 						var count = GetValField!<int_arsize>(val, "mLength");
-						
+
+						bool includeAllValues = state.arrayKeepUnlessSet;
 						switch (t.UnspecializedType)
 						{
 						case typeof(Array1<>):
-							if (!Serialize.IsArrayFilled(arrType, arrPtr, count, env))
+							if (!includeAllValues && !Serialize.IsArrayFilled(arrType, arrPtr, count, env))
 								writer.Sizer((.)count);
-							Array(writer, arrType, arrPtr, count, env, state.arrayKeepUnlessSet);
+							Array(writer, arrType, arrPtr, count, env, includeAllValues);
 
 						case typeof(Array2<>):
 							let count1 = GetValField!<int_cosize>(val, "mLength1");
 							count /= count1;
 							writer.MultiSizer((.)count,(.)count1);
 
-							MultiDimensionalArray(writer, arrType, arrPtr, env, state.arrayKeepUnlessSet, count, count1);
+							MultiDimensionalArray(writer, arrType, arrPtr, env, includeAllValues, count, count1);
 
 						case typeof(Array3<>):
 							let count2 = GetValField!<int_cosize>(val, "mLength2");
@@ -308,7 +309,7 @@ namespace Bon.Integrated
 							count /= (count1 * count2);
 							writer.MultiSizer((.)count,(.)count1,(.)count2);
 
-							MultiDimensionalArray(writer, arrType, arrPtr, env, state.arrayKeepUnlessSet, count, count1, count2);
+							MultiDimensionalArray(writer, arrType, arrPtr, env, includeAllValues, count, count1, count2);
 
 						case typeof(Array4<>):
 							let count1 = GetValField!<int_cosize>(val, "mLength1");
@@ -317,7 +318,7 @@ namespace Bon.Integrated
 							count /= (count1 * count2 * count3);
 							writer.MultiSizer((.)count,(.)count1,(.)count2,(.)count3);
 
-							MultiDimensionalArray(writer, arrType, arrPtr, env, state.arrayKeepUnlessSet, count, count1, count2, count3);
+							MultiDimensionalArray(writer, arrType, arrPtr, env, includeAllValues, count, count1, count2, count3);
 
 						default:
 							Debug.FatalError();
@@ -398,9 +399,6 @@ namespace Bon.Integrated
 
 						if (!membersKeepUnlessSet && !DoInclude!(val, flags) && !f.HasCustomAttribute<BonKeepUnlessSetAttribute>())
 							continue;
-
-						// TODO
-						// tests for new behaviour- patchableArray outputs exact, struct outputs all 0 but keepUnlessSet members...
 
 						if (flags.HasFlag(.Verbose) && uint64.Parse(f.Name) case .Ok)
 							hasUnnamedMembers = true;

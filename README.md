@@ -41,7 +41,7 @@ Content of ``serialized``:
     currentMode = .Battle{
         stage = 5
     },
-    playerInfo = <3>[
+    playerInfo = [
         {
             level = 2,
             gold = 231
@@ -49,12 +49,12 @@ Content of ``serialized``:
         {
             level = 1,
             dead = true
-        }
+        },
+        {}
     ]
 }
 ```
-
-The output omits default values by default (the deserializer will try to default unmentioned values accordingly). This, among other behaviors, is configurable just like with the ``.Verbose`` flag set above to produce a formatted and more extensive output. Bon's [configuration](#bon-environment) is contained in a ``BonEnvironment`` object, that is passed into every call. By default, the global environment ``gBonEnv`` is used.
+The output omits default values if possible (the deserializer will try to default unmentioned values accordingly). This, among other behaviors, is configurable just like with the ``.Verbose`` flag set above to produce a formatted and more extensive output. Bon's [configuration](#bon-environment) is contained in a ``BonEnvironment`` object, that is passed into every call. By default, the global environment ``gBonEnv`` is used.
 
 For an extensive overview of bon's capabilities, see [Documentation](#documentation) and [Tests](https://github.com/EinScott/bon/blob/main/Tests/src/Test.bf).
 
