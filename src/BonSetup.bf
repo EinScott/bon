@@ -7,19 +7,15 @@ namespace Bon
 	[StaticInitPriority(90)]
 	static
 	{
-		static this()
+		internal static void SetupBuiltinTypeHandlers(BonEnvironment env)
 		{
-			let env = gBonEnv = new BonEnvironment();
-
-#if !BON_NO_DEFAULT_SETUP
 			env.typeHandlers.Add(typeof(String), ((.)new => StringSerialize, (.)new => StringDeserialize));
 			env.typeHandlers.Add(typeof(List<>), ((.)new => ListSerialize, (.)new => ListDeserialize));
 			env.typeHandlers.Add(typeof(Dictionary<,>), ((.)new => DictionarySerialize, (.)new => DictionaryDeserialize));
 			env.typeHandlers.Add(typeof(Nullable<>), ((.)new => NullableSerialize, (.)new => NullableDeserialize));
-#endif
 		}
 
-		public static BonEnvironment gBonEnv ~ delete _;
+		public static BonEnvironment gBonEnv = new .() ~ delete _;
 	}
 }
 

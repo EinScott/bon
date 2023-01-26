@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Reflection;
 using Bon.Integrated;
 
+using internal Bon;
+
 namespace Bon
 {
 	enum BonSerializeFlags : uint8
@@ -79,6 +81,10 @@ namespace Bon
 
 		public this()
 		{
+#if !BON_NO_DEFAULT_SETUP
+			SetupBuiltinTypeHandlers(this);
+#endif
+
 			if (gBonEnv == null)
 				return;
 
