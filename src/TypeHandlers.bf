@@ -371,6 +371,8 @@ namespace Bon.Integrated
 			{
 				*(bool*)hasValPtr = false;
 				Try!(Deserialize.MakeDefault(reader, structVal, env, true));
+
+				Try!(reader.ConsumeEmpty());
 			}
 			else
 			{
