@@ -61,7 +61,7 @@ namespace System
 
 		// TryAdd and Remove are forced to be included & reflected through build settings.
 		[BonTarget]
-		extension Dictionary<T1,T2>
+		extension Dictionary<TKey,TValue>
 		{
 			[Reflect(.NonStaticFields)]
 			extension Entry {}

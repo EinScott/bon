@@ -1917,14 +1917,14 @@ namespace Bon.Tests
 			{
 				let l = scope List<AlignStruct>()
 					{
-						AlignStruct{a=1,b=2}, .{}, .{a=12,b=150}
+						AlignStruct{a=1,b=2}, AlignStruct{}, AlignStruct{a=12,b=150}
 					};
 				let str = Bon.Serialize(l, .. scope .());
 				Test.Assert(str == "[{a=1,b=2},{},{a=12,b=150}]");
 
 				List<AlignStruct> lo = scope List<AlignStruct>()
 					{
-						AlignStruct{}, .{}, .{}, .{a=10,b=12} // oops, already in use
+						AlignStruct{}, AlignStruct{}, AlignStruct{}, AlignStruct{a=10,b=12} // oops, already in use
 					};
 				Test.Assert((Bon.Deserialize(ref lo, str) case .Ok) && ArrayEqual!(l, lo));
 			}
@@ -1932,7 +1932,7 @@ namespace Bon.Tests
 			{
 				let l = scope List<AlignStruct>(3)
 					{
-						AlignStruct{a=1,b=2}, .{}, .{a=12,b=150}
+						AlignStruct{a=1,b=2}, AlignStruct{}, AlignStruct{a=12,b=150}
 					};
 				let str = Bon.Serialize(l, .. scope .());
 				Test.Assert(str == "[{a=1,b=2},{},{a=12,b=150}]");
