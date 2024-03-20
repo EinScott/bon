@@ -37,7 +37,7 @@ namespace Bon.Integrated
 			if (type != null)
 				message.AppendF("\n> On type: {}", type);
 #if BON_PRINT
-#if TEST || BON_CONSOLE_PRINT
+#if BON_CONSOLE_PRINT
 			Console.WriteLine(message);
 #else
 			Debug.WriteLine(message);

@@ -663,7 +663,7 @@ namespace Bon.Integrated
 			var bracketDepth = 0;
 			for (; nameLen < inStr.Length; nameLen++)
 			{
-				let char = inStr[nameLen];
+				let char = inStr[[Unchecked]nameLen];
 
 				if (char.IsWhiteSpace || (char == ')' && bracketDepth == 0))
 					break;
@@ -707,7 +707,7 @@ namespace Bon.Integrated
 			var refLen = 0;
 			for (; refLen < inStr.Length; refLen++)
 			{
-				let char = inStr[refLen];
+				let char = inStr[[Unchecked]refLen];
 				if (!char.IsLetterOrDigit && char != '_')
 					break;
 			}
@@ -779,7 +779,7 @@ namespace Bon.Integrated
 				if (int.StartsWith('-'))
 					Error!("Expected positive integer");
 
-				ints[i] = int;
+				ints[[Unchecked]i] = int;
 
 				if (i + 1 < N)
 				{
