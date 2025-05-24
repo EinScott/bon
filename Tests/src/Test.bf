@@ -186,7 +186,7 @@ namespace Bon.Tests
 				Test.Assert(str == "NaN");
 
 				double of = ?;
-				Test.Assert((Bon.Deserialize(ref of, str) case .Ok) && of == f);
+				Test.Assert((Bon.Deserialize(ref of, str) case .Ok) && of.IsNaN);
 			}
 
 			{
@@ -228,7 +228,7 @@ namespace Bon.Tests
 
 			{
 				float of = ?;
-				Test.Assert((Bon.Deserialize(ref of, "nan") case .Ok) && of == float.NaN);
+				Test.Assert((Bon.Deserialize(ref of, "nan") case .Ok) && of.IsNaN);
 			}
 
 			{
