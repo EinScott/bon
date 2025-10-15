@@ -67,7 +67,7 @@ namespace Bon
 		public mixin RegisterPolyType(Type type)
 		{
 			Debug.Assert(type is TypeInstance, "Type not set up properly! Put [BonTarget] on it or force reflection info & always include.");
-			let str = type.GetFullName(.. new .(256));
+			let str = Serialize.GetPolyTypeName(type, .. new .(256));
 			if (!polyTypes.ContainsKey(str))
 				polyTypes.Add(str, type);
 			else delete str;

@@ -12,13 +12,23 @@ namespace Bon
 	/// In order to deserialize polymorphed values, the original type needs to be looked up by type name from bon string,
 	/// so we need some sort of central lookup for them. That's why they need to be specifically registered with this.
 	/// For inaccessible library types, you can just manually call gBonEnv.RegisterPolyType!(type) for it somewhere.
-	[AttributeUsage(.Class|.Struct|.Enum)]
+	[AttributeUsage(.Class|.Struct|.Enum, .DisallowAllowMultiple)]
 	struct BonPolyRegisterAttribute : Attribute, IComptimeTypeApply
 	{
 		[Comptime]
 		public void ApplyToType(Type type)
 		{
 			Compiler.EmitTypeBody(type, "static this { gBonEnv.RegisterPolyType!(typeof(Self)); }");
+		}
+	}
+
+	/// When serializing/deserializing polymorphed values, this overrides the name used to look up the type from bon string.
+	[AttributeUsage(.Class|.Struct|.Enum, .DisallowAllowMultiple | .NotInherited | .ReflectAttribute)]
+	struct BonPolyNameAttribute : Attribute {
+		public readonly String name;
+
+		public this(String nameOverride) {
+			name = nameOverride;
 		}
 	}
 

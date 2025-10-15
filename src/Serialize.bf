@@ -532,11 +532,21 @@ namespace Bon.Integrated
 			}
 		}
 
+		public static void GetPolyTypeName(Type type, String into)
+		{
+			let res = type.GetCustomAttribute<BonPolyNameAttribute>();
+			if (res case .Ok(let attr))
+			{
+				into.Append(attr.name);
+			}
+			else type.GetFullName(.. into);
+		}
+
 		[Inline]
 		public static void Type(BonWriter writer, Type type)
 		{
 			writer.EntryStart();
-			writer.Type(type.GetFullName(.. scope .(256)));
+			writer.Type(GetPolyTypeName(type, .. scope .(256)));
 		}
 
 		[Inline]

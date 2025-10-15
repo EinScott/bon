@@ -1434,6 +1434,21 @@ namespace Bon.Tests
 			public int a;
 		}
 
+		[BonTarget]
+		abstract class Base {}
+
+		[BonTarget,BonPolyRegister,BonPolyName("base")]
+		class NameBase : Base
+		{
+			public uint32 baseInt;
+		}
+
+		[BonTarget,BonPolyRegister]
+		class UsualSub : NameBase
+		{
+			public uint64 other;
+		}
+
 		[Test]
 		static void Classes()
 		{
@@ -1554,6 +1569,28 @@ namespace Bon.Tests
 				
 				let str2 = Bon.Serialize(co, .. scope .());
 				Test.Assert(str2 == "{kills=12,Name=\"\"}");
+			}
+
+			{
+				Base c = scope NameBase() { baseInt = 1 };
+
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "(base){baseInt=1}");
+
+				Base co = null;
+				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType() && Bon.Serialize(co, .. scope .()) == str);
+				delete co;
+			}
+
+			{
+				Base c = scope UsualSub() { baseInt = 2, other = 1 };
+
+				let str = Bon.Serialize(c, .. scope .());
+				Test.Assert(str == "(Bon.Tests.UsualSub){other=1,baseInt=2}");
+
+				Base co = null;
+				Test.Assert((Bon.Deserialize(ref co, str) case .Ok) && c.GetType() == co.GetType() && Bon.Serialize(co, .. scope .()) == str);
+				delete co;
 			}
 		}
 
