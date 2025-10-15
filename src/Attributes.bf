@@ -33,6 +33,7 @@ namespace Bon
 	}
 
 	/// Forbid access to this field in (de-) serialization. Makes it act like any non-public field.
+	/// Note that the name passed has to be unique among all registered types!
 	[AttributeUsage(.Field, .ReflectAttribute)]
 	struct BonIgnoreAttribute : Attribute {}
 

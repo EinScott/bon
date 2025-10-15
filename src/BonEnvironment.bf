@@ -68,6 +68,7 @@ namespace Bon
 		{
 			Debug.Assert(type is TypeInstance, "Type not set up properly! Put [BonTarget] on it or force reflection info & always include.");
 			let str = Serialize.GetPolyTypeName(type, .. new .(256));
+			Debug.Assert(!polyTypes.ContainsKey(str), "Attempting to register the same type name twice.");
 			if (!polyTypes.ContainsKey(str))
 				polyTypes.Add(str, type);
 			else delete str;

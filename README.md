@@ -466,6 +466,7 @@ This can be useful for keeping default values for fields unmentioned in user con
 #### Polymorphism
 
 Polymorphed values denote their actual type as part of the serialized value in order to be deserialized properly. For this to be possible, bon needs to look up the types by name. So a type that need to be serialized with polymorphism like this must be registered on the used [bon environment](#poly-types) with ``env.RegisterPolyType(typeof(x))`` during static initialization or by placing ``[BonPolyRegister]`` on the type. The first of the two options is especially useful for boxed struct types, which also need to be registered like this in case they should be serialized.
+The name used to identify the type in serialization is its full name including namespaces by default but this can be overritten using the ``BonPolyName`` attribute.
 
 For example, assuming that ``UIButton`` and ``UITextField`` are registered properly:
 ```bf
@@ -547,7 +548,7 @@ Type handlers are called as part of the (de-) serialization process. They are re
 
 #### Poly types
 
-``polyTypes`` is a lookup of type by its name. It's used to enable [polymorphism](#polymorphism). Use ``RegisterPolyType!(type)`` and ``TryGetPolyType(typeName, let type)`` to add to it (during static intialisation ideally!).
+``polyTypes`` is a lookup of type by its name. It's used to enable [polymorphism](#polymorphism). Use ``RegisterPolyType!(type)`` and ``TryGetPolyType(typeName, let type)`` to add to it (during static intialisation ideally!). The ```BonPolyRegister`` attribute does exactly this.
 
 ### Extension
 
