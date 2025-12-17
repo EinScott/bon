@@ -71,7 +71,7 @@ namespace Bon.Integrated
 			}
 			else if (currCount < count)
 			{
-				if ((t.GetMethod("EnsureCapacity", .NonPublic|.Instance) case .Ok(let method))
+				if ((t.GetMethod("EnsureCapacity", .Public|.Instance) case .Ok(let method))
 					// Keep in mind, strictly speaking val.DataPtr is pointing to the field which references this list!
 					&& method.Invoke(*(Object*)val.dataPtr, (int)count, true) case .Ok) // returns T*, which is sizeof(int), so Variant doesnt alloc
 				{
